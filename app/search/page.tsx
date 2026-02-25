@@ -1,12 +1,13 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react" // Tambahkan Suspense
 import { useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Star, MapPin, ImageOff } from "lucide-react"
-import Link from "next/link" // Import Link dari Next.js
+import Link from "next/link"
 
-export default function SearchResults() {
-  const searchParams = useSearchParams()
+// 1. Ubah fungsi utama menjadi komponen internal (SearchContent)
+function SearchContent() {
+  const searchParams = useSearchParams() // Hook ini penyebab error build
   const q = searchParams.get('q') || ""
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,14 +56,12 @@ export default function SearchResults() {
                 key={p.id} 
                 className="group bg-white rounded-md overflow-hidden shadow-sm flex flex-col active:scale-95 transition-transform"
               >
-                {/* GAMBAR PRODUK */}
                 <div className="aspect-square w-full bg-gray-50 relative">
                   {displayImg ? (
                     <img src={displayImg} alt={p.name} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageOff size={24}/></div>
                   )}
-                  {/* Badge Diskon di Gambar */}
                   {discount > 0 && (
                     <div className="absolute top-0 right-0 bg-[#fff1e0] text-[#f57224] text-[10px] font-bold px-1.5 py-0.5 rounded-bl-lg">
                       -{discount}%
@@ -70,23 +69,17 @@ export default function SearchResults() {
                   )}
                 </div>
 
-                {/* INFO PRODUK */}
                 <div className="p-2 flex flex-col justify-between flex-1">
                   <div>
-                    {/* Badge & Title */}
                     <div className="mb-1 h-8 overflow-hidden">
                       <p className="text-[11px] leading-[1.3] text-[#212121] line-clamp-2">
                         <span className="inline-block bg-[#f57224] text-white text-[8px] font-bold px-1 rounded-sm mr-1">LazMall</span>
                         {p.name}
                       </p>
                     </div>
-
-                    {/* Harga Utama */}
                     <p className="text-[#f57224] font-bold text-[15px]">
                       <span className="text-[10px] mr-0.5">Rp</span>{price.toLocaleString('id-ID')}
                     </p>
-
-                    {/* Harga Coret */}
                     {discount > 0 && (
                       <p className="text-[10px] text-gray-400 line-through">
                         Rp {original.toLocaleString('id-ID')}
@@ -94,7 +87,6 @@ export default function SearchResults() {
                     )}
                   </div>
 
-                  {/* Rating & Lokasi */}
                   <div className="mt-2 pt-2 border-t border-gray-50">
                     <div className="flex items-center gap-1 mb-1">
                       <Star size={10} fill="#ffc107" className="text-[#ffc107]" />
@@ -118,5 +110,18 @@ export default function SearchResults() {
         </div>
       )}
     </div>
+  )
+}
+
+// 2. Export default dengan bungkus Suspense
+export default function SearchResults() {
+  return (
+    <Suspense fallback={
+      <div className="pt-24 px-4 text-center text-xs text-gray-400 animate-pulse">
+        Menyiapkan hasil pencarian...
+      </div>
+    }>
+      <SearchContent />
+    </Suspense>
   )
 }
