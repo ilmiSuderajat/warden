@@ -71,10 +71,10 @@ useEffect(() => {
       </div>
 
       {/* CONTENT AREA */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden mb-20">
         
         {/* SIDEBAR KIRI */}
-        <div className="w-[85px] bg-slate-50 border-r border-slate-100 overflow-y-auto no-scrollbar shrink-0">
+        <div className="w-21.25 bg-slate-50 border-r  border-slate-100 overflow-y-auto no-scrollbar shrink-0">
           {categories.map((cat) => {
             const Icon = (Icons as any)[cat.icon_name] || Icons.Package
             const isActive = selectedCat === cat.id
@@ -89,16 +89,16 @@ useEffect(() => {
               >
                 {/* Indikator Aktif (Pill vertikal di kiri) */}
                 {isActive && (
-                  <div className="absolute left-0 top-3 bottom-3 w-1 bg-slate-900 rounded-r-full" />
+                  <div className="absolute left-0 top-3 bottom-3 w-1 bg-indigo-600 rounded-r-full" />
                 )}
                 
                 <div className={`p-2 rounded-xl transition-all duration-200
-                  ${isActive ? "bg-slate-900 text-white shadow-sm" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"}
+                  ${isActive ? "bg-indigo-600 text-white shadow-sm" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"}
                 `}>
                   <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
                 </div>
                 <span className={`text-[9px] font-bold text-center leading-tight uppercase tracking-tight line-clamp-2
-                  ${isActive ? "text-slate-900" : "text-slate-400"}
+                  ${isActive ? "text-indigo-600" : "text-slate-400"}
                 `}>
                   {cat.name}
                 </span>
@@ -141,7 +141,7 @@ useEffect(() => {
                       />
                     </div>
                     <div className="p-3">
-                      <h3 className="text-xs font-semibold text-slate-800 line-clamp-2 leading-tight min-h-[32px]">{p.name}</h3>
+                      <h3 className="text-xs font-semibold text-slate-800 line-clamp-2 leading-tight min-h-8">{p.name}</h3>
                       <p className="text-sm font-bold text-slate-900 mt-1">
                         Rp {p.price?.toLocaleString('id-ID')}
                       </p>

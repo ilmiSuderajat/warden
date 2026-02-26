@@ -47,8 +47,8 @@ export default function AdminProfilePage() {
   // Menu Admin dengan ikon dan warna spesifik
   const adminMenus = [
     { icon: "LayoutDashboard", label: "Dashboard Utama", color: "text-slate-600", bg: "bg-slate-100", link: "/admin" },
-    { icon: "PackagePlus", label: "Tambah Produk Baru", color: "text-indigo-600", bg: "bg-indigo-50", link: "/admin/add-product" },
-    { icon: "FolderPlus", label: "Kelola Kategori", color: "text-emerald-600", bg: "bg-emerald-50", link: "/admin/add-category" },
+    { icon: "PackagePlus", label: "Tambah Produk Baru", color: "text-indigo-600", bg: "bg-indigo-50", link: "/admin/add-product/detail" },
+    { icon: "FolderPlus", label: "Kelola Kategori", color: "text-emerald-600", bg: "bg-emerald-50", link: "/admin/add-category/detail" },
     { icon: "Zap", label: "Pengaturan Flash Sale", color: "text-amber-600", bg: "bg-amber-50", link: "/admin/flash-sale" },
     { icon: "Users", label: "Daftar Pelanggan", color: "text-blue-600", bg: "bg-blue-50", link: "#" },
   ];
@@ -82,7 +82,7 @@ export default function AdminProfilePage() {
       <div className="p-5">
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm text-center relative overflow-hidden">
           {/* Decorative Background Pattern (Optional) */}
-          <div className="absolute inset-x-0 top-0 h-20 bg-slate-900 rounded-t-2xl"></div>
+          <div className="absolute inset-x-0 top-0 h-20 bg-indigo-600 rounded-t-2xl"></div>
           
           <div className="relative pt-2">
             <div className="w-24 h-24 rounded-full bg-slate-200 border-4 border-white mx-auto shadow-lg overflow-hidden flex items-center justify-center">
@@ -102,7 +102,7 @@ export default function AdminProfilePage() {
               </p>
             </div>
 
-            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wide">
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wide">
               <Icons.ShieldCheck size={12} />
               <span>Administrator</span>
             </div>

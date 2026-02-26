@@ -60,8 +60,8 @@ export default function ManageProductsPage() {
           </div>
           
           <Link 
-            href="/admin/add-product" // Sesuaikan path tambah produk
-            className="flex items-center gap-1.5 bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm"
+            href="/admin/add-product/detail" // Sesuaikan path tambah produk
+            className="flex items-center gap-1.5 bg-indigo-600 slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm"
           >
             <Plus size={14} />
             <span>Baru</span>
@@ -127,7 +127,7 @@ export default function ManageProductsPage() {
                 {/* Tombol Aksi */}
                 <div className="flex flex-col gap-1 shrink-0">
                   <Link 
-                    href={`/admin/add-product?id=${p.id}`} // Asumsi link edit pakai query param
+                    href={`/admin/add-product/${p.id}`} // Asumsi link edit pakai query param
                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex justify-center"
                   >
                     <Edit3 size={16} />

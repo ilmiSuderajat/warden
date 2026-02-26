@@ -283,7 +283,7 @@ export default function AddProductPage() {
         <div className="mb-10 bg-white/80 backdrop-blur-lg border-t border-slate-100 p-5 max-w-md mx-auto z-50">
           <button 
             disabled={loading} 
-            className="w-full bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-400 shadow-sm flex items-center justify-center gap-2"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-400 shadow-sm flex items-center justify-center gap-2"
           >
             {loading ? (
               <>

@@ -1,96 +1,148 @@
 "use client"
+
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Trash2, Tag, Link } from "lucide-react"
+import { Trash2, Tag, Zap, Plus, ArrowLeft, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
 
-export default function ManageFlashSale() {
+export default function ManageFlashSalePage() {
+  const router = useRouter()
   const [flashProducts, setFlashProducts] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [processingId, setProcessingId] = useState<string | null>(null)
 
-  // 1. Fungsi untuk mengambil produk yang sedang Flash Sale
+  // 1. Ambil data produk flash sale
   const fetchFlashProducts = async () => {
+    setLoading(true)
     const { data } = await supabase
       .from("products")
       .select("id, name, price, original_price, sold_count")
       .eq("is_flash_sale", true)
     
     if (data) setFlashProducts(data)
+    setLoading(false)
   }
 
   useEffect(() => {
     fetchFlashProducts()
   }, [])
 
-  // 2. Fungsi untuk menghapus produk dari Flash Sale (Kembali ke Reguler)
-  const removeFromFlashSale = async (id: string) => {
-    if (!confirm("Yakin ingin menurunkan produk ini dari Flash Sale?")) return
+  // 2. Hapus dari Flash Sale
+  const removeFromFlashSale = async (id: string, name: string) => {
+    if (!confirm(`Hentikan promosi Flash Sale untuk "${name}"?`)) return
     
-    setLoading(true)
+    setProcessingId(id)
     const { error } = await supabase
       .from("products")
       .update({ is_flash_sale: false })
       .eq("id", id)
 
     if (error) {
-      alert("Gagal: " + error.message)
+      alert("Gagal mengupdate: " + error.message)
     } else {
-      alert("Produk dikembalikan ke kategori reguler")
-      fetchFlashProducts() // Refresh list
+      // Optimistic Update: Hapus dari state lokal
+      setFlashProducts(prev => prev.filter(p => p.id !== id))
     }
-    setLoading(false)
+    setProcessingId(null)
   }
 
   return (
-    <div className="p-6 max-w-md mx-auto mt-10">
-      <div className="flex flex-col items-center gap-2 mb-6">
-        <Tag className="text-orange-500" />
-        
-      <button onClick={() => window.location.href = "/admin/add-banner"} className="w-full bg-orange-500 text-white py-3 mt-4 rounded-lg font-bold hover:bg-orange-600">Tambah Produk ke Flash Sale</button>
+    <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-10">
+      
+      {/* HEADER */}
+      <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
+        <div className="flex items-center justify-between px-5 pt-12 pb-4">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+              <ArrowLeft size={20} strokeWidth={2.5} />
+            </button>
+            <div>
+              <h1 className="text-lg font-bold text-slate-900 tracking-tight">Flash Sale Aktif</h1>
+              <p className="text-[10px] font-medium text-slate-400">Kelola produk promosi</p>
+            </div>
+          </div>
+          
+          {/* Badge Jumlah Item */}
+          <span className="px-3 py-1 bg-orange-50 text-orange-600 text-[10px] font-bold rounded-full border border-orange-100">
+            {flashProducts.length} Item
+          </span>
+        </div>
       </div>
-        <h2 className="text-2xl font-bold mb-5 text-gray-800">Flash Sale yang Sedang Aktif</h2>
-        
 
-      <div className="bg-white shadow rounded-lg overflow-hidden border">
-        {flashProducts.length === 0 ? (
-          <div className="p-10 text-center text-gray-500">
-            Belum ada produk di Warden Flash Sale.
+      <div className="p-5 space-y-4">
+        
+        {/* Tombol Tambah (Link ke halaman form sebelumnya) */}
+        <Link 
+          href="/admin/add-banner" 
+          className="flex items-center justify-center gap-2 w-full bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98] shadow-sm shadow-orange-100"
+        >
+          <Plus size={18} />
+          <span>Tambah Produk Promo</span>
+        </Link>
+
+        {/* LIST PRODUK */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <Loader2 className="animate-spin mb-3" size={28} />
+            <p className="text-xs font-medium">Memuat data promo...</p>
+          </div>
+        ) : flashProducts.length > 0 ? (
+          <div className="space-y-3">
+            {flashProducts.map((product) => (
+              <div 
+                key={product.id} 
+                className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-orange-200 transition-colors"
+              >
+                <div className="flex-1 min-w-0 pr-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-sm font-semibold text-slate-800 truncate">{product.name}</h3>
+                    <Zap size={12} className="text-orange-500 shrink-0 fill-orange-500" />
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-orange-600">
+                      Rp {product.price?.toLocaleString('id-ID')}
+                    </p>
+                    {product.original_price && (
+                      <p className="text-[10px] text-slate-400 line-through">
+                        Rp {product.original_price?.toLocaleString('id-ID')}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {product.sold_count && (
+                     <p className="text-[10px] text-slate-400 mt-1">{product.sold_count} terjual</p>
+                  )}
+                </div>
+
+                {/* Tombol Aksi */}
+                <button 
+                  onClick={() => removeFromFlashSale(product.id, product.name)}
+                  disabled={processingId === product.id}
+                  className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50"
+                  title="Hentikan Promosi"
+                >
+                  {processingId === product.id ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={18} />
+                  )}
+                </button>
+              </div>
+            ))}
           </div>
         ) : (
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-gray-50 text-gray-600 text-sm">
-              <tr>
-                <th className="p-4 font-semibold">Produk</th>
-                <th className="p-4 font-semibold">Harga Promo</th>
-                <th className="p-4 font-semibold text-center">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {flashProducts.map((product) => (
-                <tr key={product.id} className="border-t hover:bg-gray-50 transition">
-                  <td className="p-4">
-                    <p className="font-medium text-gray-800">{product.name}</p>
-                    <p className="text-xs text-gray-400 line-through">Rp {product.original_price?.toLocaleString()}</p>
-                  </td>
-                  <td className="p-4 text-red-500 font-bold">
-                    Rp {product.price?.toLocaleString()}
-                  </td>
-                  <td className="p-4 text-center">
-                    <button 
-                      onClick={() => removeFromFlashSale(product.id)}
-                      disabled={loading}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-full transition"
-                      title="Hapus dari Flash Sale"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          /* EMPTY STATE */
+          <div className="text-center py-16 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl mt-4 bg-white">
+            <div className="w-14 h-14 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+              <Tag size={24} className="text-slate-300" />
+            </div>
+            <p className="text-sm font-semibold text-slate-700 mb-1">Belum Ada Promo</p>
+            <p className="text-xs text-slate-400">Tekan tombol di atas untuk memulai.</p>
+          </div>
         )}
       </div>
     </div>
-       
   )
 }

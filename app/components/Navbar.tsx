@@ -59,7 +59,7 @@ export default function Navbar() {
   const currentMenu = isAdminPage ? adminMenu : userMenu;
 
   return (
-    <nav className="max-w-md mx-auto fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-100 z-50">
+    <nav className="max-w-md mx-auto fixed bottom-0 left-0 right-0 h-16 bg-gray-50 border-t border-slate-100 z-50">
       <div className="flex justify-around items-center h-full px-2">
         
         {/* Render Menu Dinamis */}
@@ -70,7 +70,7 @@ export default function Navbar() {
               key={item.href}
               href={item.href}
               className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${
-                isActive ? 'text-slate-900' : 'text-slate-400'
+                isActive ? 'text-indigo-600' : 'text-gray-600'
               }`}
             >
               <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
@@ -78,7 +78,7 @@ export default function Navbar() {
               
               {/* Indikator Garis Bawah saat Aktif */}
               {isActive && (
-                <div className="absolute bottom-0 h-0.5 w-6 bg-slate-900 rounded-full"></div>
+                <div className="absolute bottom-0 h-0.5 w-6 bg-indigo-600 rounded-full"></div>
               )}
             </Link>
           );
@@ -88,7 +88,7 @@ export default function Navbar() {
         <Link
           href={profileHref}
           className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${
-            isProfileActive ? 'text-slate-900' : 'text-slate-400'
+            isProfileActive ? 'text-indigo-600' : 'text-gray-600'
           }`}
         >
           <Users size={20} strokeWidth={isProfileActive ? 2.5 : 2} />

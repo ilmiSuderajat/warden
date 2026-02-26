@@ -72,7 +72,7 @@ export default function ManageCategoriesPage() {
           
           <Link 
             href="/admin/add-category/detail" 
-            className="flex items-center gap-1.5 bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm"
+            className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
           >
             <Plus size={14} />
             <span>Baru</span>
@@ -94,7 +94,7 @@ export default function ManageCategoriesPage() {
             
             // Logic for styling: Use DB theme or fallback to generated colors
             const iconStyle = c.color_theme 
-              ? `bg-slate-900 text-white` 
+              ? `bg-indigo-600 text-white` 
               : getIconBgColor(index)
 
             return (
@@ -120,7 +120,7 @@ export default function ManageCategoriesPage() {
                 <div className="flex gap-1 shrink-0 ml-2">
                   <Link 
                     href={`/admin/add-category/detail?id=${c.id}`} 
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-colors"
                   >
                     <Edit3 size={16} />
                   </Link>
