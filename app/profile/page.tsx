@@ -28,10 +28,10 @@ export default function ProfilePage() {
 
   const menuItems = [
    { href: "/orders", icon: "ShoppingBag", label: "Pesanan Saya", color: "text-blue-500", bg: "bg-blue-50" },
-    { icon: "Heart", label: "Wishlist", color: "text-red-500", bg: "bg-red-50" },
-    { icon: "MapPin", label: "Alamat Saya", color: "text-orange-500", bg: "bg-orange-50" },
-    { icon: "Settings", label: "Pengaturan Akun", color: "text-gray-500", bg: "bg-gray-50" },
-    { icon: "ShieldCheck", label: "Pusat Bantuan", color: "text-green-500", bg: "bg-green-50" },
+    { href: "/wishlist", icon: "Heart", label: "Wishlist", color: "text-red-500", bg: "bg-red-50" },
+    { href: "/address", icon: "MapPin", label: "Alamat Saya", color: "text-orange-500", bg: "bg-orange-50" },
+    { href: "/settings", icon: "Settings", label: "Pengaturan Akun", color: "text-gray-500", bg: "bg-gray-50" },
+    { href: "/help-center", icon: "ShieldCheck", label: "Pusat Bantuan", color: "text-green-500", bg: "bg-green-50" },
   ];
 
   return (
