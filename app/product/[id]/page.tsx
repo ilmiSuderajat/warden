@@ -116,7 +116,7 @@ export default function ProductDetail() {
           </div>
 
           <div className="flex gap-2 items-start mb-3">
-            <span className="bg-[#f57224] text-white text-[9px] font-bold px-1 py-0.5 rounded-sm">LazMall</span>
+            <span className="bg-[#f57224] text-white text-[9px] font-bold px-1 py-0.5 rounded-sm">WardenMall</span>
             <h1 className="text-[14px] leading-[1.4] font-medium text-[#212121]">
               {product.name}
             </h1>

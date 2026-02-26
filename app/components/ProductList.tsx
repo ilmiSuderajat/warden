@@ -17,17 +17,37 @@ function ProductImageSlider({ images, name }: { images?: string[] | string; name
 
   const isSlider = imageList.length > 1
 
-  useEffect(() => {
+useEffect(() => {
     if (!isSlider) return
-    const interval = setInterval(() => {
-      if (!scrollRef.current) return
-      const nextIndex = (activeIndex + 1) % imageList.length
-      const width = scrollRef.current.clientWidth
-      scrollRef.current.scrollTo({ left: width * nextIndex, behavior: "smooth" })
-      setActiveIndex(nextIndex)
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [activeIndex, isSlider, imageList.length])
+
+    // Kasih delay random antara 0 sampai 2000ms sebelum mulai interval
+    const startDelay = Math.random() * 2000 
+    
+    let interval: NodeJS.Timeout
+
+    const timeout = setTimeout(() => {
+      interval = setInterval(() => {
+        if (!scrollRef.current) return
+        
+        // Gunakan fungsional update agar tidak perlu memasukkan activeIndex ke dependency
+        setActiveIndex((current) => {
+          const nextIndex = (current + 1) % imageList.length
+          const width = scrollRef.current?.clientWidth || 0
+          scrollRef.current?.scrollTo({ 
+            left: width * nextIndex, 
+            behavior: "smooth" 
+          })
+          return nextIndex
+        })
+      }, 3000)
+    }, startDelay)
+
+    return () => {
+      clearTimeout(timeout)
+      if (interval) clearInterval(interval)
+    }
+    // Dependency cukup length dan isSlider saja agar tidak re-run tiap slide pindah
+  }, [isSlider, imageList.length])
 
   return (
     <div ref={scrollRef} className="flex w-full h-full overflow-x-auto snap-x snap-mandatory no-scrollbar">
@@ -37,8 +57,13 @@ function ProductImageSlider({ images, name }: { images?: string[] | string; name
         </div>
       )}
       {imageList.map((url, idx) => (
+        // Di dalam ProductImageSlider mapping:
         <div key={idx} className="w-full h-full shrink-0 snap-center">
-          <img src={url} alt={`${name ?? "product"}-${idx}`} className="w-full h-full object-cover" />
+          <img 
+            src={url} 
+            alt={`${name ?? "product"}-${idx}`} 
+            className="w-full h-full object-cover" // Ini kuncinya Lur!
+          />
         </div>
       ))}
     </div>
@@ -85,15 +110,19 @@ export default function ProductList() {
               <div className={`bg-white overflow-hidden border border-gray-100 h-full ${
                 view === "list" ? "flex flex-row rounded-lg" : "flex flex-col rounded-xl shadow-sm"
               }`}>
-                {/* IMAGE */}
-                <div className={`relative shrink-0 ${view === "grid" ? "aspect-square w-full" : "w-28 h-28"}`}>
+                                {/* IMAGE CONTAINER */}
+                <div className={`relative shrink-0 overflow-hidden ${
+                  view === "grid" ? "aspect-square w-full" : "w-28 h-28"
+                }`}>
+                  {/* Badge Lapisan Atas */}
                   <div className="absolute top-0 left-0 z-10 flex flex-col items-start">
                     <span className="bg-indigo-600 text-white text-[7px] font-bold px-1 py-0.5 rounded-br-md">WardenMall</span>
                     {p.is_flash_sale && <span className="bg-orange-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-br-md italic">FLASH</span>}
                   </div>
+
+                  {/* Slider Gambar */}
                   <ProductImageSlider images={p.image_url} name={p.name} />
                 </div>
-
                 {/* INFO */}
                 <div className="p-2 flex flex-col justify-between flex-1 min-w-0">
                   <div>
@@ -118,10 +147,12 @@ export default function ProductList() {
                       </div>
                       <span className="text-gray-400 text-[9px] ml-1">{p.sold_count || "0"} terjual</span>
                     </div>
-                    <div className="flex items-center text-gray-400 gap-0.5">
-                      <MapPin size={8} />
-                      <span className="text-[9px] truncate max-w-20">{p.location || "Jakarta"}</span>
-                    </div>
+                    <div className="flex items-center text-gray-400 gap-0.5 overflow-hidden">
+  <MapPin size={8} className="text-orange-500 shrink-0" />
+  <span className="text-[9px] truncate font-medium">
+    {p.location || "Lokasi tidak tersedia"}
+  </span>
+</div>
                   </div>
                 </div>
               </div>
