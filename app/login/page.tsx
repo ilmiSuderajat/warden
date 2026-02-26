@@ -8,25 +8,29 @@ import * as Icons from "lucide-react"
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+const handleGoogleLogin = async () => {
+  setLoading(true)
+  
+  // Deteksi apakah user buka lewat aplikasi Android kita (cek User Agent)
+  const isApp = navigator.userAgent.includes("WardenApp")
+  
+  // Kalau di App, arahkan ke scheme warden-app. Kalau di web, pakai origin biasa.
+  const redirectUrl = isApp 
+    ? 'warden-app://auth-callback' 
+    : `${window.location.origin}/auth/callback`
 
-  const handleGoogleLogin = async () => {
-    setLoading(true)
-    
-    // 1. Panggil Google OAuth
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        // Redirect ke halaman khusus buat ngecek role
-        redirectTo: `${window.location.origin}/auth/callback`, 
-      },
-    })
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: redirectUrl,
+    },
+  })
 
-    if (error) {
-      alert("Gagal Login: " + error.message)
-      setLoading(false)
-    }
+  if (error) {
+    alert("Gagal Login: " + error.message)
+    setLoading(false)
   }
-
+}
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 font-sans max-w-md mx-auto">
       <div className="text-center mb-12">
