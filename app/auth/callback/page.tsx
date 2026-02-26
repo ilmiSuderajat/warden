@@ -7,31 +7,34 @@ export default function AuthCallbackPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const handleAuth = async () => {
-      // 1. Pastikan session sudah masuk
-      const { data: { user } } = await supabase.auth.getUser()
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Tunggu sampe event-nya beneran 'SIGNED_IN'
+      if (event === "SIGNED_IN" && session) {
+        const user = session.user
 
-      if (user) {
         // 2. Cek apakah email ini ada di tabel 'admins'
-        const { data: adminData } = await supabase
+        const { data: adminData, error } = await supabase
           .from("admins")
           .select("email")
           .eq("email", user.email)
-          .single()
+          .maybeSingle() // Pake maybeSingle biar gak error kalau gak nemu
 
         if (adminData) {
-          // Kalau Admin -> Lempar ke Dashboard Admin
           router.push("/admin")
         } else {
-          // Kalau User Biasa -> Lempar ke Profile
           router.push("/profile")
         }
-      } else {
-        router.push("/login")
+      } else if (event === "INITIAL_SESSION" && !session) {
+        // Kalau nunggu kelamaan dan tetep gak ada session, balikin ke login
+        // Tapi kasih jeda dikit buat WebView
+        const timeout = setTimeout(() => router.push("/login"), 3000)
+        return () => clearTimeout(timeout)
       }
-    }
+    })
 
-    handleAuth()
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
   }, [router])
 
   return (

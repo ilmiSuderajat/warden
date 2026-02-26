@@ -8,29 +8,27 @@ import * as Icons from "lucide-react"
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+// Di Next.js kamu
 const handleGoogleLogin = async () => {
-  setLoading(true)
+  const isApp = navigator.userAgent.includes("WardenApp");
   
-  // Deteksi apakah user buka lewat aplikasi Android kita (cek User Agent)
-  const isApp = navigator.userAgent.includes("WardenApp")
-  
-  // Kalau di App, arahkan ke scheme warden-app. Kalau di web, pakai origin biasa.
+  // Pakai URL yang simpel tanpa embel-embel folder dulu buat ngetes
   const redirectUrl = isApp 
     ? 'warden-app://auth-callback' 
-    : `${window.location.origin}/auth/callback`
+    : `${window.location.origin}/auth/callback`;
 
-  const { error } = await supabase.auth.signInWithOAuth({
+  await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: redirectUrl,
+      // Tambahkan ini biar dia nggak numpuk query string yang aneh-aneh
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      },
     },
-  })
-
-  if (error) {
-    alert("Gagal Login: " + error.message)
-    setLoading(false)
-  }
-}
+  });
+};
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 font-sans max-w-md mx-auto">
       <div className="text-center mb-12">
