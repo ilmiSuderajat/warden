@@ -1,143 +1,301 @@
 "use client"
+
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { 
-  LayoutDashboard, Truck, PackageSearch, 
-  TrendingUp, ArrowUpRight, Package, List, 
-  XCircle, Edit3, Plus, Save, Undo2
+  LayoutDashboard, Package, Truck, Settings, 
+  TrendingUp, Edit3, Plus, 
+  CheckCircle2, Clock, 
+  CreditCard, Search
 } from "lucide-react"
-
-
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("dashboard")
+  const [timeFilter, setTimeFilter] = useState("all")
   const [products, setProducts] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
+  const [categorySales, setCategorySales] = useState<any[]>([])
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalSales: 0,
+    pending: 0,
+    process: 0,
+    shipping: 0,
+    done: 0
+  })
   const [loading, setLoading] = useState(false)
 
-  // State untuk Edit (Form Sederhana)
-  const [editMode, setEditMode] = useState<{type: 'product' | 'category' | null, data: any}>({ type: null, data: null })
+  // Navigation Items
+  const navItems = [
+    { id: "dashboard", label: "Beranda", icon: LayoutDashboard },
+    { id: "inventory", label: "Produk", icon: Package },
+    { id: "orders", label: "Pesanan", icon: Truck },
+    { id: "settings", label: "Pengaturan", icon: Settings },
+  ]
 
-  // 1. Ambil Data dari Database
   const fetchData = async () => {
     setLoading(true)
-    const { data: prod } = await supabase.from('products').select('*').order('created_at', { ascending: false })
-    const { data: cat } = await supabase.from('categories').select('*').order('created_at', { ascending: false })
+    
+    // 1. Setup Filter Tanggal
+    let dateQuery = supabase.from('orders').select('status, total_amount, created_at, id')
+    
+    if (timeFilter !== 'all') {
+      const now = new Date()
+      let startDate = new Date()
+      if (timeFilter === 'daily') startDate.setHours(0, 0, 0, 0)
+      if (timeFilter === 'weekly') startDate.setDate(now.getDate() - 7)
+      if (timeFilter === 'monthly') startDate.setMonth(now.getMonth() - 1)
+      dateQuery = dateQuery.gte('created_at', startDate.toISOString())
+    }
+
+    const { data: orders } = await dateQuery
+    const { data: prod } = await supabase.from('products').select('*')
+    const { data: cat } = await supabase.from('categories').select('*')
+    const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
+
+    // 2. Ambil Item Terjual
+    const orderIds = orders?.map(o => o.id) || []
+    const { data: items } = await supabase
+      .from('order_items')
+      .select('quantity, product_name, products(category_id)')
+      .in('order_id', orderIds)
+
     if (prod) setProducts(prod)
     if (cat) setCategories(cat)
+
+    // 3. Hitung Statistik
+    if (orders) {
+      const summary = orders.reduce((acc, curr) => {
+        acc.totalSales += curr.total_amount || 0;
+        if (curr.status === 'pending') acc.pending++;
+        if (curr.status === 'dikemas') acc.process++;
+        if (curr.status === 'dikirim') acc.shipping++;
+        if (curr.status === 'selesai') acc.done++;
+        return acc;
+      }, { totalSales: 0, pending: 0, process: 0, shipping: 0, done: 0 })
+
+      setStats({ ...summary, totalUsers: userCount || 0 })
+    }
+
+    // 4. Hitung Penjualan per Kategori
+    if (items && cat) {
+      const catMap: any = {}
+      cat.forEach(c => catMap[c.id] = { name: c.name, total: 0 })
+      
+      items.forEach((item: any) => {
+        const catId = item.products?.category_id
+        if (catId && catMap[catId]) {
+          catMap[catId].total += item.quantity
+        }
+      })
+      setCategorySales(Object.values(catMap).sort((a: any, b: any) => b.total - a.total))
+    }
+
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [])
-
-  // 2. Fungsi Hapus
-  const handleDelete = async (table: string, id: string) => {
-    if (!confirm("Yakin mau hapus data ini, Lur?")) return
-    const { error } = await supabase.from(table).delete().eq('id', id)
-    if (!error) fetchData()
-    else alert("Gagal hapus: " + error.message)
-  }
+  useEffect(() => { fetchData() }, [timeFilter])
 
   return (
-    <div className="min-h-screen max-w-md mx-auto bg-gray-50 pb-24 border-x border-gray-200 shadow-xl font-sans">
-      {/* Header Statis */}
-      <div className="bg-white p-6 border-b sticky top-0 z-20">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="font-extrabold text-xl text-gray-800">Admin Desa</h1>
-          <button onClick={() => fetchData()} className="text-indigo-600"><Undo2 size={18}/></button>
-        </div>
-
-        {/* Menu Tab */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
-          {[
-            { id: "dashboard", name: "Statistik", icon: LayoutDashboard },
-            { id: "inventory", name: "Stok Produk", icon: PackageSearch },
-            { id: "manage-cat", name: "Kategori", icon: List },
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => { setActiveTab(item.id); setEditMode({type: null, data: null}) }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === item.id ? "bg-indigo-600 text-white shadow-md" : "bg-gray-100 text-gray-400"
-              }`}
+    <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto relative pb-24">
+      
+      {/* HEADER */}
+      <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
+        <div className="flex items-center justify-between px-5 pt-12 pb-4">
+          <div>
+            <h1 className="text-lg font-bold text-slate-900 tracking-tight">Master Admin</h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+              <p className="text-[10px] font-medium text-slate-400 uppercase">Toko Aktif</p>
+            </div>
+          </div>
+          
+          {/* Time Filter Dropdown */}
+          <div className="relative">
+            <select 
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value)}
+              className="appearance-none bg-slate-100 text-slate-600 text-xs font-semibold pl-3 pr-8 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer"
             >
-              <item.icon size={14} />
-              {item.name}
-            </button>
-          ))}
+              <option value="all">Semua Waktu</option>
+              <option value="daily">Hari Ini</option>
+              <option value="weekly">7 Hari Terakhir</option>
+              <option value="monthly">30 Hari Terakhir</option>
+            </select>
+            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="p-4">
-        {/* --- TAB STOK PRODUK --- */}
-        {activeTab === "inventory" && (
-          <div className="animate-in fade-in space-y-3">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Daftar Produk ({products.length})</span>
-              <button className="bg-indigo-600 text-white p-2 rounded-lg shadow-sm"><Plus size={16}/></button>
-            </div>
-
-            {products.map((p) => (
-              <div key={p.id} className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
-                <img src={p.image_url} className="w-12 h-12 rounded-xl object-cover bg-gray-50" />
-                <div className="flex-1">
-                  <h4 className="text-[13px] font-bold text-gray-800 line-clamp-1">{p.name}</h4>
-                  <p className="text-[11px] text-indigo-600 font-black">Rp {p.price.toLocaleString()}</p>
-                </div>
-                <div className="flex gap-1">
-                  <button className="p-2 text-blue-500 bg-blue-50 rounded-lg"><Edit3 size={14} /></button>
-                  <button onClick={() => handleDelete('products', p.id)} className="p-2 text-red-500 bg-red-50 rounded-lg"><XCircle size={14} /></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* --- TAB KATEGORI --- */}
-        {activeTab === "manage-cat" && (
-          <div className="animate-in fade-in space-y-3">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Kategori ({categories.length})</span>
-              <button className="bg-indigo-600 text-white p-2 rounded-lg shadow-sm"><Plus size={16}/></button>
-            </div>
-
-            {categories.map((c) => (
-              <div key={c.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg text-white bg-linear-to-br ${c.color_theme || 'from-gray-400 to-gray-600'}`}>
-                    <List size={16} />
-                  </div>
-                  <h4 className="text-sm font-bold text-gray-800">{c.name}</h4>
-                </div>
-                <div className="flex gap-1">
-                  <button className="p-2 text-blue-500 bg-blue-50 rounded-lg"><Edit3 size={14} /></button>
-                  <button onClick={() => handleDelete('categories', c.id)} className="p-2 text-red-500 bg-red-50 rounded-lg"><XCircle size={14} /></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* --- TAB DASHBOARD (STATISTIK) --- */}
+      <div className="p-5 space-y-5">
+        
+        {/* --- TAB DASHBOARD --- */}
         {activeTab === "dashboard" && (
-          <div className="animate-in fade-in space-y-4 text-center py-10">
-            <div className="bg-indigo-600 p-8 rounded-4xl shadow-xl relative overflow-hidden text-white">
-               <p className="text-indigo-200 text-xs font-bold uppercase mb-2">Total Produk Aktif</p>
-               <h2 className="text-5xl font-black">{products.length}</h2>
-               <div className="mt-6 pt-6 border-t border-indigo-500/50 flex justify-around">
+          <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            
+            {/* Main Stats Card (Dark Mode) */}
+            <div className="bg-slate-900 p-6 rounded-2xl text-white shadow-lg relative overflow-hidden">
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-6">
                   <div>
-                    <p className="text-[10px] opacity-70">Kategori</p>
-                    <p className="font-bold">{categories.length}</p>
+                    <p className="text-slate-400 text-xs font-medium mb-1">Total Omzet</p>
+                    <h2 className="text-2xl font-bold tracking-tight">Rp {stats.totalSales.toLocaleString('id-ID')}</h2>
+                  </div>
+                  <div className="p-2 bg-white/10 rounded-lg">
+                    <TrendingUp size={20} className="text-emerald-400" />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/10">
+                  <div>
+                    <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Users</p>
+                    <p className="text-lg font-bold">{stats.totalUsers}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] opacity-70">Penjualan</p>
-                    <p className="font-bold">128</p>
+                    <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Produk</p>
+                    <p className="text-lg font-bold">{products.length}</p>
                   </div>
-               </div>
+                  <div>
+                    <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Kategori</p>
+                    <p className="text-lg font-bold">{categories.length}</p>
+                  </div>
+                </div>
+              </div>
+               {/* Decorative Element */}
+               <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl"></div>
+            </div>
+
+            {/* KATEGORI TERLARIS */}
+            <div>
+              <div className="flex justify-between items-center mb-3 px-1">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide">Kategori Terlaris</h3>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-100 p-5 space-y-4">
+                {categorySales.length > 0 ? categorySales.map((c, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-medium">
+                      <span className="text-slate-600">{c.name}</span>
+                      <span className="text-slate-900">{c.total} <span className="text-slate-400 font-normal">pcs</span></span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-indigo-500 rounded-full transition-all duration-1000" 
+                        style={{ width: `${Math.min((c.total / (categorySales[0]?.total || 1)) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )) : (
+                  <p className="text-xs text-slate-400 text-center py-4">Belum ada penjualan.</p>
+                )}
+              </div>
+            </div>
+
+            {/* STATUS GRID */}
+            <div>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 px-1">Status Pesanan</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <StatCard label="Belum Bayar" value={stats.pending} icon={CreditCard} color="bg-amber-50 text-amber-600 border-amber-100" />
+                <StatCard label="Diproses" value={stats.process} icon={Clock} color="bg-indigo-50 text-indigo-600 border-indigo-100" />
+                <StatCard label="Dikirim" value={stats.shipping} icon={Truck} color="bg-blue-50 text-blue-600 border-blue-100" />
+                <StatCard label="Selesai" value={stats.done} icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 border-emerald-100" />
+              </div>
             </div>
           </div>
         )}
+
+        {/* --- TAB INVENTORY (Placeholder for consistency) --- */}
+        {activeTab === "inventory" && (
+           <div className="space-y-4 animate-in fade-in duration-300 pt-2">
+             <div className="flex gap-3">
+               <div className="flex-1 flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5">
+                 <Search size={16} className="text-slate-400" />
+                 <input type="text" placeholder="Cari produk..." className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" />
+               </div>
+               <button className="p-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors">
+                 <Plus size={18} />
+               </button>
+             </div>
+             
+             {products.map((p) => (
+                <div key={p.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-50">
+                    <img src={Array.isArray(p.image_url) ? p.image_url[0] : p.image_url} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-semibold text-slate-800 line-clamp-1">{p.name}</h4>
+                    <p className="text-sm font-bold text-slate-900 mt-1">Rp {p.price.toLocaleString('id-ID')}</p>
+                  </div>
+                  <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
+                    <Edit3 size={16}/>
+                  </button>
+                </div>
+             ))}
+           </div>
+        )}
+
+        {/* --- TAB ORDERS & SETTINGS (Placeholder) --- */}
+        {activeTab === "orders" && (
+          <div className="text-center py-24 animate-in fade-in duration-300">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Truck size={24} className="text-slate-300" />
+            </div>
+            <p className="text-sm font-semibold text-slate-700">Manajemen Pesanan</p>
+            <p className="text-xs text-slate-400 mt-1">Pantau status pesanan di sini.</p>
+          </div>
+        )}
+        
+        {activeTab === "settings" && (
+           <div className="text-center py-24 animate-in fade-in duration-300">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Settings size={24} className="text-slate-300" />
+            </div>
+            <p className="text-sm font-semibold text-slate-700">Pengaturan</p>
+            <p className="text-xs text-slate-400 mt-1">Konfigurasi toko Anda.</p>
+          </div>
+        )}
+
       </div>
+
+      {/* BOTTOM NAVIGATION */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 max-w-md mx-auto z-50">
+        <div className="flex justify-around items-center h-16">
+          {navItems.map((item) => {
+            const isActive = activeTab === item.id
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${
+                  isActive ? 'text-slate-900' : 'text-slate-400'
+                }`}
+              >
+                <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                <span className={`text-[10px] font-semibold`}>{item.label}</span>
+                {isActive && (
+                  <div className="absolute bottom-0 h-0.5 w-8 bg-slate-900 rounded-full"></div>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Sub-component untuk Card Statistik (Clean Style)
+function StatCard({ label, value, icon: Icon, color }: any) {
+  return (
+    <div className={`p-5 rounded-xl border ${color} transition-all hover:shadow-sm`}>
+      <div className="flex justify-between items-start mb-3">
+        <div className="p-1.5 bg-white rounded-lg shadow-xs"><Icon size={16}/></div>
+        <span className="text-xl font-bold">{value}</span>
+      </div>
+      <p className="text-[10px] font-bold uppercase tracking-wide opacity-80 line-clamp-1">{label}</p>
     </div>
   )
 }

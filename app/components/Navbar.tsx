@@ -1,16 +1,20 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { House, ShoppingCart, ChartBarStacked, Users, Zap, Package, FolderPlus } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { 
+  Home, ShoppingCart, LayoutGrid, Users, Zap, 
+  Package, FolderPlus, LayoutDashboard 
+} from "lucide-react";
 
 export default function Navbar() {
   const pathname = usePathname();
   const isAdminPage = pathname.startsWith('/admin');
-  
   const [profileHref, setProfileHref] = useState("/login");
-  // Perbaiki isProfileActive agar menyala di halaman profil manapun
+  
+  // Cek apakah halaman profil sedang aktif
   const isProfileActive = pathname === "/profile" || pathname === "/admin/profile" || pathname === "/login";
 
   useEffect(() => {
@@ -27,7 +31,6 @@ export default function Navbar() {
           .single();
 
         if (adminData) {
-          // KUNCI DISINI: Kalau dia admin, arahkan ke sub-folder profile admin
           setProfileHref("/admin/profile"); 
         } else {
           setProfileHref("/profile");
@@ -38,61 +41,65 @@ export default function Navbar() {
     getDynamicLink();
   }, [pathname]);
 
+  // Definisi Menu User
+  const userMenu = [
+    { href: "/", label: "Beranda", icon: Home, match: pathname === "/" },
+    { href: "/category", label: "Kategori", icon: LayoutGrid, match: pathname === "/category" },
+    { href: "/cart", label: "Keranjang", icon: ShoppingCart, match: pathname === "/cart" },
+  ];
+
+  // Definisi Menu Admin
+  const adminMenu = [
+    { href: "/admin", label: "Home", icon: LayoutDashboard, match: pathname === "/admin" },
+    { href: "/admin/flash-sale", label: "Flash", icon: Zap, match: pathname.includes("flash-sale") },
+    { href: "/admin/add-category", label: "Kategori", icon: FolderPlus, match: pathname.includes("add-category") },
+    { href: "/admin/add-product", label: "Produk", icon: Package, match: pathname.includes("add-product") },
+  ];
+
+  const currentMenu = isAdminPage ? adminMenu : userMenu;
+
   return (
-    <main className="max-w-md mx-auto h-16 font-bold fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-[0_-4px_10px_rgba(0,0,0,0.03)] flex items-center justify-between px-6 z-50">
-      
-      {isAdminPage ? (
-        /* === MENU KHUSUS ADMIN === */
-        <>
-          <Link href="/admin" className={`text-xs focus:outline-none ${pathname === '/admin' ? 'text-indigo-600' : 'text-gray-400'}`}>
-            <House className={`m-auto mb-0.5 ${pathname === '/admin' ? 'text-indigo-600' : 'text-gray-400'}`} size={20} />
-            <span className="text-[9px] uppercase tracking-tighter font-black">Dash</span>
-          </Link>
+    <nav className="max-w-md mx-auto fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-100 z-50">
+      <div className="flex justify-around items-center h-full px-2">
+        
+        {/* Render Menu Dinamis */}
+        {currentMenu.map((item) => {
+          const isActive = item.match;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${
+                isActive ? 'text-slate-900' : 'text-slate-400'
+              }`}
+            >
+              <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+              <span className={`text-[10px] font-semibold`}>{item.label}</span>
+              
+              {/* Indikator Garis Bawah saat Aktif */}
+              {isActive && (
+                <div className="absolute bottom-0 h-0.5 w-6 bg-slate-900 rounded-full"></div>
+              )}
+            </Link>
+          );
+        })}
 
-          <Link href="/admin/flash-sale" className={`text-xs focus:outline-none ${pathname.includes('flash-sale') ? 'text-indigo-600' : 'text-gray-400'}`}>
-            <Zap className={`m-auto mb-0.5 ${pathname.includes('flash-sale') ? 'text-indigo-600' : 'text-gray-400'}`} size={20} />
-            <span className="text-[9px] uppercase tracking-tighter font-black">Flash</span>
-          </Link>
+        {/* Menu Akun (Selalu di ujung) */}
+        <Link
+          href={profileHref}
+          className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${
+            isProfileActive ? 'text-slate-900' : 'text-slate-400'
+          }`}
+        >
+          <Users size={20} strokeWidth={isProfileActive ? 2.5 : 2} />
+          <span className={`text-[10px] font-semibold`}>Akun</span>
           
-          <Link href="/admin/add-category" className={`text-xs focus:outline-none ${pathname.includes('add-category') ? 'text-indigo-600' : 'text-gray-400'}`}>
-            <FolderPlus className={`m-auto mb-0.5 ${pathname.includes('add-category') ? 'text-indigo-600' : 'text-gray-400'}`} size={20} />
-            <span className="text-[9px] uppercase tracking-tighter font-black">Kategori</span>
-          </Link>
+          {isProfileActive && (
+            <div className="absolute bottom-0 h-0.5 w-6 bg-slate-900 rounded-full"></div>
+          )}
+        </Link>
 
-          <Link href="/admin/add-product" className={`text-xs focus:outline-none ${pathname.includes('add-product') ? 'text-indigo-600' : 'text-gray-400'}`}>
-            <Package className={`m-auto mb-0.5 ${pathname.includes('add-product') ? 'text-indigo-600' : 'text-gray-400'}`} size={20} />
-            <span className="text-[9px] uppercase tracking-tighter font-black">Produk</span>
-          </Link>
-        </>
-      ) : (
-        /* === MENU KHUSUS USER === */
-        <>
-          <Link href="/" className={`text-xs focus:outline-none ${pathname === '/' ? 'text-indigo-600' : 'text-gray-400'}`}>
-            <House className={`m-auto mb-0.5 ${pathname === '/' ? 'text-indigo-600' : 'text-gray-400'}`} size={20} />
-            <span className="text-[9px] uppercase tracking-tighter font-black">Beranda</span>
-          </Link>
-          
-          <Link href="/category" className={`text-xs focus:outline-none ${pathname === '/category' ? 'text-indigo-600' : 'text-gray-400'}`}>
-            <ChartBarStacked className={`m-auto mb-0.5 ${pathname === '/category' ? 'text-indigo-600' : 'text-gray-400'}`} size={20} />
-            <span className="text-[9px] uppercase tracking-tighter font-black">Kategori</span>
-          </Link>
-
-          <Link href="/cart" className={`text-xs focus:outline-none ${pathname === '/cart' ? 'text-indigo-600' : 'text-gray-400'}`}>
-            <ShoppingCart className={`m-auto mb-0.5 ${pathname === '/cart' ? 'text-indigo-600' : 'text-gray-400'}`} size={20} />
-            <span className="text-[9px] uppercase tracking-tighter font-black">Keranjang</span>
-          </Link>
-        </>
-      )}
-
-      {/* LINK AKUN DINAMIS (Sekarang nge-link ke /admin/profile atau /profile) */}
-      <Link 
-        href={profileHref} 
-        className={`text-xs focus:outline-none transition-all active:scale-90 ${isProfileActive ? 'text-indigo-600' : 'text-gray-400'}`}
-      >
-        <Users className={`m-auto mb-0.5 ${isProfileActive ? 'text-indigo-600' : 'text-gray-400'}`} size={20} />
-        <span className="text-[9px] uppercase tracking-tighter font-black">Akun</span>
-      </Link>
-
-    </main>
+      </div>
+    </nav>
   );
 }

@@ -1,119 +1,200 @@
-"use client";
+"use client"
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Icons from "lucide-react";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
 export default function CartPage() {
   const router = useRouter();
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Ambil data dari LocalStorage
   useEffect(() => {
-    const savedCart = localStorage.getItem("warden-cart");
-    if (savedCart) {
-      setCartItems(JSON.parse(savedCart));
-    }
-    setLoading(false);
+    fetchCart();
   }, []);
 
-  // 2. Update Jumlah Barang (Plus/Minus)
-  const updateQuantity = (id: string, delta: number) => {
-    const newCart = cartItems.map(item => {
-      if (item.id === id) {
-        const newQty = Math.max(1, (item.quantity || 1) + delta);
-        return { ...item, quantity: newQty };
-      }
-      return item;
-    });
-    setCartItems(newCart);
-    localStorage.setItem("warden-cart", JSON.stringify(newCart));
+  const fetchCart = async () => {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("cart")
+      .select("*, products(*)")
+      .eq("user_id", user.id);
+
+    if (data) {
+      const formattedData = data.map(item => ({
+        id: item.id,
+        product_id: item.product_id,
+        name: item.products.name,
+        price: item.products.price,
+        image_url: Array.isArray(item.products.image_url) ? item.products.image_url[0] : item.products.image_url,
+        quantity: item.quantity
+      }));
+      setCartItems(formattedData);
+    }
+    setLoading(false);
   };
 
-  // 3. Hapus Barang dari Keranjang
-  const removeItem = (id: string) => {
-    const newCart = cartItems.filter(item => item.id !== id);
-    setCartItems(newCart);
-    localStorage.setItem("warden-cart", JSON.stringify(newCart));
+  const updateQuantity = async (id: string, delta: number, currentQty: number) => {
+    const newQty = Math.max(1, currentQty + delta);
+    
+    // Optimistic Update
+    setCartItems(prev => prev.map(item => item.id === id ? { ...item, quantity: newQty } : item));
+
+    const { error } = await supabase
+      .from("cart")
+      .update({ quantity: newQty })
+      .eq("id", id);
+
+    if (error) fetchCart(); 
   };
 
-  // 4. Hitung Total
+  const removeItem = async (id: string) => {
+    // Optimistic Update
+    setCartItems(prev => prev.filter(item => item.id !== id));
+    
+    const { error } = await supabase
+      .from("cart")
+      .delete()
+      .eq("id", id);
+      
+    if (error) fetchCart(); // Rollback if error
+  };
+
+  const clearCart = async () => {
+    if (confirm("Kosongkan semua keranjang?")) {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from("cart").delete().eq("user_id", user?.id);
+      setCartItems([]);
+    }
+  };
+
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * (item.quantity || 1)), 0);
 
-  if (loading) return <div className="p-20 text-center text-[10px] font-black uppercase opacity-20">Ngecek Keranjang...</div>;
+  if (loading) return (
+    <div className="h-screen flex flex-col items-center justify-center bg-slate-50 gap-3">
+      <Icons.Loader2 className="animate-spin text-slate-400" size={28} />
+      <p className="text-xs font-medium text-slate-400">Memuat keranjang...</p>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-32 font-sans max-w-md mx-auto relative">
-      {/* HEADER NAVBAR */}
-      <div className="bg-white px-6 py-6 rounded-b-[2.5rem] shadow-sm border-b border-gray-100 sticky top-0 z-50">
-        <div className="flex justify-between items-center">
-          <button onClick={() => router.back()} className="p-2 bg-gray-50 rounded-xl active:scale-90 transition-all">
-            <Icons.ArrowLeft size={18} />
+    <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto relative pb-32">
+      
+      {/* HEADER */}
+      <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
+        <div className="flex items-center justify-between px-5 pt-12 pb-4">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+            <Icons.ArrowLeft size={20} strokeWidth={2.5} />
           </button>
-          <h2 className="text-sm font-black uppercase tracking-widest text-gray-800">Keranjang Belanja</h2>
-          <button className="p-2 bg-gray-50 rounded-xl text-red-500" onClick={() => {if(confirm("Kosongkan keranjang?")){setCartItems([]); localStorage.removeItem("warden-cart")}}}>
-            <Icons.Trash2 size={18} />
-          </button>
+          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Keranjang</h1>
+          {cartItems.length > 0 ? (
+             <button onClick={clearCart} className="p-2 -mr-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
+               <Icons.Trash2 size={18} />
+             </button>
+          ) : (
+            <div className="w-8"></div>
+          )}
         </div>
       </div>
 
-      <div className="px-4 mt-6 space-y-4">
+      {/* CONTENT */}
+      <div className="p-5 space-y-3">
         {cartItems.length > 0 ? (
           cartItems.map((item) => (
-            <div key={item.id} className="bg-white p-4 rounded-4xl shadow-xl shadow-gray-200/40 border border-gray-50 flex gap-4 relative overflow-hidden group">
-              {/* IMAGE */}
-              <div className="w-20 h-20 bg-gray-100 rounded-2xl overflow-hidden shrink-0">
-                <img src={Array.isArray(item.image_url) ? item.image_url[0] : item.image_url} className="w-full h-full object-cover" alt={item.name} />
+            <div 
+              key={item.id} 
+              className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex gap-4 relative group"
+            >
+              {/* Image */}
+              <div className="w-20 h-20 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-50">
+                <img 
+                  src={item.image_url} 
+                  className="w-full h-full object-cover" 
+                  alt={item.name} 
+                />
               </div>
 
-              {/* INFO */}
-              <div className="flex flex-col justify-between flex-1 py-1">
+              {/* Detail */}
+              <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
                 <div>
-                  <h3 className="text-[11px] font-bold text-gray-800 line-clamp-1">{item.name}</h3>
-                  <p className="text-indigo-600 font-black text-sm">Rp {item.price.toLocaleString('id-ID')}</p>
+                  <h3 className="text-sm font-semibold text-slate-800 line-clamp-1 leading-tight">{item.name}</h3>
+                  <p className="text-sm font-bold text-slate-900 mt-1">
+                    Rp {item.price.toLocaleString('id-ID')}
+                  </p>
                 </div>
 
-                {/* COUNTER */}
-                <div className="flex items-center gap-3 bg-gray-50 self-start px-2 py-1 rounded-xl">
-                  <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-lg shadow-sm active:scale-90">-</button>
-                  <span className="text-[11px] font-black w-4 text-center">{item.quantity || 1}</span>
-                  <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-lg shadow-sm active:scale-90">+</button>
+                {/* Quantity Control (Modern Pill Style) */}
+                <div className="flex items-center justify-between mt-2">
+                   <div className="flex items-center gap-1 shrink-0 border border-slate-200 rounded-full p-1">
+                      <button 
+                        onClick={() => updateQuantity(item.id, -1, item.quantity)}
+                        className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors"
+                      >
+                        <Icons.Minus size={14} className="text-slate-500" />
+                      </button>
+                      <span className="w-5 text-center text-xs font-bold text-slate-700">{item.quantity}</span>
+                      <button 
+                        onClick={() => updateQuantity(item.id, 1, item.quantity)}
+                        className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-900 hover:bg-slate-800 transition-colors"
+                      >
+                        <Icons.Plus size={14} className="text-white" />
+                      </button>
+                   </div>
+                   
+                   <button 
+                    onClick={() => removeItem(item.id)} 
+                    className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                   >
+                     <Icons.X size={16} />
+                   </button>
                 </div>
               </div>
-
-              {/* REMOVE BUTTON */}
-              <button onClick={() => removeItem(item.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors">
-                <Icons.X size={16} />
-              </button>
             </div>
           ))
         ) : (
-          <div className="text-center py-24 bg-white rounded-[3rem] shadow-sm border border-gray-100">
-            <div className="bg-indigo-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Icons.ShoppingBag size={32} className="text-indigo-600 opacity-30" />
+          /* EMPTY STATE */
+          <div className="text-center py-20 flex flex-col items-center justify-center">
+            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-5">
+              <Icons.ShoppingBag size={32} className="text-slate-300" />
             </div>
-            <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Keranjang Kosong, Lur!</p>
-            <Link href="/" className="mt-6 inline-block bg-indigo-600 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100 active:scale-95 transition-all">
-              Cari Donsu
+            <p className="text-sm font-semibold text-slate-700 mb-1">Keranjang Kosong</p>
+            <p className="text-xs text-slate-400 mb-6">Waktunya isi dengan barang favoritmu!</p>
+            <Link 
+              href="/" 
+              className="bg-slate-900 text-white px-8 py-3 rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm"
+            >
+              Mulai Belanja
             </Link>
           </div>
         )}
       </div>
 
-      {/* RINGKASAN PEMBAYARAN FIXED BOTTOM */}
+      {/* FOOTER CHECKOUT (Floating) */}
       {cartItems.length > 0 && (
-        <div className="fixed bottom-24 left-0 right-0 max-w-md mx-auto px-4 z-40">
-          <div className="bg-gray-900 text-white p-6 rounded-[2.5rem] shadow-2xl shadow-indigo-200">
-            <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-50">Total Bayar</span>
-              <span className="text-xl font-black">Rp {subtotal.toLocaleString('id-ID')}</span>
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-t border-slate-100 max-w-md mx-auto p-4">
+          <div className="flex items-center justify-between gap-4">
+            {/* Total Section */}
+            <div className="flex-1">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Total Tagihan</p>
+              <p className="text-lg font-bold text-slate-900">Rp {subtotal.toLocaleString('id-ID')}</p>
             </div>
             
-            <button className="w-full bg-white text-gray-900 py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2 group">
-              Checkout Sekarang
-              <Icons.ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+            {/* Checkout Button */}
+            <button 
+              onClick={() => router.push("/checkout")}
+              className="bg-slate-900 hover:bg-slate-800 text-white h-12 px-6 rounded-xl text-sm font-bold transition-all active:scale-[0.98] shadow-sm flex items-center gap-2"
+            >
+              <span>Checkout</span>
+              <Icons.ArrowRight size={18} />
             </button>
           </div>
         </div>

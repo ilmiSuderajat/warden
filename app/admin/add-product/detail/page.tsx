@@ -1,13 +1,15 @@
-"use client";
+"use client"
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import * as Icons from "lucide-react";
 import imageCompression from 'browser-image-compression';
+import { useRouter } from "next/navigation";
 
 export default function AddProductPage() {
+  const router = useRouter();
   const [categories, setCategories] = useState<any[]>([]);
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>(""); 
   const [loading, setLoading] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [files, setFiles] = useState<(File | null)[]>([null, null, null]);
@@ -19,7 +21,9 @@ export default function AddProductPage() {
     original_price: "", 
     description: "",
     location: "", 
-    stock: "" 
+    stock: "" ,
+    latitude: null as number | null, 
+    longitude: null as number | null
   });
 
   useEffect(() => {
@@ -30,11 +34,10 @@ export default function AddProductPage() {
     fetchCategories();
   }, []);
 
-  // FUNGSI DETEKSI LOKASI OTOMATIS
- const detectLocation = () => {
+  const detectLocation = () => {
     setDetecting(true);
     if (!navigator.geolocation) {
-      alert("Browser kamu nggak dukung lokasi, Lur.");
+      alert("Browser tidak mendukung lokasi.");
       setDetecting(false);
       return;
     }
@@ -43,37 +46,30 @@ export default function AddProductPage() {
       async (position) => {
         try {
           const { latitude, longitude } = position.coords;
-          // Reverse Geocoding menggunakan OpenStreetMap
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
-          );
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
           const data = await res.json();
-          
-          // AMBIL NAMA DESA / KELURAHAN
-          // Kita cek satu-satu dari yang paling spesifik (desa/kelurahan)
           const address = data.address;
-          const desa = address.village || address.suburb || address.hamlet || address.neighbourhood || address.town || "Desa Tidak Terdeteksi";
-          
-          setFormData(prev => ({ ...prev, location: desa }));
+          const desa = address.village || address.suburb || address.hamlet || address.neighbourhood || address.town || "Lokasi tidak terdeteksi";
+          setFormData(prev => ({ ...prev, location: desa, latitude, longitude }));
         } catch (err) {
-          alert("Gagal menerjemahkan koordinat ke nama desa.");
+          alert("Gagal mendeteksi lokasi.");
         } finally {
           setDetecting(false);
         }
       },
       () => {
-        alert("Izin lokasi ditolak, silakan ketik manual.");
+        alert("Izin lokasi ditolak.");
         setDetecting(false);
       }
     );
   };
+
   const handleFileChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const newFiles = [...files];
       newFiles[index] = file;
       setFiles(newFiles);
-
       const reader = new FileReader();
       reader.onloadend = () => {
         const newPreviews = [...previews];
@@ -86,6 +82,7 @@ export default function AddProductPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedCategory) return alert("Pilih kategori dulu!");
     setLoading(true);
 
     const options = { maxSizeMB: 0.5, maxWidthOrHeight: 1024, useWebWorker: true };
@@ -94,7 +91,6 @@ export default function AddProductPage() {
       const uploadedUrls: string[] = [];
       for (const file of files) {
         if (file) {
-          // Kompresi Gambar Otomatis
           const compressedFile = await imageCompression(file, options);
           const fileExt = file.name.split('.').pop();
           const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
@@ -113,8 +109,7 @@ export default function AddProductPage() {
         }
       }
 
-      // Insert ke database
-      const { data: newProduct, error: productError } = await supabase
+      const { error: productError } = await supabase
         .from("products")
         .insert([{
           name: formData.name,
@@ -123,22 +118,16 @@ export default function AddProductPage() {
           image_url: uploadedUrls,
           description: formData.description,
           location: formData.location,
-          stock: parseInt(formData.stock)
-        }])
-        .select().single();
+          stock: parseInt(formData.stock),
+          category_id: selectedCategory,
+          latitude: formData.latitude,
+          longitude: formData.longitude
+        }]);
 
       if (productError) throw productError;
 
-      if (selectedCategories.length > 0 && newProduct) {
-        const junctionData = selectedCategories.map(catId => ({
-          product_id: newProduct.id,
-          category_id: catId
-        }));
-        await supabase.from("product_categories").insert(junctionData);
-      }
-
-      alert("Gaskeun! Produk sudah tayang!");
-      window.location.reload();
+      alert("Produk berhasil ditambahkan!");
+      router.push("/admin"); // Kembali ke dashboard admin
     } catch (error: any) {
       alert("Error: " + error.message);
     } finally {
@@ -147,103 +136,168 @@ export default function AddProductPage() {
   };
 
   return (
-    <div className="min-h-screen max-w-md mx-auto bg-gray-50 pb-20 font-sans">
+    <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-32">
+      
       {/* HEADER */}
-      <div className="bg-gray-50 px-6 py-8 mb-10 border-b shadow-sm border-gray-100">
-        <div className="max-w-md mx-auto flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Post Produk</h2>
-            <p className="text-xs text-gray-800 font-medium mt-1">Isi detail jualanmu di sini, Lur.</p>
-          </div>
-          <div className="bg-gray-50 text-indigo-800 p-3 rounded-2xl">
-            <Icons.Store size={24} />
+      <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
+        <div className="flex items-center justify-between px-5 pt-12 pb-4">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+              <Icons.ArrowLeft size={20} strokeWidth={2.5} />
+            </button>
+            <div>
+              <h1 className="text-lg font-bold text-slate-900 tracking-tight">Tambah Produk</h1>
+              <p className="text-[10px] font-medium text-slate-400">Masukkan detail produk baru</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="max-w-md mx-auto px-4 -mt-6 space-y-4">
-        {/* FOTO PRODUK */}
-        <div className="bg-gray-50 p-4  shadow-xl shadow-gray-200/50 grid grid-cols-3 gap-3">
-          {previews.map((src, index) => (
-            <label key={index} className="relative aspect-square text-black bg-white rounded-2xl border-2 border-dashed border-gray-600 flex flex-col items-center justify-center cursor-pointer overflow-hidden hover:border-indigo-800 transition-all group">
-              {src ? (
-                <img src={src} className="w-full h-full object-cover" alt="preview" />
-              ) : (
-                <div className="text-center">
-                  <Icons.ImagePlus size={20} className="text-gray-800 mx-auto group-hover:text-indigo-800" />
-                  <span className="text-[8px] font-bold text-gray-800 mt-1 block uppercase">Foto {index + 1}</span>
-                </div>
-              )}
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(index, e)} />
-            </label>
-          ))}
+      <form onSubmit={handleSubmit} className="p-5 space-y-5">
+        
+        {/* UPLOAD FOTO */}
+        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm">
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Foto Produk</label>
+          <div className="grid grid-cols-3 gap-3">
+            {previews.map((src, index) => (
+              <label 
+                key={index} 
+                className={`relative aspect-square bg-slate-50 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all hover:border-slate-300 hover:bg-slate-100 ${index === 0 ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-200'}`}
+              >
+                {src ? (
+                  <img src={src} className="w-full h-full object-cover" alt="preview" />
+                ) : (
+                  <div className="text-center flex flex-col items-center justify-center">
+                    <Icons.ImagePlus size={20} className={`${index === 0 ? 'text-indigo-300' : 'text-slate-300'} mb-1`} />
+                    {index === 0 && <span className="text-[8px] font-bold text-indigo-400 uppercase">Utama</span>}
+                  </div>
+                )}
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(index, e)} />
+              </label>
+            ))}
+          </div>
+          <p className="text-[10px] text-slate-400 mt-3 text-center">Kotak pertama adalah foto utama</p>
         </div>
 
         {/* INFO UTAMA */}
-        <div className="bg-gray-50 p-6 shadow-xl shadow-gray-200/50 space-y-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-gray-800 uppercase ml-2 tracking-widest">Informasi Produk</label>
-            <input type="text" placeholder="Nama Produk" className="w-full p-4 bg-white text-gray-800 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-600 border-none" 
-              onChange={e => setFormData({...formData, name: e.target.value})} required />
+        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Nama Produk</label>
+            <input 
+              type="text" 
+              placeholder="Contoh: Donsu Warden" 
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 transition-all placeholder:text-slate-300" 
+              onChange={e => setFormData({...formData, name: e.target.value})} 
+              required 
+            />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-3">
-            <input type="number" placeholder="Harga Jual" className="p-4 bg-white text-gray-800 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 border-none" 
-              onChange={e => setFormData({...formData, price: e.target.value})} required />
-            <input type="number" placeholder="Harga Coret" className="p-4 bg-white text-gray-800 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 border-none" 
-              onChange={e => setFormData({...formData, original_price: e.target.value})} />
-          </div>
-
-          {/* LOKASI & STOK */}
-          <div className="grid grid-cols-2 gap-3 border-t border-gray-50 pt-4">
-            <div className="relative">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Harga Jual (Rp)</label>
               <input 
-                type="text" 
-                placeholder="Lokasi" 
-                value={formData.location}
-                className="w-full p-4 pl-4 pr-12 bg-white text-gray-800 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 border-none" 
-                onChange={e => setFormData({...formData, location: e.target.value})} required 
+                type="number" 
+                placeholder="100.000" 
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all placeholder:text-slate-300" 
+                onChange={e => setFormData({...formData, price: e.target.value})} 
+                required 
               />
-              <button
-                type="button"
-                onClick={detectLocation}
-                disabled={detecting}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-indigo-500 p-2 hover:bg-indigo-50 rounded-xl"
-              >
-                {detecting ? <Icons.Loader2 size={14} className="animate-spin" /> : <Icons.Navigation size={14} />}
-              </button>
             </div>
-            <div className="relative">
-              <Icons.Box size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="number" placeholder="Stok" className="w-full p-4 pl-10 bg-white text-gray-800 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 border-none" 
-                onChange={e => setFormData({...formData, stock: e.target.value})} required />
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Harga Coret (Rp)</label>
+              <input 
+                type="number" 
+                placeholder="150.000" 
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all placeholder:text-slate-300" 
+                onChange={e => setFormData({...formData, original_price: e.target.value})} 
+              />
             </div>
           </div>
 
-          <textarea placeholder="Deskripsi lengkap..." className="w-full p-4 bg-white text-gray-800 rounded-2xl h-24 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500 border-none"
-            onChange={e => setFormData({...formData, description: e.target.value})} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Lokasi</label>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  placeholder="Deteksi otomatis" 
+                  value={formData.location} 
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all placeholder:text-slate-300 pr-10" 
+                  onChange={e => setFormData({...formData, location: e.target.value})} 
+                  required 
+                />
+                <button 
+                  type="button" 
+                  onClick={detectLocation} 
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {detecting ? <Icons.Loader2 size={16} className="animate-spin" /> : <Icons.Navigation size={16} />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Stok</label>
+              <input 
+                type="number" 
+                placeholder="Jumlah stok" 
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all placeholder:text-slate-300" 
+                onChange={e => setFormData({...formData, stock: e.target.value})} 
+                required 
+              />
+            </div>
+          </div>
         </div>
 
         {/* KATEGORI */}
-        <div className="bg-white p-6 rounded-xl shadow-xl shadow-gray-200/50 space-y-3">
-          <div className="flex items-center gap-2 px-1">
-            <Icons.Tag size={14} className="text-indigo-600" />
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kategori</span>
-          </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm">
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Kategori</label>
           <div className="flex flex-wrap gap-2">
             {categories.map((cat) => (
-              <button key={cat.id} type="button" 
-                onClick={() => selectedCategories.includes(cat.id) ? setSelectedCategories(selectedCategories.filter(id => id !== cat.id)) : setSelectedCategories([...selectedCategories, cat.id])}
-                className={`px-4 py-2  text-[11px] font-bold transition-all border ${selectedCategories.includes(cat.id) ? "bg-indigo-500 border-indigo-500 text-white shadow-lg shadow-indigo-100" : "bg-gray-50 border-gray-100 text-gray-400"}`}>
+              <button 
+                key={cat.id} 
+                type="button" 
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                  selectedCategory === cat.id 
+                  ? "bg-slate-900 text-white border-slate-900" 
+                  : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
+                }`}
+              >
                 {cat.name}
               </button>
             ))}
           </div>
         </div>
 
-        <button disabled={loading} className="w-full bg-indigo-900 text-white py-5 rounded-xl font-black shadow-sm active:scale-95 transition-all text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3">
-          {loading ? <Icons.Loader2 className="animate-spin" size={18} /> : "Simpan Produk Sekarang"}
-        </button>
+        {/* DESKRIPSI */}
+        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm">
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Deskripsi</label>
+          <textarea 
+            placeholder="Tulis deskripsi produk di sini..." 
+            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl h-28 text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all resize-none placeholder:text-slate-300"
+            onChange={e => setFormData({...formData, description: e.target.value})} 
+          />
+        </div>
+
+        {/* SUBMIT BUTTON FLOATING */}
+        <div className="mb-10 bg-white/80 backdrop-blur-lg border-t border-slate-100 p-5 max-w-md mx-auto z-50">
+          <button 
+            disabled={loading} 
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-400 shadow-sm flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <>
+                <Icons.Loader2 size={16} className="animate-spin" />
+                <span>Menyimpan...</span>
+              </>
+            ) : (
+              <>
+                <Icons.Check size={16} />
+                <span>Simpan Produk</span>
+              </>
+            )}
+          </button>
+        </div>
       </form>
     </div>
   );

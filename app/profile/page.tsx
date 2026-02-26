@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import * as Icons from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Link } from "lucide-react";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function ProfilePage() {
   };
 
   const menuItems = [
-    { icon: "ShoppingBag", label: "Pesanan Saya", color: "text-blue-500", bg: "bg-blue-50" },
+   { href: "/orders", icon: "ShoppingBag", label: "Pesanan Saya", color: "text-blue-500", bg: "bg-blue-50" },
     { icon: "Heart", label: "Wishlist", color: "text-red-500", bg: "bg-red-50" },
     { icon: "MapPin", label: "Alamat Saya", color: "text-orange-500", bg: "bg-orange-50" },
     { icon: "Settings", label: "Pengaturan Akun", color: "text-gray-500", bg: "bg-gray-50" },
