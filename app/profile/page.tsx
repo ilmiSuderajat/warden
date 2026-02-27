@@ -1,156 +1,118 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { ArrowLeft, Loader2, Package } from "lucide-react"
-import dynamic from 'next/dynamic'
-import dynamicIconImports from 'lucide-react/dynamicIconImports'
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import * as Icons from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Link } from "lucide-react";
 
-// --- DYNAMIC ICON COMPONENT ---
-// Menghilangkan import * as Icons agar memori HP irit
-const DynamicIcon = ({ name, size = 18 }: { name: string; size?: number }) => {
-  const Icon = dynamic<any>(
-    (dynamicIconImports as any)[name] || (() => Promise.resolve(Package)),
-    { ssr: false, loading: () => <div style={{ width: size, height: size }} className="bg-slate-100 animate-pulse rounded" /> }
-  )
-  return <Icon size={size} />
-}
-
-export default function CategorySplitPage() {
-  const router = useRouter()
-  const [categories, setCategories] = useState<any[]>([])
-  const [selectedCat, setSelectedCat] = useState<string | null>(null)
-  const [products, setProducts] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
+export default function ProfilePage() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchCats = async () => {
-      const { data } = await supabase.from("categories").select("*").order("name")
-      if (data && data.length > 0) {
-        setCategories(data)
-        setSelectedCat(data[0].id)
-      }
-    }
-    fetchCats()
-  }, [])
+    const getProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      setLoading(false);
+    };
+    getProfile();
+  }, []);
 
-  useEffect(() => {
-    if (!selectedCat) return
-    const fetchProducts = async () => {
-      setLoading(true)
-      try {
-        const { data, error } = await supabase
-          .from("products")
-          .select("*")
-          .eq("category_id", selectedCat)
-          .order('created_at', { ascending: false })
-        if (error) throw error
-        setProducts(data || [])
-      } catch (error) {
-        setProducts([])
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchProducts()
-  }, [selectedCat])
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  };
+
+  const menuItems = [
+   { href: "/orders", icon: "ShoppingBag", label: "Pesanan Saya", color: "text-blue-500", bg: "bg-blue-50" },
+    { href: "/wishlist", icon: "Heart", label: "Wishlist", color: "text-red-500", bg: "bg-red-50" },
+    { href: "/address", icon: "MapPin", label: "Alamat Saya", color: "text-orange-500", bg: "bg-orange-50" },
+    { href: "/settings", icon: "Settings", label: "Pengaturan Akun", color: "text-gray-500", bg: "bg-gray-50" },
+    { href: "/help-center", icon: "ShieldCheck", label: "Pusat Bantuan", color: "text-green-500", bg: "bg-green-50" },
+  ];
 
   return (
-    <div className="bg-slate-50 max-w-md mx-auto font-sans text-slate-900">
-      
-      {/* HEADER FIXED */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-white">
-        <div className="w-full max-w-md h-14 flex items-center px-4 border-b border-slate-100">
-          <button 
-            onClick={() => router.back()} 
-            className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform"
-          >
-            <ArrowLeft size={24} strokeWidth={2.5} />
-          </button>
-          <h1 className="ml-3 text-lg font-bold tracking-tight">Kategori</h1>
-        </div>
-      </header>
-
-      {/* SIDEBAR FIXED */}
-      <aside className="fixed top-14 left-0 bottom-0 w-18 bg-white border-r border-slate-100 z-40 overflow-y-auto no-scrollbar">
-        <div className="py-2">
-          {categories.map((cat) => {
-            const isActive = selectedCat === cat.id
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCat(cat.id)}
-                className={`w-full py-3 flex flex-col items-center gap-1 relative transition-colors ${
-                  isActive ? "bg-indigo-50" : "bg-transparent"
-                }`}
-              >
-                {isActive && (
-                  <span className="absolute left-0 top-2 bottom-2 w-1 bg-indigo-600 rounded-r-full" />
-                )}
-                <div className={`p-1.5 rounded-lg transition-colors ${
-                  isActive ? "bg-indigo-600 text-white shadow-md shadow-indigo-200" : "bg-slate-100 text-slate-500"
-                }`}>
-                  {/* Panggil DynamicIcon di sini */}
-                  <DynamicIcon name={cat.icon_name} size={18} />
-                </div>
-                <span className={`text-[10px] font-semibold leading-tight line-clamp-2 px-1 text-center ${
-                  isActive ? "text-indigo-600" : "text-slate-500"
-                }`}>
-                  {cat.name}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </aside>
-
-      {/* KONTEN KANAN */}
-      <main className="pl-18 pt-14 min-h-screen bg-slate-50/50 pb-10">
-        <div className="p-4">
-          <div className="mb-4 px-1">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              {categories.find(c => c.id === selectedCat)?.name || "Produk"}
-            </h2>
+    <div className="min-h-screen bg-[#F8F9FD] pb-32 font-sans max-w-md mx-auto">
+      {/* HEADER & AVATAR SECTION */}
+      <div className="bg-white px-8 pt-16 pb-10 rounded-b-[3.5rem] shadow-sm relative overflow-hidden">
+        {/* Dekorasi Background */}
+        <div className="absolute -top-10 -right-10 w-40 h-40 bg-indigo-50 rounded-full blur-3xl opacity-50"></div>
+        
+        <div className="relative flex flex-col items-center">
+          <div className="w-24 h-24 rounded-[2.5rem] bg-indigo-600 p-1 shadow-2xl shadow-indigo-200 relative group">
+            <div className="w-full h-full rounded-[2.2rem] bg-white overflow-hidden flex items-center justify-center border-4 border-white">
+              {user?.user_metadata?.avatar_url ? (
+                <img src={user.user_metadata.avatar_url} className="w-full h-full object-cover" alt="Profile" />
+              ) : (
+                <Icons.User size={40} className="text-indigo-200" />
+              )}
+            </div>
+            <button className="absolute bottom-0 right-0 bg-white p-2 rounded-xl shadow-lg border border-gray-50 active:scale-90 transition-all">
+              <Icons.Camera size={14} className="text-indigo-600" />
+            </button>
           </div>
 
-          {loading ? (
-            <div className="flex justify-center items-center h-40">
-              <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
-            </div>
-          ) : products.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3">
-              {products.map((p) => (
-                <Link
-                  href={`/product/${p.id}`}
-                  key={p.id}
-                  className="bg-white rounded-xl border border-slate-100 overflow-hidden active:scale-[0.98] transition-all shadow-sm"
-                >
-                  <div className="aspect-square bg-slate-100 relative overflow-hidden">
-                    <img
-                      src={Array.isArray(p.image_url) ? p.image_url[0] : p.image_url}
-                      className="w-full h-full object-cover"
-                      alt={p.name}
-                      loading="lazy"
-                    />
-                  </div>
-                  <div className="p-2.5">
-                    <h3 className="text-[13px] font-medium text-slate-800 line-clamp-2 leading-tight mb-1">
-                      {p.name}
-                    </h3>
-                    <p className="text-sm font-bold text-indigo-600">
-                      Rp {p.price?.toLocaleString('id-ID')}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-16 text-slate-400 text-sm">Produk Kosong</div>
-          )}
+          <div className="mt-4 text-center">
+            <h2 className="text-xl font-black text-gray-800 tracking-tight">
+              {user?.user_metadata?.full_name || "Sobat Warden"}
+            </h2>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+              {user?.email || "Belum Login, Lur"}
+            </p>
+          </div>
         </div>
-      </main>
+      </div>
+
+      {/* STATS SECTION */}
+      <div className="grid grid-cols-3 gap-4 px-6 -mt-6 relative z-10">
+        {[
+          { label: "Poin", val: "1.2k" },
+          { label: "Voucher", val: "5" },
+          { label: "Saldo", val: "0" }
+        ].map((stat, i) => (
+          <div key={i} className="bg-white p-3 rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-50 text-center">
+            <p className="text-[12px] font-black text-gray-800">{stat.val}</p>
+            <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter mt-0.5">{stat.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* MENU LIST */}
+      <div className="mt-8 px-6 space-y-3">
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2 mb-4">Aktivitas Saya</p>
+        
+        {menuItems.map((item, idx) => {
+          const Icon = (Icons as any)[item.icon];
+          return (
+            <button key={idx} className="w-full bg-white p-4 rounded-2xl flex items-center justify-between group active:scale-[0.98] transition-all border border-transparent hover:border-indigo-100 shadow-sm">
+              <div className="flex items-center gap-4">
+                <div className={`p-2.5 rounded-xl ${item.bg} ${item.color}`}>
+                  <Icon size={18} />
+                </div>
+                <span className="text-xs font-bold text-gray-700">{item.label}</span>
+              </div>
+              <Icons.ChevronRight size={16} className="text-gray-300 group-hover:text-indigo-400 transition-colors" />
+            </button>
+          );
+        })}
+
+        {/* LOGOUT */}
+        <button 
+          onClick={handleLogout}
+          className="w-full mt-6 bg-red-50 p-4 rounded-2xl flex items-center justify-center gap-2 text-red-500 active:scale-[0.98] transition-all border border-red-100 shadow-sm shadow-red-100/50"
+        >
+          <Icons.LogOut size={16} />
+          <span className="text-xs font-black uppercase tracking-widest">Keluar Akun</span>
+        </button>
+      </div>
+
+      {/* FOOTER INFO */}
+      <div className="mt-10 text-center pb-10">
+        <p className="text-[8px] font-bold text-gray-300 uppercase tracking-[0.3em]">Warden v1.0.4 - 2026</p>
+      </div>
     </div>
-  )
+  );
 }
