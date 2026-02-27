@@ -63,7 +63,7 @@ export default function Banner() {
               className="block active:scale-[0.98] transition-transform duration-150"
             >
               <div 
-                className="min-w-32 p-2 bg-white rounded-lg shadow-sm snap-start"
+                className="min-w-32 p-2 bg-gray-100 snap-start"
               >
               <div className="h-32 bg-gray-100 rounded-md mb-2 overflow-hidden">
                 {displayImg ? (

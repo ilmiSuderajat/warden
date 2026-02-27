@@ -125,7 +125,7 @@ export default function CategorySplitPage() {
                 <Link
                   href={`/product/${p.id}`}
                   key={p.id}
-                  className="bg-white rounded-xl border border-slate-100 overflow-hidden active:scale-[0.98] transition-transform"
+                  className="bg-white overflow-hidden active:scale-[0.98] transition-transform"
                 >
                   <div className="aspect-square bg-slate-100 relative overflow-hidden">
                     <img
@@ -136,10 +136,10 @@ export default function CategorySplitPage() {
                     />
                   </div>
                   <div className="p-2.5">
-                    <h3 className="text-[13px] font-medium text-slate-800 line-clamp-2 leading-tight mb-1">
+                    <h3 className="text-[13px] font-medium text-slate-800 line-clamp-2 leading-tight ">
                       {p.name}
                     </h3>
-                    <p className="text-sm font-bold text-slate-900">
+                    <p className="text-sm font-bold text-red-600">
                       Rp {p.price?.toLocaleString('id-ID')}
                     </p>
                   </div>

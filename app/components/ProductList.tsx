@@ -94,7 +94,7 @@ export default function ProductList() {
       </div>
 
       {/* PRODUCT LIST */}
-      <div className={view === "grid" ? "grid grid-cols-2 gap-2" : "flex flex-col gap-2"}>
+      <div className={view === "grid" ? "grid grid-cols-2 gap-2" : "flex flex-col gap-2 "}>
         {products.map((p) => {
           const price = p.price || 0
           const original = p.original_price || 0
@@ -107,8 +107,8 @@ export default function ProductList() {
               key={p.id} 
               className="block active:scale-[0.98] transition-transform duration-150"
             >
-              <div className={`bg-white overflow-hidden border border-gray-100 h-full ${
-                view === "list" ? "flex flex-row rounded-lg" : "flex flex-col rounded-xl shadow-sm"
+              <div className={`bg-white overflow-hidden border border-gray-100 mx-auto h-full w-full ${
+                view === "list" ? "flex flex-row" : "flex flex-col  "
               }`}>
                                 {/* IMAGE CONTAINER */}
                 <div className={`relative shrink-0 overflow-hidden ${
@@ -116,8 +116,8 @@ export default function ProductList() {
                 }`}>
                   {/* Badge Lapisan Atas */}
                   <div className="absolute top-0 left-0 z-10 flex flex-col items-start">
-                    <span className="bg-indigo-600 text-white text-[7px] font-bold px-1 py-0.5 rounded-br-md">WardenMall</span>
-                    {p.is_flash_sale && <span className="bg-orange-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-br-md italic">FLASH</span>}
+                    <span className="bg-indigo-600 text-white text-[7px] font-bold px-1 py-0.5 ">WardenMall</span>
+                    {p.is_flash_sale && <span className="bg-orange-500 text-white text-[7px] font-bold px-1 py-0.5 italic">FLASH</span>}
                   </div>
 
                   {/* Slider Gambar */}
