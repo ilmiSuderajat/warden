@@ -112,6 +112,8 @@ export default function CheckoutPage() {
 
   const totalPrice = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
+// ... (kode atas tetap sama)
+
   const handlePlaceOrder = async () => {
     if (!address || cartItems.length === 0) {
       alert("Alamat atau keranjang tidak valid!");
@@ -121,8 +123,9 @@ export default function CheckoutPage() {
     setIsProcessing(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User tidak ditemukan");
       
-      // 1. Buat Order
+      // 1. Buat Order ke Supabase
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
         .insert([{
@@ -133,8 +136,8 @@ export default function CheckoutPage() {
           shipping_amount: shippingFee,
           distance_km: distance,
           total_amount: totalPrice + shippingFee,
-          status: "pending", // Status awal pending
-          user_id: user?.id
+          payment_status: "pending", 
+          user_id: user.id
         }]).select().single();
 
       if (orderError) throw orderError;
@@ -150,16 +153,12 @@ export default function CheckoutPage() {
       await supabase.from("order_items").insert(itemsToInsert);
 
       // 3. Hapus Cart
-      await supabase.from("cart").delete().eq("user_id", user?.id);
+      await supabase.from("cart").delete().eq("user_id", user.id);
 
-      // 4. Simpan info penting ke localStorage untuk halaman pembayaran
-      localStorage.setItem('pendingOrder', JSON.stringify({
-        orderId: orderData.id,
-        totalAmount: totalPrice + shippingFee
-      }));
-
-      // 5. Arahkan ke Pembayaran
-      router.push("/checkout/payment");
+      // --- PERBAIKAN DI SINI ---
+      // Kita arahkan ke payment sambil membawa order_id di URL
+      // Di CheckoutPage handlePlaceOrder
+router.push(`/checkout/payment?order_id=${orderData.id}`);
 
     } catch (error: any) {
       console.error(error);
@@ -167,6 +166,8 @@ export default function CheckoutPage() {
       setIsProcessing(false);
     }
   };
+
+// ... (sisa UI tetap sama)
 
   if (loading) {
     return (
@@ -180,7 +181,7 @@ export default function CheckoutPage() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-28">
       {/* HEADER */}
-      <div className="bg-white border-b border-slate-100 sticky top-0 z-40 backdrop-blur-lg bg-white/80">
+      <div className="bg-white border-b border-slate-100 sticky top-0 z-40 backdrop-blur-lg ">
         <div className="flex items-center gap-3 px-5 pt-12 pb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
             <Icons.ArrowLeft size={22} strokeWidth={2.5} />

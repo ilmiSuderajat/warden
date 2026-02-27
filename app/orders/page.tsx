@@ -24,33 +24,53 @@ export default function MyOrdersPage() {
     fetchOrders()
   }, [activeTab])
 
-  const fetchOrders = async () => {
-    setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return router.push("/login")
+ const fetchOrders = async () => {
+  setLoading(true)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return router.push("/login")
 
-    let query = supabase
-      .from("orders")
-      .select("*, order_items(*)")
-      .eq("user_id", user.id)
+  let query = supabase
+    .from("orders")
+    .select("*, order_items(*)")
+    .eq("user_id", user.id)
 
-    if (activeTab !== "all") {
-      query = query.eq("status", activeTab)
-    }
-
-    const { data } = await query.order("created_at", { ascending: false })
-    if (data) setOrders(data)
-    setLoading(false)
+  if (activeTab === "pending") {
+    query = query.eq("payment_status", "pending")
   }
 
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case 'pending': return 'bg-amber-50 text-amber-600 border-amber-100';
-      case 'dikirim': return 'bg-blue-50 text-blue-600 border-blue-100';
-      case 'selesai': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-      default: return 'bg-slate-50 text-slate-600 border-slate-100';
-    }
+  if (activeTab === "dikemas") {
+    query = query.eq("status", "Perlu Dikemas")
   }
+
+  if (activeTab === "dikirim") {
+    query = query.eq("status", "Dikirim")
+  }
+
+  if (activeTab === "selesai") {
+    query = query.eq("status", "Selesai")
+  }
+
+  const { data } = await query.order("created_at", { ascending: false })
+
+  if (data) setOrders(data)
+  setLoading(false)
+}
+const getStatusStyle = (status: string) => {
+  switch (status) {
+    case 'Menunggu Pembayaran':
+      return 'bg-amber-50 text-amber-600 border-amber-100'
+    case 'Perlu Dikemas':
+      return 'bg-indigo-50 text-indigo-600 border-indigo-100'
+    case 'Dikirim':
+      return 'bg-blue-50 text-blue-600 border-blue-100'
+    case 'Selesai':
+      return 'bg-emerald-50 text-emerald-600 border-emerald-100'
+    case 'Dibatalkan':
+      return 'bg-rose-50 text-rose-600 border-rose-100'
+    default:
+      return 'bg-slate-50 text-slate-600 border-slate-100'
+  }
+}
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('id-ID', { 
@@ -112,9 +132,19 @@ export default function MyOrdersPage() {
                 <span className="text-[11px] font-medium text-slate-400">
                   {formatDate(order.created_at)}
                 </span>
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${getStatusStyle(order.status)}`}>
-                  {order.status}
-                </span>
+                <span
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${getStatusStyle(
+                          order.payment_status === "pending"
+                            ? "Menunggu Pembayaran"
+                            : order.status
+                        )}`}
+                      >
+                        {
+                          order.payment_status === "pending"
+                            ? "Menunggu Pembayaran"
+                            : order.status
+                        }
+                      </span>
               </div>
 
               {/* Card Body */}

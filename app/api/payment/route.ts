@@ -1,21 +1,29 @@
+// app/api/payment/route.ts
+
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 const Midtrans = require('midtrans-client');
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! 
-);
-
-const snap = new Midtrans.Snap({
-  isProduction: false,
-  serverKey: process.env.MIDTRANS_SERVER_KEY,
-  clientKey: process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY
-});
-
 export async function POST(req: Request) {
   try {
-    const { orderId } = await req.json();
+    const body = await req.json();
+    const { orderId } = body;
+
+    console.log("Memproses Order ID:", orderId);
+
+    if (!process.env.MIDTRANS_SERVER_KEY) {
+      throw new Error("MIDTRANS_SERVER_KEY tidak ditemukan di env");
+    }
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! // Gunakan Service Role untuk operasi server-side
+    );
+
+    const snap = new Midtrans.Snap({
+      isProduction: false,
+      serverKey: process.env.MIDTRANS_SERVER_KEY,
+    });
 
     const { data: order, error: dbError } = await supabase
       .from('orders')
@@ -23,25 +31,35 @@ export async function POST(req: Request) {
       .eq('id', orderId)
       .single();
 
-    if (dbError || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    if (dbError || !order) {
+      return NextResponse.json({ error: "Pesanan tidak ditemukan" }, { status: 404 });
+    }
 
     const parameter = {
       transaction_details: {
         order_id: order.id,
-        gross_amount: order.total_amount,
+        gross_amount: Math.round(order.total_amount),
       },
+      // --- TAMBAHKAN BAGIAN INI UNTUK MENGATASI EXAMPLE.COM ---
+  callbacks: {
+    finish: "http://localhost:3000/checkout/success", // Akan dipanggil jika 200 (Settlement)
+    unfinish: "http://localhost:3000/orders",         // Akan dipanggil jika 201 (Pending/Close)
+    error: "http://localhost:3000/orders"             // Akan dipanggil jika gagal
+  },
       customer_details: {
         first_name: order.customer_name,
         phone: order.whatsapp_number,
         email: "customer@example.com"
-      },
-      // Penting: Hapus callbacks jika kamu ingin setting via Dashboard Midtrans (lebih aman)
+      }
     };
 
     const transaction = await snap.createTransaction(parameter);
     return NextResponse.json({ token: transaction.token });
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("DETEKSI ERROR API:", error.message);
+    return NextResponse.json({ 
+      error: error.message || "Internal Server Error" 
+    }, { status: 500 });
   }
 }
