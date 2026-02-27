@@ -180,7 +180,7 @@ export default function CheckoutPage() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-28">
       {/* HEADER */}
-      <div className="bg-white border-b border-slate-100 sticky top-0 z-40 backdrop-blur-lg ">
+      <div className="bg-white border-b border-slate-100 sticky top-0 z-40 backdrop-blur-lg bg-white/80">
         <div className="flex items-center gap-3 px-5 pt-12 pb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
             <Icons.ArrowLeft size={22} strokeWidth={2.5} />
