@@ -42,9 +42,9 @@ export async function POST(req: Request) {
       },
       // --- TAMBAHKAN BAGIAN INI UNTUK MENGATASI EXAMPLE.COM ---
   callbacks: {
-    finish: "http://localhost:3000/checkout/success", // Akan dipanggil jika 200 (Settlement)
-    unfinish: "http://localhost:3000/orders",         // Akan dipanggil jika 201 (Pending/Close)
-    error: "http://localhost:3000/orders"             // Akan dipanggil jika gagal
+    finish: "http://warden-blond.vercel.app/checkout/success", // Akan dipanggil jika 200 (Settlement)
+    unfinish: "http://warden-blond.vercel.app/orders",         // Akan dipanggil jika 201 (Pending/Close)
+    error: "http://warden-blond.vercel.app/orders"             // Akan dipanggil jika gagal
   },
       customer_details: {
         first_name: order.customer_name,

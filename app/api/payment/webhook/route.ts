@@ -4,55 +4,85 @@ import crypto from 'crypto'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
 export async function POST(req: Request) {
-  const body = await req.json()
+  try {
+    const body = await req.json()
 
-  // 1️⃣ Verifikasi Signature
-  const signature = crypto
-    .createHash('sha512')
-    .update(
-      body.order_id +
-      body.status_code +
-      body.gross_amount +
-      process.env.MIDTRANS_SERVER_KEY
-    )
-    .digest('hex')
+    const {
+      order_id,
+      status_code,
+      gross_amount,
+      signature_key,
+      transaction_status,
+      fraud_status
+    } = body
 
-  if (signature !== body.signature_key) {
-    return NextResponse.json({ message: "Invalid signature" }, { status: 403 })
+    // 🔐 1. Verifikasi Signature
+    const serverKey = process.env.MIDTRANS_SERVER_KEY!
+
+    const hash = crypto
+      .createHash('sha512')
+      .update(order_id + status_code + gross_amount + serverKey)
+      .digest('hex')
+
+    if (hash !== signature_key) {
+      console.log("❌ Signature tidak valid")
+      return NextResponse.json({ message: "Invalid signature" }, { status: 403 })
+    }
+
+    let paymentStatus = 'pending'
+    let orderStatus = 'Menunggu Pembayaran'
+
+    // 🧠 2. Mapping Status Midtrans
+    if (transaction_status === 'capture') {
+      if (fraud_status === 'challenge') {
+        paymentStatus = 'pending'
+        orderStatus = 'Menunggu Pembayaran'
+      } else if (fraud_status === 'accept') {
+        paymentStatus = 'paid'
+        orderStatus = 'Perlu Dikemas'
+      }
+    }
+
+    if (transaction_status === 'settlement') {
+      paymentStatus = 'paid'
+      orderStatus = 'Perlu Dikemas'
+    }
+
+    if (
+      transaction_status === 'cancel' ||
+      transaction_status === 'deny' ||
+      transaction_status === 'expire'
+    ) {
+      paymentStatus = 'cancelled'
+      orderStatus = 'Dibatalkan'
+    }
+
+    console.log("✅ Update Order:", order_id)
+    console.log("➡ Payment:", paymentStatus)
+    console.log("➡ Status:", orderStatus)
+
+    // 📦 3. Update Database
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        payment_status: paymentStatus,
+        status: orderStatus
+      })
+      .eq('id', order_id)
+
+    if (error) {
+      console.log("❌ DB Error:", error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ message: "OK" })
+
+  } catch (err: any) {
+    console.log("🔥 Webhook Crash:", err.message)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
-
-  const transactionStatus = body.transaction_status
-  const orderId = body.order_id
-
-  let paymentStatus = 'pending'
-  let orderStatus = 'Menunggu Pembayaran'
-
-  // 2️⃣ Mapping Status
-  if (transactionStatus === 'settlement' || transactionStatus === 'capture') {
-    paymentStatus = 'paid'
-    orderStatus = 'Perlu Dikemas'
-  } 
-  else if (transactionStatus === 'expire' || transactionStatus === 'cancel') {
-    paymentStatus = 'cancelled'
-    orderStatus = 'Menunggu Pembayaran'
-  }
-
-  // 3️⃣ Update Database
-  const { error } = await supabase
-    .from('orders')
-    .update({
-      payment_status: paymentStatus,
-      status: orderStatus
-    })
-    .eq('id', orderId)
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ message: "OK" })
 }
