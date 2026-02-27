@@ -70,7 +70,7 @@ export default function ProductDetail() {
   }
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
+    <div className="h-screen max-w-md mx-auto text-center flex flex-col items-center justify-center bg-slate-50">
       <Loader2 className="animate-spin text-slate-400 mb-3" size={28} />
       <p className="text-xs font-medium text-slate-400">Memuat produk...</p>
     </div>

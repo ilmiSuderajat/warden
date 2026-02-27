@@ -103,7 +103,7 @@ export default function MyOrdersPage() {
       {/* LIST CONTENT */}
       <div className="p-5 space-y-4">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+          <div className="flex flex-col max-w-md -mx-auto text-center items-center justify-center py-20 text-slate-400">
             <Icons.Loader2 className="animate-spin mb-3 text-indigo-600" size={24} />
             <p className="text-xs font-medium">Memuat pesanan...</p>
           </div>
