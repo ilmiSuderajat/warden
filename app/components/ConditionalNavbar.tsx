@@ -12,7 +12,8 @@ export default function ConditionalNavbar() {
   const isCartPage = pathname.startsWith('/cart');
   const isCategoryPage = pathname.startsWith('/category');
   const isProductDetailPage = pathname.match(/^\/product\/[^\/]+$/);
-  if (isProductPage || isOrdersPage || isCheckoutPage || isCartPage || isCategoryPage || isProductDetailPage) return null;
+  const isAdressPage = pathname.startsWith('/address');
+  if (isProductPage || isOrdersPage || isCheckoutPage || isCartPage || isCategoryPage || isProductDetailPage || isAdressPage) return null;
 
   return (
    <>

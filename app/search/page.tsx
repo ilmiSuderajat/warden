@@ -1,124 +1,178 @@
 "use client"
-import { useEffect, useState, Suspense } from "react" // Tambahkan Suspense
-import { useSearchParams } from "next/navigation"
+
+import { useEffect, useState, Suspense } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { Star, MapPin, ImageOff } from "lucide-react"
+import { Star, MapPin, ImageOff, ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
 
-// 1. Ubah fungsi utama menjadi komponen internal (SearchContent)
+// Komponen Utama Konten
 function SearchContent() {
-  const searchParams = useSearchParams() // Hook ini penyebab error build
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const q = searchParams.get('q') || ""
+  
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchResults = async () => {
       setLoading(true)
-      const { data } = await supabase
-        .from("products")
-        .select("*")
-        .ilike("name", `%${q}%`)
-        .order('created_at', { ascending: false })
-
-      if (data) setResults(data)
-      setLoading(false)
+      try {
+        const { data } = await supabase
+          .from("products")
+          .select("*")
+          .ilike("name", `%${q}%`)
+          .order('created_at', { ascending: false })
+        
+        setResults(data || [])
+      } catch (error) {
+        console.error("Error fetching search results", error)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    if (q) fetchResults()
+    if (q) {
+      fetchResults()
+    } else {
+      setLoading(false)
+    }
   }, [q])
 
   return (
-    <div className="pt-24 px-2 pb-24 max-w-md mx-auto min-h-screen bg-[#f4f4f4]">
-      {/* HEADER INFO */}
-      <div className="bg-white mb-2 p-3 rounded-lg shadow-sm border border-gray-100">
-        <p className="text-[12px] text-gray-500">
-          Hasil pencarian: <span className="text-[#f57224] font-bold">"{q}"</span>
-        </p>
-      </div>
-
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-xs text-gray-400 font-bold uppercase tracking-widest">Mencari...</p>
+    <div className="bg-slate-50 max-w-md mx-auto min-h-screen font-sans text-slate-900">
+      
+      {/* --- HEADER FIXED --- */}
+      <header className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-white">
+        <div className="w-full max-w-md h-14 flex items-center px-4 border-b border-slate-100">
+          <button 
+            onClick={() => router.back()} 
+            className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform touch-manipulation"
+          >
+            <ArrowLeft size={24} strokeWidth={2.5} />
+          </button>
+          <div className="ml-3 flex flex-col overflow-hidden">
+            <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Hasil Pencarian</span>
+            <h1 className="text-sm font-bold text-slate-800 truncate">“{q}”</h1>
+          </div>
         </div>
-      ) : results.length > 0 ? (
-        <div className="grid grid-cols-2 gap-2">
-          {results.map((p) => {
-            const displayImg = Array.isArray(p.image_url) ? p.image_url[0] : p.image_url;
-            const original = p.original_price || 0;
-            const price = p.price || 0;
-            const discount = original > price ? Math.round(((original - price) / original) * 100) : 0;
+      </header>
 
-            return (
-              <Link 
-                href={`/product/${p.id}`} 
-                key={p.id} 
-                className="group bg-white rounded-md overflow-hidden shadow-sm flex flex-col active:scale-95 transition-transform"
-              >
-                <div className="aspect-square w-full bg-gray-50 relative">
-                  {displayImg ? (
-                    <img src={displayImg} alt={p.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageOff size={24}/></div>
-                  )}
-                  {discount > 0 && (
-                    <div className="absolute top-0 right-0 bg-[#fff1e0] text-[#f57224] text-[10px] font-bold px-1.5 py-0.5 rounded-bl-lg">
-                      -{discount}%
-                    </div>
-                  )}
-                </div>
+      {/* --- KONTEN UTAMA --- */}
+      {/* Padding top mengikuti tinggi header (h-14 = 56px / 3.5rem) */}
+      <main className="pt-16 pb-8 px-4">
+        
+        {loading ? (
+          // Loading State
+          <div className="flex flex-col items-center justify-center h-[60vh]">
+            <Loader2 className="w-8 h-8 text-orange-500 animate-spin mb-3" />
+            <p className="text-xs text-slate-400 font-medium">Mencari produk...</p>
+          </div>
+        ) : results.length > 0 ? (
+          // Results Grid
+          <div className="grid grid-cols-2 gap-3">
+            {results.map((p) => {
+              const displayImg = Array.isArray(p.image_url) ? p.image_url[0] : p.image_url;
+              const original = p.original_price || 0;
+              const price = p.price || 0;
+              const discount = original > price ? Math.round(((original - price) / original) * 100) : 0;
 
-                <div className="p-2 flex flex-col justify-between flex-1">
-                  <div>
-                    <div className="mb-1 h-8 overflow-hidden">
-                      <p className="text-[11px] leading-[1.3] text-[#212121] line-clamp-2">
-                        <span className="inline-block bg-[#f57224] text-white text-[8px] font-bold px-1 rounded-sm mr-1">LazMall</span>
-                        {p.name}
-                      </p>
-                    </div>
-                    <p className="text-[#f57224] font-bold text-[15px]">
-                      <span className="text-[10px] mr-0.5">Rp</span>{price.toLocaleString('id-ID')}
-                    </p>
+              return (
+                <Link
+                  href={`/product/${p.id}`}
+                  key={p.id}
+                  className="group bg-white rounded-xl border border-slate-100 overflow-hidden flex flex-col active:scale-[0.98] transition-transform"
+                >
+                  {/* Gambar */}
+                  <div className="aspect-square w-full bg-slate-100 relative overflow-hidden">
+                    {displayImg ? (
+                      <img 
+                        src={displayImg} 
+                        alt={p.name} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-300">
+                        <ImageOff size={32} strokeWidth={1.5} />
+                      </div>
+                    )}
+                    
+                    {/* Badge Diskon */}
                     {discount > 0 && (
-                      <p className="text-[10px] text-gray-400 line-through">
-                        Rp {original.toLocaleString('id-ID')}
-                      </p>
+                      <div className="absolute top-2 right-2 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                        -{discount}%
+                      </div>
                     )}
                   </div>
 
-                  <div className="mt-2 pt-2 border-t border-gray-50">
-                    <div className="flex items-center gap-1 mb-1">
-                      <Star size={10} fill="#ffc107" className="text-[#ffc107]" />
-                      <span className="text-[10px] font-bold text-[#212121]">{p.rating || "5.0"}</span>
-                      <span className="text-[10px] text-gray-400">({p.sold_count || 0})</span>
+                  {/* Detail Produk */}
+                  <div className="p-3 flex flex-col flex-1">
+                    {/* Nama & Badge */}
+                    <div className="mb-2">
+                      <p className="text-xs text-slate-700 line-clamp-2 leading-tight">
+                        {/* Contoh Badge, bisa dihapus jika tidak perlu */}
+                        <span className="inline-block bg-orange-500 text-white text-[8px] font-bold px-1 rounded mr-1 align-middle">Mall</span>
+                        <span className="align-middle">{p.name}</span>
+                      </p>
                     </div>
-                    <div className="flex items-center text-gray-400 gap-1">
-                      <MapPin size={10} />
-                      <span className="text-[10px] truncate">{p.location || "Indonesia"}</span>
+
+                    {/* Spacer untuk mendorong harga ke bawah jika perlu */}
+                    <div className="flex-1" />
+
+                    {/* Harga */}
+                    <div className="mt-auto">
+                      <p className="text-orange-500 font-bold text-base leading-tight">
+                        <span className="text-[10px] font-normal mr-0.5">Rp</span>
+                        {price.toLocaleString('id-ID')}
+                      </p>
+                      {discount > 0 && (
+                        <p className="text-[10px] text-slate-400 line-through mt-0.5">
+                          Rp {original.toLocaleString('id-ID')}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Footer Info (Rating & Lokasi) */}
+                    <div className="mt-2 pt-2 border-t border-slate-50 flex items-center justify-between text-slate-400">
+                      <div className="flex items-center gap-0.5">
+                        <Star size={10} className="text-orange-400 fill-orange-400" />
+                        <span className="text-[10px] font-medium text-slate-600">{p.rating || "5.0"}</span>
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        <MapPin size={10} />
+                        <span className="text-[10px] truncate max-w-20">{p.location || "Jakarta"}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="text-center py-20 bg-white rounded-2xl mx-2 shadow-sm border border-dashed border-gray-200">
-          <div className="flex justify-center mb-4 text-gray-200"><ImageOff size={48} /></div>
-          <p className="text-gray-400 text-sm italic px-10">Waduh, produknya nggak ketemu Lur. Coba kata kunci lain!</p>
-        </div>
-      )}
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          // Empty State
+          <div className="flex flex-col items-center justify-center h-[60vh] text-center px-8">
+            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+               <ImageOff size={36} className="text-slate-300" />
+            </div>
+            <h2 className="text-slate-800 font-bold text-base mb-1">Produk Tidak Ditemukan</h2>
+            <p className="text-slate-400 text-xs leading-relaxed">
+              Tidak ada hasil untuk “{q}”. Coba gunakan kata kunci lain.
+            </p>
+          </div>
+        )}
+      </main>
     </div>
   )
 }
 
-// 2. Export default dengan bungkus Suspense
+// Wrapper Suspense
 export default function SearchResults() {
   return (
     <Suspense fallback={
-      <div className="pt-24 px-4 text-center text-xs text-gray-400 animate-pulse">
-        Menyiapkan hasil pencarian...
+      <div className="pt-20 flex justify-center items-center h-screen bg-slate-50">
+        <Loader2 className="animate-spin text-orange-500" />
       </div>
     }>
       <SearchContent />

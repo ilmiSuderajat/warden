@@ -17,6 +17,7 @@ export default function CheckoutPage() {
   const TARIF_PER_KM = 2000;
   const ONGKIR_MINIMAL = 10000;
 
+  // Fungsi hitung jarak (Haversine Formula)
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
     const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -33,42 +34,48 @@ export default function CheckoutPage() {
 
   const prepareCheckout = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return router.push("/login");
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return router.push("/login");
 
-    const { data: addrData } = await supabase
-      .from("addresses")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("is_default", { ascending: false })
-      .limit(1).single();
-    
-    setAddress(addrData);
+      const { data: addrData } = await supabase
+        .from("addresses")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("is_default", { ascending: false })
+        .limit(1)
+        .single();
+      
+      setAddress(addrData);
 
-    const { data: cartData } = await supabase
-      .from("cart")
-      .select("*, products(*)")
-      .eq("user_id", user.id);
+      const { data: cartData } = await supabase
+        .from("cart")
+        .select("*, products(*)")
+        .eq("user_id", user.id);
 
-    if (cartData) {
-      const formattedCart = cartData.map(item => ({
-        cart_id: item.id,
-        id: item.product_id,
-        name: item.products.name,
-        price: item.products.price,
-        image_url: Array.isArray(item.products.image_url) ? item.products.image_url[0] : item.products.image_url,
-        quantity: item.quantity,
-        lat: item.products.latitude,
-        lng: item.products.longitude
-      }));
-      setCartItems(formattedCart);
-      if (addrData) updateShipping(formattedCart, addrData);
+      if (cartData) {
+        const formattedCart = cartData.map(item => ({
+          cart_id: item.id,
+          id: item.product_id,
+          name: item.products.name,
+          price: item.products.price,
+          image_url: Array.isArray(item.products.image_url) ? item.products.image_url[0] : item.products.image_url,
+          quantity: item.quantity,
+          lat: item.products.latitude,
+          lng: item.products.longitude
+        }));
+        setCartItems(formattedCart);
+        if (addrData) updateShipping(formattedCart, addrData);
+      }
+    } catch (error) {
+      console.error("Error preparing checkout:", error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const updateShipping = (items: any[], addr: any) => {
-    if (items.length > 0 && addr?.latitude) {
+    if (items.length > 0 && addr?.latitude && items[0].lat && items[0].lng) {
       const dist = calculateDistance(items[0].lat, items[0].lng, addr.latitude, addr.longitude);
       setDistance(dist);
       const fee = Math.ceil(dist) * TARIF_PER_KM;
@@ -77,30 +84,45 @@ export default function CheckoutPage() {
   };
 
   const updateQuantity = async (cartId: string, newQty: number) => {
-    // Optimistic update untuk UI responsif
     const prevItems = [...cartItems];
     
+    // Optimistic UI Update
+    let newItems;
     if (newQty < 1) {
-      await supabase.from("cart").delete().eq("id", cartId);
-      const newItems = cartItems.filter(item => item.cart_id !== cartId);
+      newItems = cartItems.filter(item => item.cart_id !== cartId);
       setCartItems(newItems);
       if (newItems.length === 0) setShippingFee(0);
     } else {
-      await supabase.from("cart").update({ quantity: newQty }).eq("id", cartId);
-      const newItems = cartItems.map(item => 
+      newItems = cartItems.map(item => 
         item.cart_id === cartId ? { ...item, quantity: newQty } : item
       );
       setCartItems(newItems);
     }
+
+    // Update ke Supabase
+    if (newQty < 1) {
+      await supabase.from("cart").delete().eq("id", cartId);
+    } else {
+      await supabase.from("cart").update({ quantity: newQty }).eq("id", cartId);
+    }
+    
+    // Hitung ulang ongkir jika perlu
+    if (address && newItems.length > 0) updateShipping(newItems, address);
   };
 
   const totalPrice = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
   const handlePlaceOrder = async () => {
-    if (!address || cartItems.length === 0) return;
+    if (!address || cartItems.length === 0) {
+      alert("Alamat atau keranjang tidak valid!");
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      
+      // 1. Buat Order
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
         .insert([{
@@ -111,12 +133,13 @@ export default function CheckoutPage() {
           shipping_amount: shippingFee,
           distance_km: distance,
           total_amount: totalPrice + shippingFee,
-          status: "pending",
+          status: "pending", // Status awal pending
           user_id: user?.id
         }]).select().single();
 
       if (orderError) throw orderError;
 
+      // 2. Buat Order Items
       const itemsToInsert = cartItems.map((item: any) => ({
         order_id: orderData.id,
         product_name: item.name,
@@ -125,10 +148,21 @@ export default function CheckoutPage() {
         image_url: item.image_url
       }));
       await supabase.from("order_items").insert(itemsToInsert);
+
+      // 3. Hapus Cart
       await supabase.from("cart").delete().eq("user_id", user?.id);
 
-      router.push("/orders");
+      // 4. Simpan info penting ke localStorage untuk halaman pembayaran
+      localStorage.setItem('pendingOrder', JSON.stringify({
+        orderId: orderData.id,
+        totalAmount: totalPrice + shippingFee
+      }));
+
+      // 5. Arahkan ke Pembayaran
+      router.push("/checkout/payment");
+
     } catch (error: any) {
+      console.error(error);
       alert("Gagal memproses pesanan: " + error.message);
       setIsProcessing(false);
     }
@@ -137,98 +171,98 @@ export default function CheckoutPage() {
   if (loading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-3 bg-slate-50">
-        <Icons.Loader2 className="animate-spin text-indigo-600" size={28} />
-        <p className="text-xs font-medium text-slate-400">Memuat data checkout...</p>
+        <Icons.Loader2 className="animate-spin text-indigo-600" size={32} />
+        <p className="text-sm font-medium text-slate-400">Menyiapkan checkout...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-32">
+    <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-28">
       {/* HEADER */}
-      <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
+      <div className="bg-white border-b border-slate-100 sticky top-0 z-40 backdrop-blur-lg ">
         <div className="flex items-center gap-3 px-5 pt-12 pb-4">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
-            <Icons.ArrowLeft size={20} strokeWidth={2.5} />
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+            <Icons.ArrowLeft size={22} strokeWidth={2.5} />
           </button>
-          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Konfirmasi</h1>
+          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Konfirmasi Pesanan</h1>
         </div>
       </div>
 
-      <div className="p-5 space-y-4">
+      <div className="p-5 space-y-5">
         
         {/* ALAMAT PENGIRIMAN */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex justify-between items-center px-5 py-3 border-b border-slate-50 bg-slate-50/50">
-             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alamat Pengiriman</span>
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="flex justify-between items-center px-5 py-3 border-b border-slate-50 bg-slate-50/40">
+             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Kirim Ke</span>
              {address && (
-                <button onClick={() => router.push("/address")} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">
-                    Ubah
+                <button onClick={() => router.push("/address")} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                    Ubah <Icons.Pencil size={12} />
                 </button>
              )}
           </div>
           
           <div className="p-5">
             {address ? (
-              <div className="flex gap-3">
-                <div className="p-2.5 bg-indigo-50 rounded-xl shrink-0 h-fit">
-                  <Icons.MapPin size={18} className="text-indigo-500" />
+              <div className="flex gap-4">
+                <div className="p-3 bg-indigo-50 rounded-2xl shrink-0 h-fit">
+                  <Icons.MapPin size={20} className="text-indigo-500" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-slate-800">{address.name}</p>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">{address.detail}, {address.city}</p>
-                  <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 rounded-full border border-emerald-100">
+                  <p className="text-sm font-bold text-slate-800">{address.name} • {address.phone}</p>
+                  <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{address.detail}, {address.city}</p>
+                  <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 rounded-full border border-emerald-100">
                     <Icons.Route size={12} className="text-emerald-600"/>
-                    <span className="text-[10px] font-bold text-emerald-700">{distance.toFixed(1)} KM</span>
+                    <span className="text-[11px] font-bold text-emerald-700">{distance.toFixed(1)} KM dari toko</span>
                   </div>
                 </div>
               </div>
             ) : (
               <button 
                 onClick={() => router.push("/address/add")} 
-                className="w-full py-8 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:text-slate-500 hover:border-slate-300 transition-colors flex flex-col items-center gap-2"
+                className="w-full py-10 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors flex flex-col items-center gap-2"
               >
-                <Icons.PlusCircle size={20} />
-                <span className="text-xs font-semibold">Tambah Alamat Baru</span>
+                <Icons.PlusCircle size={24} />
+                <span className="text-sm font-semibold">Tambah Alamat Pengiriman</span>
               </button>
             )}
           </div>
         </div>
 
         {/* ITEM BELANJA */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex justify-between items-center px-5 py-3 border-b border-slate-50 bg-slate-50/50">
-             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Item Belanja</span>
-             <span className="text-xs font-medium text-slate-500">{cartItems.length} Produk</span>
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="flex justify-between items-center px-5 py-3 border-b border-slate-50 bg-slate-50/40">
+             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pesananmu</span>
+             <span className="text-xs font-medium text-slate-500">{cartItems.length} Item</span>
           </div>
           
           <div className="divide-y divide-slate-50">
-            {cartItems.map((item: any, idx: number) => (
-              <div key={idx} className="p-5 flex justify-between items-center gap-4">
+            {cartItems.map((item: any) => (
+              <div key={item.cart_id} className="p-4 flex justify-between items-center gap-4">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-14 h-14 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-50">
+                  <div className="w-16 h-16 bg-slate-100 rounded-2xl overflow-hidden shrink-0 border border-slate-50 shadow-sm">
                     <img src={item.image_url} className="w-full h-full object-cover" alt={item.name} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-800 line-clamp-1">{item.name}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Rp {item.price.toLocaleString('id-ID')}</p>
+                    <p className="text-xs text-slate-400 mt-1 font-medium">Rp {item.price.toLocaleString('id-ID')}</p>
                   </div>
                 </div>
                 
                 {/* Quantity Control */}
-                <div className="flex items-center gap-1 shrink-0 border border-slate-200 rounded-full p-1">
+                <div className="flex items-center gap-0 shrink-0 border border-slate-200 rounded-full bg-white shadow-sm">
                   <button 
                     onClick={() => updateQuantity(item.cart_id, item.quantity - 1)}
-                    className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors"
+                    className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors"
                   >
-                    <Icons.Minus size={14} className="text-slate-500" />
+                    <Icons.Minus size={14} />
                   </button>
                   <span className="w-6 text-center text-xs font-bold text-slate-700">{item.quantity}</span>
                   <button 
                     onClick={() => updateQuantity(item.cart_id, item.quantity + 1)}
-                    className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-900 hover:bg-slate-800 transition-colors"
+                    className="w-8 h-8 flex items-center justify-center bg-slate-900 text-white rounded-full hover:bg-slate-700 transition-colors"
                   >
-                    <Icons.Plus size={14} className="text-white" />
+                    <Icons.Plus size={14} />
                   </button>
                 </div>
               </div>
@@ -237,19 +271,19 @@ export default function CheckoutPage() {
         </div>
 
         {/* RINCIAN PEMBAYARAN */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 space-y-4">
           <div className="flex justify-between text-sm">
-            <span className="text-slate-500">Subtotal</span>
+            <span className="text-slate-500">Subtotal Produk</span>
             <span className="text-slate-700 font-medium">Rp {totalPrice.toLocaleString('id-ID')}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-slate-500">Ongkos Kirim</span>
+            <span className="text-slate-500">Ongkos Kirim ({distance.toFixed(1)} km)</span>
             <span className="text-slate-700 font-medium">Rp {shippingFee.toLocaleString('id-ID')}</span>
           </div>
-          <div className="border-t border-slate-100 pt-3 mt-3">
+          <div className="border-t border-dashed border-slate-200 pt-4 mt-4">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-semibold text-slate-600">Total Tagihan</span>
-              <span className="text-lg font-bold text-slate-900">
+              <span className="text-sm font-bold text-slate-700">Total Tagihan</span>
+              <span className="text-xl font-extrabold text-slate-900">
                 Rp {(totalPrice + shippingFee).toLocaleString('id-ID')}
               </span>
             </div>
@@ -258,21 +292,21 @@ export default function CheckoutPage() {
       </div>
 
       {/* FLOATING ACTION BUTTON */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-lg border-t border-slate-100 p-5 max-w-md mx-auto z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-100 p-5 max-w-md mx-auto z-50">
         <button 
           onClick={handlePlaceOrder}
           disabled={isProcessing || !address || cartItems.length === 0}
-          className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-sm font-bold transition-all active:scale-[0.98] disabled:bg-slate-200 disabled:text-slate-400 shadow-lg shadow-slate-200 flex items-center justify-center gap-2"
+          className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-bold transition-all active:scale-[0.98] disabled:bg-indigo-300 disabled:cursor-not-allowed shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
         >
           {isProcessing ? (
             <>
-              <Icons.Loader2 size={16} className="animate-spin" />
-              <span>Memproses...</span>
+              <Icons.Loader2 size={18} className="animate-spin" />
+              <span>Memproses Pesanan...</span>
             </>
           ) : (
             <>
-              <span>Bayar Sekarang</span>
-              <Icons.ArrowRight size={16} />
+              <span>Lanjut ke Pembayaran</span>
+              <Icons.ArrowRight size={18} />
             </>
           )}
         </button>

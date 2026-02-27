@@ -13,8 +13,9 @@ export default function ConditionalSearchBar() {
   const isLogin = pathname.startsWith("/login");
   const isOrders = pathname.startsWith("/orders");
   const isCheckout = pathname.startsWith("/checkout");
+  const isAdressPage = pathname.startsWith('/address');
   const isProductDetailPage = pathname.match(/^\/product\/[^\/]+$/);
-  if (isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isProductDetailPage) return null;
+  if (isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isProductDetailPage || isAdressPage  ) return null;
 
   return (
     <Suspense fallback={<div className="h-16 bg-white animate-pulse" />}>

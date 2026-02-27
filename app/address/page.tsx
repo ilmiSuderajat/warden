@@ -1,141 +1,179 @@
-"use client";
+"use client"
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import * as Icons from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
+import * as Icons from "lucide-react"
+import { useRouter } from "next/navigation"
 
 export default function AddressListPage() {
-  const router = useRouter();
-  const [addresses, setAddresses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter()
+  const [addresses, setAddresses] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchAddresses();
-  }, []);
+    fetchAddresses()
+  }, [])
 
   const fetchAddresses = async () => {
-    setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      router.push("/login");
-      return;
+    setLoading(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        router.push("/login")
+        return
+      }
+
+      const { data, error } = await supabase
+        .from("addresses")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("is_default", { ascending: false })
+
+      if (!error && data) setAddresses(data)
+    } catch (error) {
+      console.error("Error fetching addresses:", error)
+    } finally {
+      setLoading(false)
     }
-
-    const { data, error } = await supabase
-      .from("addresses")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("is_default", { ascending: false });
-
-    if (!error) setAddresses(data);
-    setLoading(false);
-  };
+  }
 
   const handleDelete = async (id: string) => {
-    if (confirm("Yakin mau hapus alamat ini, Lur?")) {
-      const { error } = await supabase.from("addresses").delete().eq("id", id);
-      if (!error) fetchAddresses(); // Refresh data
+    if (confirm("Yakin mau hapus alamat ini?")) {
+      try {
+        const { error } = await supabase.from("addresses").delete().eq("id", id)
+        if (!error) {
+          // Refresh data lokal dan global (untuk cache Next.js)
+          fetchAddresses()
+          router.refresh()
+        }
+      } catch (error) {
+        console.error("Error deleting:", error)
+      }
     }
-  };
+  }
 
   const handleSetDefault = async (id: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    // Reset semua jadi false dulu
-    await supabase.from("addresses").update({ is_default: false }).eq("user_id", user?.id);
-    
-    // Set yang dipilih jadi true
-    const { error } = await supabase.from("addresses").update({ is_default: true }).eq("id", id);
-    
-    if (!error) fetchAddresses();
-  };
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      
+      // 1. Reset semua jadi false
+      await supabase
+        .from("addresses")
+        .update({ is_default: false })
+        .eq("user_id", user.id)
+      
+      // 2. Set yang dipilih jadi true
+      const { error } = await supabase
+        .from("addresses")
+        .update({ is_default: true })
+        .eq("id", id)
+      
+      if (!error) {
+        fetchAddresses()
+        router.refresh()
+      }
+    } catch (error) {
+      console.error("Error setting default:", error)
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FD] pb-32 font-sans max-w-md mx-auto">
-      {/* HEADER */}
-      <div className="bg-white px-8 pt-16 pb-8 rounded-b-[3.5rem] shadow-sm sticky top-0 z-40">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={() => router.back()} className="p-2 bg-gray-50 rounded-xl active:scale-90 transition-all">
-              <Icons.ChevronLeft size={20} />
+    <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans pb-28">
+      
+      {/* --- HEADER FIXED --- */}
+      <header className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-white border-b border-slate-100">
+        <div className="w-full max-w-md h-14 flex items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="p-1 text-slate-700 active:scale-95 transition-transform">
+              <Icons.ChevronLeft size={24} strokeWidth={2.5} />
             </button>
-            <h1 className="text-xl font-black text-gray-900 tracking-tight italic">Alamat Saya</h1>
+            <h1 className="text-lg font-bold text-slate-900">Daftar Alamat</h1>
           </div>
-          <div className="bg-indigo-50 p-2.5 rounded-2xl text-indigo-600">
-            <Icons.MapPin size={20} />
-          </div>
+          <Icons.MapPin size={20} className="text-slate-400" />
         </div>
-      </div>
+      </header>
 
-      {/* LIST ALAMAT */}
-      <div className="p-6 space-y-4">
+      {/* --- CONTENT AREA --- */}
+      <main className="pt-16 px-4">
+        
         {loading ? (
-          <div className="text-center py-20 opacity-20 font-black uppercase text-[10px] tracking-widest">
-            Menarik Data Lokasi...
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <Icons.Loader2 className="animate-spin mb-2" size={24} />
+            <p className="text-xs font-medium">Memuat alamat...</p>
           </div>
         ) : addresses.length > 0 ? (
-          addresses.map((addr) => (
-            <div 
-              key={addr.id} 
-              className={`bg-white p-6 rounded-[2.5rem] shadow-xl shadow-gray-200/50 border-2 transition-all ${
-                addr.is_default ? "border-indigo-600" : "border-transparent"
-              }`}
-            >
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-xs font-black text-gray-800 uppercase tracking-tighter">{addr.name}</h3>
-                  {addr.is_default && (
-                    <span className="bg-indigo-600 text-white text-[7px] font-black px-2 py-0.5 rounded-full uppercase">Utama</span>
-                  )}
+          <div className="space-y-3 mt-4">
+            {addresses.map((addr) => (
+              <div 
+                key={addr.id} 
+                className={`bg-white p-4 rounded-xl border transition-all ${
+                  addr.is_default 
+                    ? "border-indigo-500 shadow-sm bg-indigo-50/30" 
+                    : "border-slate-200"
+                }`}
+              >
+                {/* Header Kartu */}
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-800">{addr.name}</h3>
+                    {addr.is_default && (
+                      <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        Utama
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <Icons.Map size={14} className={addr.is_default ? "text-indigo-600" : "text-gray-200"} />
-              </div>
-              
-              <p className="text-[10px] font-bold text-gray-400 mb-2 italic">{addr.phone}</p>
-              <p className="text-[11px] font-medium text-gray-600 leading-relaxed line-clamp-2">
-                {addr.detail}, {addr.city}
-              </p>
+                
+                {/* Info Detail */}
+                <p className="text-xs text-slate-500 font-medium mb-1">{addr.phone}</p>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  {addr.detail}, {addr.city}
+                </p>
 
-              <div className="mt-5 flex gap-2 border-t border-gray-50 pt-4">
-                {!addr.is_default && (
+                {/* Aksi */}
+                <div className="mt-4 pt-3 border-t border-slate-100 flex gap-2">
+                  {!addr.is_default && (
+                    <button 
+                      onClick={() => handleSetDefault(addr.id)}
+                      className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-200 active:scale-95 transition-all"
+                    >
+                      Jadikan Utama
+                    </button>
+                  )}
                   <button 
-                    onClick={() => handleSetDefault(addr.id)}
-                    className="flex-1 py-3 bg-gray-50 text-gray-400 rounded-xl text-[8px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                    onClick={() => handleDelete(addr.id)}
+                    className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 active:scale-95 transition-all"
                   >
-                    Set Utama
+                    <Icons.Trash2 size={16} />
                   </button>
-                )}
-                <button 
-                  onClick={() => handleDelete(addr.id)}
-                  className="px-4 py-3 bg-red-50 text-red-500 rounded-xl active:scale-95 transition-all"
-                >
-                  <Icons.Trash2 size={14} />
-                </button>
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         ) : (
-          <div className="text-center py-20 opacity-30">
-            <Icons.MapPinned size={48} className="mx-auto mb-4" />
-            <p className="text-[10px] font-black uppercase tracking-[0.2em]">Belum Ada Alamat, Lur!</p>
+          // Empty State
+          <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+              <Icons.MapPinned size={32} className="text-slate-300" />
+            </div>
+            <h2 className="text-base font-bold text-slate-700 mb-1">Belum Ada Alamat</h2>
+            <p className="text-xs text-slate-400 mb-6">Yuk tambahkan alamat pengirimanmu sekarang.</p>
           </div>
         )}
-      </div>
+      </main>
 
-      {/* TOMBOL TAMBAH (STICKY BOTTOM) */}
-      <div className="fixed bottom-24 left-0 right-0 px-6 max-w-md mx-auto">
+      {/* --- FLOATING BUTTON --- */}
+      <div className="fixed bottom-6 left-0 right-0 px-4 max-w-md mx-auto z-40">
         <button 
           onClick={() => router.push("/address/add")}
-          className="w-full bg-gray-900 text-white py-5 rounded-[2rem] shadow-2xl shadow-gray-400 flex items-center justify-center gap-3 active:scale-95 transition-all group"
+          className="w-full bg-indigo-600 text-white py-3.5 rounded-xl shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 active:scale-[0.98] transition-all font-semibold"
         >
-          <div className="bg-indigo-500 p-1.5 rounded-lg group-hover:rotate-90 transition-transform">
-            <Icons.Plus size={14} className="text-white" />
-          </div>
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">Tambah Alamat Baru</span>
+          <Icons.Plus size={18} strokeWidth={2.5} />
+          <span className="text-sm">Tambah Alamat Baru</span>
         </button>
       </div>
     </div>
-  );
+  )
 }
