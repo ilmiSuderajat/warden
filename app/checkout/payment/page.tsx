@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, CheckCircle2, Truck, Loader2, CreditCard } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Truck, Loader2, CreditCard, Wallet, ShieldCheck } from "lucide-react"
 import { createClient } from "@supabase/supabase-js"
 
 const supabase = createClient(
@@ -10,7 +10,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// Helper loader Midtrans (anti double inject + nunggu ready)
+// Helper loader Midtrans
 const loadMidtransScript = (clientKey: string) => {
   return new Promise<void>((resolve, reject) => {
     if ((window as any).snap) {
@@ -92,13 +92,10 @@ function PaymentContent() {
 
   const handleProcessPayment = async () => {
     if (!orderInfo) return
-
     setLoading(true)
 
     try {
-      // ======================
-      // COD
-      // ======================
+      // COD LOGIC
       if (selectedMethod === "cod") {
         const { error } = await supabase
           .from("orders")
@@ -112,9 +109,7 @@ function PaymentContent() {
         return
       }
 
-      // ======================
-      // ONLINE PAYMENT
-      // ======================
+      // ONLINE PAYMENT LOGIC
       const response = await fetch("/api/payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -123,35 +118,29 @@ function PaymentContent() {
 
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || "Gagal memproses pembayaran")
-      }
+      if (!response.ok) throw new Error(data.error || "Gagal memproses pembayaran")
 
       const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!
       await loadMidtransScript(clientKey)
 
-      if (!(window as any).snap) {
-        throw new Error("Midtrans Snap belum siap, coba lagi")
-      }
+      if (!(window as any).snap) throw new Error("Payment gateway tidak siap")
 
       ;(window as any).snap.pay(data.token, {
-        onSuccess: function () {
+        onSuccess: () => {
           setLoading(false)
           router.push("/checkout/success")
         },
-        onPending: function () {
+        onPending: () => {
           setLoading(false)
           router.push("/orders?status=unpaid")
         },
-        onError: function () {
+        onError: () => {
           setLoading(false)
           alert("Terjadi kesalahan saat pembayaran.")
         },
-        onClose: function () {
+        onClose: () => {
           setLoading(false)
-          alert(
-            "Pembayaran dibatalkan. Pesanan tetap tersimpan di menu Pesanan."
-          )
+          alert("Pembayaran dibatalkan. Pesanan tetap tersimpan di menu Pesanan.")
           router.push("/orders")
         },
       })
@@ -163,114 +152,121 @@ function PaymentContent() {
 
   if (fetchingData) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
         <Loader2 className="animate-spin text-indigo-600" size={32} />
+        <p className="text-slate-400 text-sm font-medium">Memuat data...</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 max-w-md mx-auto pb-32">
-      <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b flex items-center px-5 max-w-md mx-auto z-50">
-        <button onClick={() => router.back()}>
-          <ArrowLeft size={24} />
-        </button>
-        <h1 className="ml-3 font-bold">Pembayaran</h1>
-      </header>
+    <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-28">
+      {/* HEADER */}
+      <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
+        <div className="flex items-center gap-3 px-5 pt-12 pb-4">
+          <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+            <ArrowLeft size={20} strokeWidth={2.5} />
+          </button>
+          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Pembayaran</h1>
+        </div>
+      </div>
 
-      <main className="pt-24 px-5">
-        <div className="space-y-3 mb-6">
-          <p className="text-xs font-bold text-slate-400 uppercase">
+      {/* CONTENT */}
+      <div className="p-5 space-y-6">
+        
+        {/* Metode Pembayaran Section */}
+        <div>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 px-1">
             Pilih Metode
           </p>
-
-          {/* ONLINE */}
-          <button
-            onClick={() => setSelectedMethod("online")}
-            className={`w-full p-4 rounded-2xl border-2 flex items-center justify-between transition-all ${
-              selectedMethod === "online"
-                ? "border-indigo-600 bg-indigo-50"
-                : "bg-white border-transparent"
-            }`}
-          >
-            <div className="flex items-center gap-4">
-              <div
-                className={`p-3 rounded-xl ${
-                  selectedMethod === "online"
-                    ? "bg-indigo-600 text-white"
-                    : "bg-slate-100 text-slate-400"
+          <div className="space-y-3">
+            {/* ONLINE OPTION */}
+            <button
+              onClick={() => setSelectedMethod("online")}
+              className={`w-full p-4 rounded-2xl flex items-center gap-4 transition-all border-2 ${
+                selectedMethod === "online"
+                  ? "bg-white border-indigo-600 shadow-sm shadow-indigo-100"
+                  : "bg-white border-transparent hover:border-slate-200"
+              }`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
+                  selectedMethod === "online" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-400"
                 }`}
               >
-                <CreditCard size={20} />
+                <CreditCard size={22} />
               </div>
-              <div className="text-left">
-                <p className="text-sm font-bold">Pembayaran Online</p>
-                <p className="text-[10px] text-slate-400">
-                  VA, QRIS, E-Wallet
-                </p>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-bold text-slate-800">Pembayaran Online</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">VA, QRIS, E-Wallet, dll</p>
               </div>
-            </div>
-            {selectedMethod === "online" && (
-              <CheckCircle2 size={20} className="text-indigo-600" />
-            )}
-          </button>
+              {selectedMethod === "online" && (
+                <CheckCircle2 size={20} className="text-indigo-600 shrink-0" />
+              )}
+            </button>
 
-          {/* COD */}
-          <button
-            onClick={() => setSelectedMethod("cod")}
-            className={`w-full p-4 rounded-2xl border-2 flex items-center justify-between transition-all ${
-              selectedMethod === "cod"
-                ? "border-indigo-600 bg-indigo-50"
-                : "bg-white border-transparent"
-            }`}
-          >
-            <div className="flex items-center gap-4">
-              <div
-                className={`p-3 rounded-xl ${
-                  selectedMethod === "cod"
-                    ? "bg-indigo-600 text-white"
-                    : "bg-slate-100 text-slate-400"
+            {/* COD OPTION */}
+            <button
+              onClick={() => setSelectedMethod("cod")}
+              className={`w-full p-4 rounded-2xl flex items-center gap-4 transition-all border-2 ${
+                selectedMethod === "cod"
+                  ? "bg-white border-indigo-600 shadow-sm shadow-indigo-100"
+                  : "bg-white border-transparent hover:border-slate-200"
+              }`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
+                  selectedMethod === "cod" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-400"
                 }`}
               >
-                <Truck size={20} />
+                <Truck size={22} />
               </div>
-              <div className="text-left">
-                <p className="text-sm font-bold">
-                  Bayar di Tempat (COD)
-                </p>
-                <p className="text-[10px] text-slate-400">
-                  Bayar saat kurir sampai
-                </p>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-bold text-slate-800">Bayar di Tempat (COD)</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Bayar tunai saat kurir tiba</p>
               </div>
-            </div>
-            {selectedMethod === "cod" && (
-              <CheckCircle2 size={20} className="text-indigo-600" />
-            )}
-          </button>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border shadow-sm">
-          <div className="flex justify-between text-lg font-black">
-            <span>Total Bayar</span>
-            <span>
-              Rp {orderInfo?.total_amount?.toLocaleString("id-ID")}
-            </span>
+              {selectedMethod === "cod" && (
+                <CheckCircle2 size={20} className="text-indigo-600 shrink-0" />
+              )}
+            </button>
           </div>
         </div>
-      </main>
 
-      <div className="fixed bottom-0 left-0 right-0 p-5 bg-white border-t max-w-md mx-auto">
+        {/* Ringkasan Pembayaran */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-4">
+          <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+              <Wallet size={20} className="text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 font-medium">Total Tagihan</p>
+              <p className="text-xl font-bold text-slate-900 tracking-tight">
+                Rp {orderInfo?.total_amount?.toLocaleString("id-ID")}
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-start gap-2 text-slate-500 text-xs">
+            <ShieldCheck size={14} className="text-green-500 mt-0.5 shrink-0" />
+            <span>Transaksi aman & terenkripsi. Pesanan akan diproses setelah pembayaran berhasil.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* FOOTER BUTTON */}
+      <div className="fixed bottom-0 left-0 right-0 p-5 bg-white/80 backdrop-blur-md border-t border-slate-100 max-w-md mx-auto">
         <button
           disabled={loading}
           onClick={handleProcessPayment}
-          className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 disabled:bg-slate-300"
+          className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:bg-indigo-300 shadow-lg shadow-indigo-200 active:scale-[0.98] transition-transform"
         >
           {loading ? (
-            <Loader2 className="animate-spin" size={18} />
+            <>
+              <Loader2 className="animate-spin" size={18} />
+              <span>Memproses...</span>
+            </>
           ) : selectedMethod === "online" ? (
             "Bayar Sekarang"
           ) : (
-            "Buat Pesanan COD"
+            "Konfirmasi Pesanan COD"
           )}
         </button>
       </div>
@@ -282,7 +278,7 @@ export default function PaymentPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
           <Loader2 className="animate-spin text-indigo-600" size={32} />
         </div>
       }
