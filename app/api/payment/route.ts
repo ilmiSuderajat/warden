@@ -6,50 +6,55 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { amount, orderId, productDetails, customerName, email } = body;
 
-    const merchantCode = process.env.DUITKU_MERCHANT_CODE!;
-    const apiKey = process.env.DUITKU_API_KEY!;
+    const merchantCode = process.env.DUITKU_MERCHANT_CODE;
+    const apiKey = process.env.DUITKU_API_KEY;
+
+    // Proteksi jika env belum diset
+    if (!merchantCode || !apiKey) {
+      return NextResponse.json({ statusMessage: "Konfigurasi API Duitku belum lengkap di Vercel" }, { status: 500 });
+    }
+
+    // WAJIB: Amount harus integer (angka bulat) tanpa titik/koma
+    const amountInt = Math.floor(Number(amount));
     
-    // RUMUS SIGNATURE DUITKU: merchantCode + orderId + amount + apiKey
-    // Pastikan amount diubah menjadi string agar konsisten
-    const signature = md5(merchantCode + orderId + String(amount) + apiKey);
+    // RUMUS SIGNATURE: merchantCode + orderId + amount + apiKey
+    const signature = md5(merchantCode + orderId + amountInt + apiKey);
 
     const payload = {
       merchantCode,
-      paymentAmount: amount,
-      merchantOrderId: orderId,
+      paymentAmount: amountInt,
+      merchantOrderId: orderId.toString(),
       productDetails,
       email,
-      customerVaName: customerName, // Nama yang muncul di VA/QRIS
+      customerVaName: customerName,
       signature,
       callbackUrl: `https://warden-blond.vercel.app/api/callback`,
       returnUrl: `https://warden-blond.vercel.app/checkout/success`,
-      expiryPeriod: 1440 // 24 jam
+      expiryPeriod: 1440
     };
 
-    // PERBAIKAN: Isi parameter fetch dengan benar
     const response = await fetch('https://sandbox.duitku.com/webapi/api/merchant/v2/inquiry', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
     const result = await response.json();
 
-    console.log("Respon Duitku:", result); // Lihat di terminal/log vercel
+    // Log ke Vercel untuk debug
+    console.log("Payload yang dikirim:", payload);
+    console.log("Respon Duitku:", result);
 
     if (response.ok && result.paymentUrl) {
       return NextResponse.json(result);
     } else {
-      // Biar muncul di alert browser kamu error detailnya
       return NextResponse.json({ 
-        statusMessage: result.statusMessage || "Gagal dapet Payment URL",
+        statusMessage: result.statusMessage || "Gagal mendapatkan link pembayaran",
         raw: result 
       }, { status: 400 });
     }
   } catch (error) {
-    console.error("Error Duitku:", error);
-    return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
+    console.error("Internal Error:", error);
+    return NextResponse.json({ statusMessage: "Terjadi kesalahan internal server" }, { status: 500 });
   }
 }
