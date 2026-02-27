@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Check, Home, ShoppingBag, PartyPopper } from "lucide-react"
+import { Check, Home, ShoppingBag, PartyPopper, Loader2 } from "lucide-react"
 
-export default function SuccessPage() {
+// --- Bagian 1: Konten Utama Halaman ---
+function SuccessContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [mounted, setMounted] = useState(false)
@@ -88,5 +89,19 @@ export default function SuccessPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// --- Bagian 2: Wrapper Suspense (Solusi Build Error) ---
+export default function SuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white gap-4">
+        <Loader2 className="animate-spin text-indigo-600" size={40} />
+        <p className="text-slate-400 font-medium animate-pulse">Menyiapkan halaman sukses...</p>
+      </div>
+    }>
+      <SuccessContent />
+    </Suspense>
   )
 }
