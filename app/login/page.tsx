@@ -18,10 +18,43 @@ export default function LoginPage() {
       }
     }
     checkSession()
+
+    // 1. Definisikan callback global untuk menangkap token dari Android native
+    window.onNativeGoogleLogin = async (idToken: string) => {
+      console.log("[Login Page] Received native idToken, signing in to Supabase...")
+      setLoading(true)
+      try {
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: idToken,
+        })
+
+        if (error) throw error
+
+        console.log("[Login Page] Native sign in success:", !!data.session)
+        router.replace("/api/auth/redirect")
+      } catch (err) {
+        console.error("[Login Page] Native sign in error:", err)
+        setLoading(false)
+      }
+    }
+
+    // Cleanup callback saat unmount
+    return () => {
+      delete window.onNativeGoogleLogin
+    }
   }, [router])
 
   const handleGoogleLogin = async () => {
     console.log("[Login Page] Starting Google Login...")
+
+    // 2. Cek apakah dibuka di dalam Android App dengan Bridge
+    if (window.AndroidBridge) {
+      console.log("[Login Page] AndroidBridge detected, calling native login...")
+      window.AndroidBridge.loginWithGoogle()
+      return
+    }
+
     setLoading(true)
     try {
       const isApp = navigator.userAgent.includes("WardenApp")
