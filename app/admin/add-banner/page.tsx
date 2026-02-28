@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { ArrowLeft, Image as ImageIcon, Search, Tag, Loader2, Check, Package, Zap, CheckCircle, X, Plus } from "lucide-react"
+import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
-import * as Icons from "lucide-react"
 import { useRouter } from "next/navigation"
 
 export default function AdminFlashSalePage() {
@@ -11,7 +12,7 @@ export default function AdminFlashSalePage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null) // Simpan objek produk utuh
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  
+
   const [flashData, setFlashData] = useState({
     price: "",
     original_price: "",
@@ -27,7 +28,7 @@ export default function AdminFlashSalePage() {
   }, [])
 
   // Logika Filter Pencarian
-  const filteredProducts = products.filter(p => 
+  const filteredProducts = products.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   ).slice(0, 10) // Batasi hasil 10 teratas agar tidak terlalu panjang
 
@@ -45,8 +46,8 @@ export default function AdminFlashSalePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedProduct) return alert("Pilih produk terlebih dahulu!")
-    
+    if (!selectedProduct) return toast.error("Pilih produk terlebih dahulu!")
+
     setLoading(true)
 
     const { error } = await supabase
@@ -60,23 +61,23 @@ export default function AdminFlashSalePage() {
       .eq("id", selectedProduct.id)
 
     setLoading(false)
-    
+
     if (error) {
-      alert("Gagal menyimpan: " + error.message)
+      toast.error("Gagal menyimpan: " + error.message)
     } else {
-      alert("Produk berhasil ditandai sebagai Flash Sale!");
+      toast.success("Produk berhasil ditandai sebagai Flash Sale!");
       handleRemoveSelection()
     }
   }
 
   return (
     <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-10">
-      
+
       {/* HEADER */}
       <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
         <div className="flex items-center gap-3 px-5 pt-12 pb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
-            <Icons.ArrowLeft size={20} strokeWidth={2.5} />
+            <ArrowLeft size={20} strokeWidth={2.5} />
           </button>
           <div>
             <h1 className="text-lg font-bold text-slate-900 tracking-tight">Pengaturan Flash Sale</h1>
@@ -86,12 +87,12 @@ export default function AdminFlashSalePage() {
       </div>
 
       <form onSubmit={handleSubmit} className="p-5 space-y-5">
-        
+
         {/* CARD 1: PILIH PRODUK (DENGAN SEARCH) */}
         <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm space-y-3">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-orange-50 rounded-lg text-orange-500">
-              <Icons.Zap size={18} />
+              <Zap size={18} />
             </div>
             <h3 className="text-sm font-bold text-slate-800">Pilih Produk</h3>
           </div>
@@ -101,28 +102,28 @@ export default function AdminFlashSalePage() {
             <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white rounded-lg text-slate-500 border border-slate-100">
-                  <Icons.CheckCircle size={16} className="text-green-500"/>
+                  <CheckCircle size={16} className="text-green-500" />
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-700">{selectedProduct.name}</p>
-                  <p className="text-[10px] text-slate-400">ID: {selectedProduct.id.slice(0,8)}...</p>
+                  <p className="text-[10px] text-slate-400">ID: {selectedProduct.id.slice(0, 8)}...</p>
                 </div>
               </div>
-              <button 
+              <button
                 type="button"
                 onClick={handleRemoveSelection}
                 className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
               >
-                <Icons.X size={16} />
+                <X size={16} />
               </button>
             </div>
           ) : (
             <>
               {/* Input Search */}
               <div className="relative">
-                <Icons.Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="text" 
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
                   placeholder="Ketik nama produk..."
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all"
                   value={searchQuery}
@@ -142,7 +143,7 @@ export default function AdminFlashSalePage() {
                         className="w-full text-left px-3 py-2.5 text-xs font-medium text-slate-600 hover:bg-white hover:text-slate-900 transition-colors flex items-center justify-between group"
                       >
                         <span>{p.name}</span>
-                        <Icons.Plus size={14} className="text-slate-300 group-hover:text-orange-500" />
+                        <Plus size={14} className="text-slate-300 group-hover:text-orange-500" />
                       </button>
                     ))
                   ) : (
@@ -159,7 +160,7 @@ export default function AdminFlashSalePage() {
           <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-indigo-50 rounded-lg text-indigo-500">
-                <Icons.Tag size={18} />
+                <Tag size={18} />
               </div>
               <h3 className="text-sm font-bold text-slate-800">Detail Penawaran</h3>
             </div>
@@ -170,13 +171,13 @@ export default function AdminFlashSalePage() {
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
                   Harga Flash Sale (Rp)
                 </label>
-                <input 
-                  type="number" 
-                  placeholder="Contoh: 75000" 
+                <input
+                  type="number"
+                  placeholder="Contoh: 75000"
                   className="w-full px-4 py-3 bg-white border border-orange-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-orange-500 transition-all placeholder:text-slate-300"
                   required
                   value={flashData.price}
-                  onChange={e => setFlashData({...flashData, price: e.target.value})} 
+                  onChange={e => setFlashData({ ...flashData, price: e.target.value })}
                 />
               </div>
 
@@ -185,13 +186,13 @@ export default function AdminFlashSalePage() {
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
                   Harga Asli / Coret (Rp)
                 </label>
-                <input 
-                  type="number" 
-                  placeholder="Contoh: 100000" 
+                <input
+                  type="number"
+                  placeholder="Contoh: 100000"
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all placeholder:text-slate-300"
                   required
                   value={flashData.original_price}
-                  onChange={e => setFlashData({...flashData, original_price: e.target.value})} 
+                  onChange={e => setFlashData({ ...flashData, original_price: e.target.value })}
                 />
               </div>
 
@@ -200,12 +201,12 @@ export default function AdminFlashSalePage() {
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
                   Simulasi Terjual (Opsional)
                 </label>
-                <input 
-                  type="number" 
-                  placeholder="Contoh: 50" 
+                <input
+                  type="number"
+                  placeholder="Contoh: 50"
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all placeholder:text-slate-300"
                   value={flashData.sold_count}
-                  onChange={e => setFlashData({...flashData, sold_count: e.target.value})} 
+                  onChange={e => setFlashData({ ...flashData, sold_count: e.target.value })}
                 />
               </div>
             </div>
@@ -213,19 +214,19 @@ export default function AdminFlashSalePage() {
         )}
 
         {/* SUBMIT BUTTON */}
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           disabled={loading || !selectedProduct}
           className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-orange-200 disabled:cursor-not-allowed shadow-sm shadow-orange-100 flex items-center justify-center gap-2"
         >
           {loading ? (
             <>
-              <Icons.Loader2 size={18} className="animate-spin" />
+              <Loader2 size={18} className="animate-spin" />
               <span>Menyimpan...</span>
             </>
           ) : (
             <>
-              <Icons.Zap size={18} />
+              <Zap size={18} />
               <span>Aktifkan Flash Sale</span>
             </>
           )}

@@ -2,7 +2,14 @@
 
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
-import * as Icons from "lucide-react"
+import { Plus, X, Search, Image as ImageIcon, Package, Soup, Utensils, Shirt, Gem, Gift, ShoppingBag, Coffee, Apple, Leaf, Fish, Store, Baby, Smartphone, Wrench } from "lucide-react"
+import { toast } from "sonner"
+
+const ICON_MAP: Record<string, any> = {
+  Package, Soup, Utensils, Shirt, Gem,
+  Gift, ShoppingBag, Coffee, Apple, Leaf,
+  Fish, Store, Baby, Smartphone, Wrench
+}
 
 export default function AdminAddCategory() {
   const [name, setName] = useState("")
@@ -11,7 +18,7 @@ export default function AdminAddCategory() {
   const [loading, setLoading] = useState(false)
 
   const availableIcons = [
-    "Package", "Soup", "Utensils", "Shirt", "Gem", 
+    "Package", "Soup", "Utensils", "Shirt", "Gem",
     "Gift", "ShoppingBag", "Coffee", "Apple", "Leaf",
     "Fish", "Store", "Baby", "Smartphone", "Wrench"
   ]
@@ -37,9 +44,9 @@ export default function AdminAddCategory() {
 
     setLoading(false)
 
-    if (error) alert(error.message)
+    if (error) toast.error(error.message)
     else {
-      alert("Kategori berhasil ditambah!")
+      toast.success("Kategori berhasil ditambah!")
       setName("")
       setIcon("Package")
       setColor("from-orange-300 to-orange-400")
@@ -48,19 +55,19 @@ export default function AdminAddCategory() {
 
   return (
     <div className="p-8 max-w-md mx-auto bg-white rounded-2xl shadow-lg mt-12 border border-gray-200 mb-20">
-      
+
       <h1 className="text-2xl font-semibold mb-8 text-gray-900 tracking-tight text-center">
         Tambah Kategori
       </h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        
+
         {/* Nama Kategori */}
         <div>
           <label className="block text-sm font-medium text-gray-600 mb-2">
             Nama Kategori
           </label>
-          <input 
+          <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -82,11 +89,10 @@ export default function AdminAddCategory() {
                 key={c.class}
                 type="button"
                 onClick={() => setColor(c.class)}
-                className={`w-10 h-10 rounded-full shrink-0 bg-linear-to-br ${c.class} transition-all ${
-                  color === c.class
-                    ? "ring-4 ring-offset-2 ring-indigo-500 scale-105"
-                    : "opacity-70 hover:opacity-100"
-                }`}
+                className={`w-10 h-10 rounded-full shrink-0 bg-linear-to-br ${c.class} transition-all ${color === c.class
+                  ? "ring-4 ring-offset-2 ring-indigo-500 scale-105"
+                  : "opacity-70 hover:opacity-100"
+                  }`}
               />
             ))}
           </div>
@@ -99,17 +105,16 @@ export default function AdminAddCategory() {
           </label>
           <div className="grid grid-cols-5 gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
             {availableIcons.map((iconName) => {
-              const IconComponent = (Icons as any)[iconName]
+              const IconComponent = ICON_MAP[iconName] || Package
               return (
                 <button
                   key={iconName}
                   type="button"
                   onClick={() => setIcon(iconName)}
-                  className={`p-3 rounded-lg flex items-center justify-center transition-all ${
-                    icon === iconName
-                      ? "bg-white text-indigo-600 shadow-md scale-105"
-                      : "text-gray-400 hover:text-indigo-500"
-                  }`}
+                  className={`p-3 rounded-lg flex items-center justify-center transition-all ${icon === iconName
+                    ? "bg-white text-indigo-600 shadow-md scale-105"
+                    : "text-gray-400 hover:text-indigo-500"
+                    }`}
                 >
                   <IconComponent size={20} />
                 </button>
@@ -122,7 +127,7 @@ export default function AdminAddCategory() {
         <div className="p-5 rounded-xl border border-dashed border-gray-300 flex items-center gap-4">
           <div className={`w-14 h-14 bg-linear-to-br ${color} rounded-full flex items-center justify-center shadow-md text-white`}>
             {(() => {
-              const PreviewIcon = (Icons as any)[icon] || Icons.Package
+              const PreviewIcon = ICON_MAP[icon] || Package
               return <PreviewIcon size={26} />
             })()}
           </div>
@@ -138,7 +143,7 @@ export default function AdminAddCategory() {
         </div>
 
         {/* Submit Button */}
-        <button 
+        <button
           disabled={loading}
           className="w-full bg-indigo-600 text-white py-3 rounded-xl 
           font-semibold shadow-md hover:bg-indigo-700 

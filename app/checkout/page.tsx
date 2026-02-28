@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import * as Icons from "lucide-react";
+import { ArrowLeft, MapPin, Truck, ShieldCheck, ChevronRight, Loader2, Pencil, Route, PlusCircle, Minus, Plus, ArrowRight } from "lucide-react"
+import { toast } from "sonner"
 import { useRouter } from "next/navigation";
 
 export default function CheckoutPage() {
@@ -116,7 +117,7 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (!address || cartItems.length === 0) {
-      alert("Alamat atau keranjang tidak valid!");
+      toast.error("Alamat atau keranjang tidak valid!");
       return;
     }
 
@@ -125,13 +126,15 @@ export default function CheckoutPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User tidak ditemukan");
 
+      const orderAddress = `${address.detail}, RT ${address.rt || '00'} / RW ${address.rw || '00'}, ${address.kelurahan}, ${address.kecamatan}, ${address.city}`;
+
       // 1. Buat Order ke Supabase
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
         .insert([{
           customer_name: address.name,
           whatsapp_number: address.phone,
-          address: `${address.detail}, ${address.city}`,
+          address: orderAddress,
           subtotal_amount: totalPrice,
           shipping_amount: shippingFee,
           distance_km: distance,
@@ -162,17 +165,15 @@ export default function CheckoutPage() {
 
     } catch (error: any) {
       console.error(error);
-      alert("Gagal memproses pesanan: " + error.message);
+      toast.error("Gagal memproses pesanan: " + error.message);
       setIsProcessing(false);
     }
   };
 
-  // ... (sisa UI tetap sama)
-
   if (loading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-3 bg-slate-50">
-        <Icons.Loader2 className="animate-spin text-indigo-600" size={32} />
+        <Loader2 className="animate-spin text-indigo-600" size={32} />
         <p className="text-sm font-medium text-slate-400">Menyiapkan checkout...</p>
       </div>
     );
@@ -184,7 +185,7 @@ export default function CheckoutPage() {
       <div className="bg-white border-b border-slate-100 sticky top-0 z-40 backdrop-blur-lg ">
         <div className="flex items-center gap-3 px-5 pt-12 pb-4">
           <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
-            <Icons.ArrowLeft size={22} strokeWidth={2.5} />
+            <ArrowLeft size={22} strokeWidth={2.5} />
           </button>
           <h1 className="text-lg font-bold text-slate-900 tracking-tight">Konfirmasi Pesanan</h1>
         </div>
@@ -198,7 +199,7 @@ export default function CheckoutPage() {
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Kirim Ke</span>
             {address && (
               <button onClick={() => router.push("/address")} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-                Ubah <Icons.Pencil size={12} />
+                Ubah <Pencil size={12} />
               </button>
             )}
           </div>
@@ -207,13 +208,15 @@ export default function CheckoutPage() {
             {address ? (
               <div className="flex gap-4">
                 <div className="p-3 bg-indigo-50 rounded-2xl shrink-0 h-fit">
-                  <Icons.MapPin size={20} className="text-indigo-500" />
+                  <MapPin size={20} className="text-indigo-500" />
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-bold text-slate-800">{address.name} • {address.phone}</p>
-                  <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{address.detail}, {address.city}</p>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed uppercase font-medium">
+                    {address.detail}, RT {address.rt || '00'}/RW {address.rw || '00'}, {address.kelurahan}, {address.kecamatan}, {address.city}
+                  </p>
                   <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 rounded-full border border-emerald-100">
-                    <Icons.Route size={12} className="text-emerald-600" />
+                    <Route size={12} className="text-emerald-600" />
                     <span className="text-[11px] font-bold text-emerald-700">{distance.toFixed(1)} KM dari toko</span>
                   </div>
                 </div>
@@ -223,7 +226,7 @@ export default function CheckoutPage() {
                 onClick={() => router.push("/address/add")}
                 className="w-full py-10 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors flex flex-col items-center gap-2"
               >
-                <Icons.PlusCircle size={24} />
+                <PlusCircle size={24} />
                 <span className="text-sm font-semibold">Tambah Alamat Pengiriman</span>
               </button>
             )}
@@ -256,14 +259,14 @@ export default function CheckoutPage() {
                     onClick={() => updateQuantity(item.cart_id, item.quantity - 1)}
                     className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors"
                   >
-                    <Icons.Minus size={14} />
+                    <Minus size={14} />
                   </button>
                   <span className="w-6 text-center text-xs font-bold text-slate-700">{item.quantity}</span>
                   <button
                     onClick={() => updateQuantity(item.cart_id, item.quantity + 1)}
                     className="w-8 h-8 flex items-center justify-center bg-slate-900 text-white rounded-full hover:bg-slate-700 transition-colors"
                   >
-                    <Icons.Plus size={14} />
+                    <Plus size={14} />
                   </button>
                 </div>
               </div>
@@ -301,13 +304,13 @@ export default function CheckoutPage() {
         >
           {isProcessing ? (
             <>
-              <Icons.Loader2 size={18} className="animate-spin" />
+              <Loader2 size={18} className="animate-spin" />
               <span>Memproses Pesanan...</span>
             </>
           ) : (
             <>
               <span>Lanjut ke Pembayaran</span>
-              <Icons.ArrowRight size={18} />
+              <ArrowRight size={18} />
             </>
           )}
         </button>

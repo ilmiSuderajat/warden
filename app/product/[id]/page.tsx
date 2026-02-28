@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 import {
   ArrowLeft, Share2, Star, MapPin, X,
@@ -56,7 +57,7 @@ export default function ProductDetail() {
           .insert([{ user_id: user.id, product_id: product.id, quantity: 1 }])
       }
 
-      if (!silent) alert("Ditambahkan ke keranjang!")
+      if (!silent) toast.success("Ditambahkan ke keranjang!")
     } catch (error) {
       console.error(error)
     } finally {

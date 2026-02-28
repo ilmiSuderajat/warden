@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, CheckCircle2, Truck, Loader2, CreditCard, Wallet, ShieldCheck } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { toast } from "sonner"
 
 // ✅ UUID validation — cegah injeksi dari URL param
 const isValidUUID = (value: string) =>
@@ -65,7 +66,7 @@ function PaymentContent() {
 
         if (error || !order) {
           // ✅ Pesan generik — jangan bocorkan apakah order ada tapi bukan miliknya
-          alert("Pesanan tidak ditemukan atau Anda tidak memiliki akses.")
+          toast.error("Pesanan tidak ditemukan atau Anda tidak memiliki akses.")
           router.push("/cart")
           return
         }
@@ -146,18 +147,17 @@ function PaymentContent() {
           },
           onError: (result: any) => {
             console.error("[Payment] Error:", result)
-            setLoading(false);
-            alert("Terjadi kesalahan saat pembayaran.")
+            toast.error("Terjadi kesalahan saat pembayaran.")
           },
           onClose: () => {
             console.log("[Payment] Closed")
-            setLoading(false)
-            alert("Pembayaran dibatalkan. Pesanan tersimpan di menu Pesanan.")
+            toast.info("Pembayaran dibatalkan. Pesanan tersimpan di menu Pesanan.")
             router.push("/orders")
           },
         })
     } catch (error: any) {
-      alert(error.message)
+      toast.error(error.message)
+    } finally {
       setLoading(false)
     }
   }

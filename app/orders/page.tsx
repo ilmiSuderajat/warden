@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { toast } from "sonner"
 import * as Icons from "lucide-react"
 import { useRouter } from "next/navigation"
 
@@ -77,13 +78,13 @@ export default function MyOrdersPage() {
 
       const data = await response.json()
       if (data.success) {
-        alert("🎉 " + data.message)
+        toast.success(data.message)
         fetchOrders() // Refresh data
-      } else {
-        alert("ℹ️ " + (data.message || data.error))
+      } else if (data.status === 'error') {
+        toast.error(data.message || data.error)
       }
-    } catch (error) {
-      alert("Gagal mengecek status. Silakan coba lagi nanti.")
+    } catch (err) {
+      toast.error("Gagal mengecek status. Silakan coba lagi nanti.")
     } finally {
       setLoading(false)
     }

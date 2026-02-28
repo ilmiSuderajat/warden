@@ -3,18 +3,15 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
-import {
-  LayoutDashboard, Package, Truck, Settings,
-  TrendingUp, Edit3, Plus,
-  CheckCircle2, Clock,
-  CreditCard, Search
-} from "lucide-react"
+import { ArrowLeft, Plus, Search, Filter, MoreVertical, LayoutDashboard, ShoppingBag, Users, Settings, Package, Truck, CheckCircle2, AlertCircle, Clock, ChevronRight, LogOut, ArrowRight, Tag, Camera, MapPin, Loader2, CreditCard, Image as ImageIcon, TrendingUp, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("dashboard")
   const [timeFilter, setTimeFilter] = useState("all")
   const [products, setProducts] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
+  const [banners, setBanners] = useState<any[]>([])
   const [categorySales, setCategorySales] = useState<any[]>([])
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -30,6 +27,7 @@ export default function AdminDashboard() {
   const navItems = [
     { id: "dashboard", label: "Beranda", icon: LayoutDashboard },
     { id: "inventory", label: "Produk", icon: Package },
+    { id: "banners", label: "Banner", icon: ImageIcon },
     { id: "orders", label: "Pesanan", icon: Truck },
     { id: "settings", label: "Pengaturan", icon: Settings },
   ]
@@ -52,23 +50,40 @@ export default function AdminDashboard() {
     const { data: orders } = await dateQuery
     const { data: prod } = await supabase.from('products').select('*')
     const { data: cat } = await supabase.from('categories').select('*')
+    const { data: ban } = await supabase.from('flash_sale_banners').select('*').order('created_at', { ascending: false })
     const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
 
-    // 2. Ambil Item Terjual
+    // 2. Ambil Item Terjual (Mapping via Nama Produk)
     const orderIds = orders?.map(o => o.id) || []
     let items: any[] = []
 
     if (orderIds.length > 0) {
-      const { data: itemsData } = await supabase
-        .from('order_items')
-        .select('quantity, product_name, products(category_id)')
-        .in('order_id', orderIds)
+      try {
+        const { data: itemsData, error: itemsError } = await supabase
+          .from('order_items')
+          .select('quantity, product_name')
+          .in('order_id', orderIds)
 
-      if (itemsData) items = itemsData
+        if (itemsError) {
+          console.warn("[Admin] Failed to fetch order items for stats:", itemsError.message)
+        } else if (itemsData && prod) {
+          // Mapping manual di sisi klien menggunakan 'product_name'
+          items = itemsData.map(item => {
+            const product = prod.find(p => p.name === item.product_name)
+            return {
+              ...item,
+              products: product ? { category_id: product.category_id } : null
+            }
+          })
+        }
+      } catch (err) {
+        console.error("[Admin] Unexpected error fetching items:", err)
+      }
     }
 
     if (prod) setProducts(prod)
     if (cat) setCategories(cat)
+    if (ban) setBanners(ban)
 
     // 3. Hitung Statistik
     if (orders) {
@@ -76,8 +91,8 @@ export default function AdminDashboard() {
         acc.totalSales += curr.total_amount || 0;
         // Penjualan yang belum dibayar
         if (curr.payment_status === 'pending') acc.pending++;
-        // Penjualan yang sudah dibayar (biasanya statusnya 'Perlu Dikemas')
-        if (curr.payment_status === 'paid' && curr.status !== 'Selesai' && curr.status !== 'Dikirim') acc.process++;
+        // Penjualan yang sudah dibayar atau sedang diproses (COD)
+        if ((curr.payment_status === 'paid' || curr.payment_status === 'processing') && curr.status !== 'Selesai' && curr.status !== 'Dikirim') acc.process++;
 
         if (curr.status === 'Dikirim') acc.shipping++;
         if (curr.status === 'Selesai') acc.done++;
@@ -221,33 +236,56 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* --- TAB INVENTORY (Placeholder for consistency) --- */}
-        {activeTab === "inventory" && (
+        {/* --- TAB BANNERS --- */}
+        {activeTab === "banners" && (
           <div className="space-y-4 animate-in fade-in duration-300 pt-2">
-            <div className="flex gap-3">
-              <div className="flex-1 flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5">
-                <Search size={16} className="text-slate-400" />
-                <input type="text" placeholder="Cari produk..." className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" />
-              </div>
-              <button className="p-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors">
-                <Plus size={18} />
+            <div className="flex justify-between items-center mb-2 px-1">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide">Kelola Banner Flash Sale</h3>
+              <button
+                onClick={() => toast.info("Fitur Tambah Banner: Masukkan data ke table flash_sale_banners di Supabase untuk saat ini.")}
+                className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                title="Sistem manajemen banner lengkap sedang dikembangkan"
+              >
+                <Plus size={16} />
               </button>
             </div>
 
-            {products.map((p) => (
-              <div key={p.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
-                <div className="w-16 h-16 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-50">
-                  <img src={Array.isArray(p.image_url) ? p.image_url[0] : p.image_url} className="w-full h-full object-cover" />
+            {banners.length > 0 ? banners.map((b) => (
+              <div key={b.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-20 h-14 rounded-lg bg-slate-100 overflow-hidden shrink-0 border border-slate-50 relative">
+                  <img src={b.image_url} className="w-full h-full object-cover" alt={b.title} />
+                  {!b.is_active && (
+                    <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
+                      <span className="text-[8px] font-bold text-white uppercase tracking-tighter">Nonaktif</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-semibold text-slate-800 line-clamp-1">{p.name}</h4>
-                  <p className="text-sm font-bold text-slate-900 mt-1">Rp {p.price.toLocaleString('id-ID')}</p>
+                  <h4 className="text-xs font-semibold text-slate-800 line-clamp-1">{b.title}</h4>
+                  <p className="text-[10px] font-medium text-red-500 mt-0.5">{b.discount_text}</p>
+                  <p className="text-[9px] text-slate-400 mt-0.5 truncate">Exp: {new Date(b.end_date).toLocaleDateString('id-ID')}</p>
                 </div>
-                <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
-                  <Edit3 size={16} />
+                <button
+                  onClick={async () => {
+                    if (confirm("Hapus banner ini?")) {
+                      const { error } = await supabase.from('flash_sale_banners').delete().eq('id', b.id);
+                      if (!error) fetchData();
+                    }
+                  }}
+                  className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 size={16} />
                 </button>
               </div>
-            ))}
+            )) : (
+              <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-200">
+                <p className="text-xs text-slate-400">Belum ada banner.</p>
+              </div>
+            )}
+
+            <p className="text-[9px] text-slate-400 text-center px-4 italic">
+              Banner ini akan muncul di halaman /flash-sale sebagai header promo.
+            </p>
           </div>
         )}
 

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Trash2, Tag, Zap, Plus, ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, Tag, Loader2, Search, Zap } from "lucide-react"
+import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -19,7 +20,7 @@ export default function ManageFlashSalePage() {
       .from("products")
       .select("id, name, price, original_price, sold_count")
       .eq("is_flash_sale", true)
-    
+
     if (data) setFlashProducts(data)
     setLoading(false)
   }
@@ -31,7 +32,7 @@ export default function ManageFlashSalePage() {
   // 2. Hapus dari Flash Sale
   const removeFromFlashSale = async (id: string, name: string) => {
     if (!confirm(`Hentikan promosi Flash Sale untuk "${name}"?`)) return
-    
+
     setProcessingId(id)
     const { error } = await supabase
       .from("products")
@@ -39,7 +40,7 @@ export default function ManageFlashSalePage() {
       .eq("id", id)
 
     if (error) {
-      alert("Gagal mengupdate: " + error.message)
+      toast.error("Gagal mengupdate: " + error.message)
     } else {
       // Optimistic Update: Hapus dari state lokal
       setFlashProducts(prev => prev.filter(p => p.id !== id))
@@ -49,7 +50,7 @@ export default function ManageFlashSalePage() {
 
   return (
     <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-10">
-      
+
       {/* HEADER */}
       <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
         <div className="flex items-center justify-between px-5 pt-12 pb-4">
@@ -62,7 +63,7 @@ export default function ManageFlashSalePage() {
               <p className="text-[10px] font-medium text-slate-400">Kelola produk promosi</p>
             </div>
           </div>
-          
+
           {/* Badge Jumlah Item */}
           <span className="px-3 py-1 bg-orange-50 text-orange-600 text-[10px] font-bold rounded-full border border-orange-100">
             {flashProducts.length} Item
@@ -71,10 +72,10 @@ export default function ManageFlashSalePage() {
       </div>
 
       <div className="p-5 space-y-4">
-        
+
         {/* Tombol Tambah (Link ke halaman form sebelumnya) */}
-        <Link 
-          href="/admin/add-banner" 
+        <Link
+          href="/admin/add-banner"
           className="flex items-center justify-center gap-2 w-full bg-orange-500 hover:bg-orange-600 text-white py-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98] shadow-sm shadow-orange-100"
         >
           <Plus size={18} />
@@ -90,8 +91,8 @@ export default function ManageFlashSalePage() {
         ) : flashProducts.length > 0 ? (
           <div className="space-y-3">
             {flashProducts.map((product) => (
-              <div 
-                key={product.id} 
+              <div
+                key={product.id}
                 className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-orange-200 transition-colors"
               >
                 <div className="flex-1 min-w-0 pr-4">
@@ -99,7 +100,7 @@ export default function ManageFlashSalePage() {
                     <h3 className="text-sm font-semibold text-slate-800 truncate">{product.name}</h3>
                     <Zap size={12} className="text-orange-500 shrink-0 fill-orange-500" />
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-bold text-orange-600">
                       Rp {product.price?.toLocaleString('id-ID')}
@@ -110,14 +111,14 @@ export default function ManageFlashSalePage() {
                       </p>
                     )}
                   </div>
-                  
+
                   {product.sold_count && (
-                     <p className="text-[10px] text-slate-400 mt-1">{product.sold_count} terjual</p>
+                    <p className="text-[10px] text-slate-400 mt-1">{product.sold_count} terjual</p>
                   )}
                 </div>
 
                 {/* Tombol Aksi */}
-                <button 
+                <button
                   onClick={() => removeFromFlashSale(product.id, product.name)}
                   disabled={processingId === product.id}
                   className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all shrink-0 disabled:opacity-50"
