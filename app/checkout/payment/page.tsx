@@ -121,7 +121,10 @@ function PaymentContent() {
       const data = await response.json()
       console.log("[Payment] API Response:", data)
 
-      if (!response.ok) throw new Error(data.error || "Gagal memproses pembayaran")
+      if (!response.ok) {
+        const errorMsg = data.apiResponse?.error_messages?.[0] || data.details || data.error || "Gagal memproses pembayaran"
+        throw new Error(errorMsg)
+      }
       if (!data.token) throw new Error("Snap token tidak ditemukan dalam respon server.")
 
       const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!

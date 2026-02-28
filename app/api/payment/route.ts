@@ -60,6 +60,7 @@ export async function POST(req: Request) {
       .maybeSingle()
 
     if (orderError || !order) {
+      console.error("[Payment API] Order not found or error:", orderError)
       return NextResponse.json({ error: "Pesanan tidak ditemukan." }, { status: 404 })
     }
 
@@ -68,35 +69,65 @@ export async function POST(req: Request) {
     }
 
     // 2. Buat parameter Midtrans
-    const parameter = {
-      transaction_details: {
-        order_id: order.id,
-        gross_amount: order.total_amount,
-      },
-      customer_details: {
-        first_name: order.customer_name,
-        phone: order.whatsapp_number,
-      },
-      item_details: order.order_items.map((item: any) => ({
-        id: item.id,
-        price: item.price,
-        quantity: item.quantity,
-        name: item.product_name,
-      })),
-    }
+    const itemDetails = order.order_items.map((item: any) => ({
+      id: item.id.toString(),
+      price: Math.round(Number(item.price)),
+      quantity: Math.round(Number(item.quantity)),
+      name: item.product_name.slice(0, 50),
+    }))
 
     // Tambahkan biaya pengiriman sebagai item jika ada
-    if (order.shipping_amount > 0) {
-      (parameter.item_details as any[]).push({
+    const shippingFee = order.shipping_amount ? Math.round(Number(order.shipping_amount)) : 0
+    if (shippingFee > 0) {
+      itemDetails.push({
         id: 'shipping-fee',
-        price: order.shipping_amount,
+        price: shippingFee,
         quantity: 1,
         name: 'Ongkos Kirim',
       })
     }
 
+    const grossAmount = Math.round(Number(order.total_amount))
+
+    // Validasi gross_amount vs item_details sum
+    const itemsSum = itemDetails.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+
+    if (itemsSum !== grossAmount) {
+      console.warn(`[Midtrans] Amount mismatch! Gross: ${grossAmount}, ItemsSum: ${itemsSum}. Adjusting gross_amount to match items.`)
+    }
+
+    const parameter = {
+      transaction_details: {
+        // Penting: Midtrans Sandbox sering menolak order_id duplikat.
+        // Kita tambahkan suffix timestamp agar unik setiap kali klik 'Bayar Sekarang'.
+        order_id: `${order.id}-${Date.now()}`,
+        gross_amount: itemsSum, // Gunakan itemsSum untuk menjamin validitas Midtrans
+      },
+      customer_details: {
+        first_name: order.customer_name,
+        phone: order.whatsapp_number,
+      },
+      item_details: itemDetails,
+    }
+
+    console.log("[Midtrans] Request Payload:", JSON.stringify(parameter, null, 2))
+
     // 3. Request Snap Token
-    const transaction = await snap.createTransaction(parameter)
+    let transaction;
+    try {
+      transaction = await snap.createTransaction(parameter)
+      console.log("[Midtrans] Snap Result:", transaction)
+    } catch (midError: any) {
+      console.error("[Midtrans API ERROR]:", midError.message)
+      if (midError.ApiResponse) {
+        console.error("[Midtrans API Response JSON]:", JSON.stringify(midError.ApiResponse, null, 2))
+      }
+      return NextResponse.json({
+        error: "Gagal memproses pembayaran Midtrans.",
+        details: midError.message,
+        apiResponse: midError.ApiResponse
+      }, { status: 500 })
+    }
 
     // 4. Update order dengan payment_method online
     await supabaseAdmin
@@ -106,7 +137,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ token: transaction.token })
   } catch (err: any) {
-    console.error("[Midtrans Payment Error]", err)
-    return NextResponse.json({ error: "Gagal memproses pembayaran Midtrans." }, { status: 500 })
+    console.error("[Global API Error]", err)
+    return NextResponse.json({ error: "Terjadi kesalahan internal." }, { status: 500 })
   }
 }

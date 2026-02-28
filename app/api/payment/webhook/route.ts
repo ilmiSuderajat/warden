@@ -33,10 +33,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid signature" }, { status: 403 })
     }
 
+    // 🧠 2. Extract real Order ID (remove timestamp suffix if present)
+    // Format: UUID (36 chars) + optional suffix "-timestamp"
+    const realOrderId = order_id.length > 36 ? order_id.substring(0, 36) : order_id;
+
+    console.log("🔔 Webhook received for order:", order_id)
+    console.log("➡ Identified Real UUID:", realOrderId)
+    console.log("➡ Status:", transaction_status)
+
     let paymentStatus = 'pending'
     let orderStatus = 'Menunggu Pembayaran'
 
-    // 🧠 2. Mapping Status Midtrans
+    // 🧠 3. Mapping Status Midtrans
     if (transaction_status === 'capture') {
       if (fraud_status === 'challenge') {
         paymentStatus = 'pending'
@@ -61,24 +69,22 @@ export async function POST(req: Request) {
       orderStatus = 'Dibatalkan'
     }
 
-    console.log("✅ Update Order:", order_id)
-    console.log("➡ Payment:", paymentStatus)
-    console.log("➡ Status:", orderStatus)
-
-    // 📦 3. Update Database
+    // 📦 4. Update Database
     const { error } = await supabase
       .from('orders')
       .update({
         payment_status: paymentStatus,
-        status: orderStatus
+        status: orderStatus,
+        payment_method: 'online' // Pastikan terupdate jika via webhook
       })
-      .eq('id', order_id)
+      .eq('id', realOrderId)
 
     if (error) {
       console.log("❌ DB Error:", error.message)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    console.log(`✅ Success updated order ${realOrderId} to ${paymentStatus}/${orderStatus}`)
     return NextResponse.json({ message: "OK" })
 
   } catch (err: any) {
