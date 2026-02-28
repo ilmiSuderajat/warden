@@ -4,16 +4,20 @@ import { useEffect, useState, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Star, MapPin, ImageOff, ArrowLeft, Loader2 } from "lucide-react"
+import ProductCardSkeleton from "../components/ProductCardSkeleton"
 import Link from "next/link"
+import { calculateDistance, formatDistance } from "@/lib/geo"
+import { useUserLocation } from "@/hooks/useUserLocation"
 
 // Komponen Utama Konten
 function SearchContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const q = searchParams.get('q') || ""
-  
+
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const { location: userLoc } = useUserLocation()
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -24,7 +28,7 @@ function SearchContent() {
           .select("*")
           .ilike("name", `%${q}%`)
           .order('created_at', { ascending: false })
-        
+
         setResults(data || [])
       } catch (error) {
         console.error("Error fetching search results", error)
@@ -42,12 +46,12 @@ function SearchContent() {
 
   return (
     <div className="bg-slate-50 max-w-md mx-auto min-h-screen font-sans text-slate-900">
-      
+
       {/* --- HEADER FIXED --- */}
       <header className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-white">
         <div className="w-full max-w-md h-14 flex items-center px-4 border-b border-slate-100">
-          <button 
-            onClick={() => router.back()} 
+          <button
+            onClick={() => router.back()}
             className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform touch-manipulation"
           >
             <ArrowLeft size={24} strokeWidth={2.5} />
@@ -62,12 +66,12 @@ function SearchContent() {
       {/* --- KONTEN UTAMA --- */}
       {/* Padding top mengikuti tinggi header (h-14 = 56px / 3.5rem) */}
       <main className="pt-16 pb-8 px-4">
-        
+
         {loading ? (
-          // Loading State
-          <div className="flex flex-col items-center justify-center h-[60vh]">
-            <Loader2 className="w-8 h-8 text-orange-500 animate-spin mb-3" />
-            <p className="text-xs text-slate-400 font-medium">Mencari produk...</p>
+          <div className="grid grid-cols-2 gap-3">
+            {Array(6).fill(0).map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))}
           </div>
         ) : results.length > 0 ? (
           // Results Grid
@@ -87,10 +91,10 @@ function SearchContent() {
                   {/* Gambar */}
                   <div className="aspect-square w-full bg-slate-100 relative overflow-hidden">
                     {displayImg ? (
-                      <img 
-                        src={displayImg} 
-                        alt={p.name} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                      <img
+                        src={displayImg}
+                        alt={p.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         loading="lazy"
                       />
                     ) : (
@@ -98,7 +102,7 @@ function SearchContent() {
                         <ImageOff size={32} strokeWidth={1.5} />
                       </div>
                     )}
-                    
+
                     {/* Badge Diskon */}
                     {discount > 0 && (
                       <div className="absolute top-2 right-2 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
@@ -142,7 +146,14 @@ function SearchContent() {
                       </div>
                       <div className="flex items-center gap-0.5">
                         <MapPin size={10} />
-                        <span className="text-[10px] truncate max-w-20">{p.location || "Jakarta"}</span>
+                        <span className="text-[10px] truncate max-w-20">
+                          {p.location || "Jakarta"}
+                          {userLoc && p.latitude && p.longitude && (
+                            <span className="ml-1 text-indigo-600 font-bold">
+                              • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.latitude, p.longitude))}
+                            </span>
+                          )}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -154,7 +165,7 @@ function SearchContent() {
           // Empty State
           <div className="flex flex-col items-center justify-center h-[60vh] text-center px-8">
             <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-               <ImageOff size={36} className="text-slate-300" />
+              <ImageOff size={36} className="text-slate-300" />
             </div>
             <h2 className="text-slate-800 font-bold text-base mb-1">Produk Tidak Ditemukan</h2>
             <p className="text-slate-400 text-xs leading-relaxed">
@@ -171,8 +182,12 @@ function SearchContent() {
 export default function SearchResults() {
   return (
     <Suspense fallback={
-      <div className="pt-20 flex justify-center items-center h-screen bg-slate-50">
-        <Loader2 className="animate-spin text-orange-500" />
+      <div className="pt-20 px-4 bg-slate-50 min-h-screen max-w-md mx-auto">
+        <div className="grid grid-cols-2 gap-3">
+          {Array(6).fill(0).map((_, i) => (
+            <ProductCardSkeleton key={i} />
+          ))}
+        </div>
       </div>
     }>
       <SearchContent />

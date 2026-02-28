@@ -4,28 +4,26 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import {
     ArrowLeft, Search, RefreshCw,
-    MessageCircle, Clock, CreditCard,
-    ChevronRight, Inbox, Loader2, MapPin, AlertCircle
+    MessageCircle, CheckCircle2,
+    Inbox, Loader2, MapPin, AlertCircle
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
-export default function UnpaidOrdersPage() {
+export default function CompletedOrdersPage() {
     const router = useRouter()
     const [orders, setOrders] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [searchQuery, setSearchQuery] = useState("")
-    const [allProducts, setAllProducts] = useState<any[]>([])
 
-    const fetchUnpaidOrders = async () => {
+    const fetchCompletedOrders = async () => {
         setLoading(true)
         setError(null)
         try {
-            // 1. Ambil data orders
             const { data: ordersData, error: ordersError } = await supabase
                 .from("orders")
                 .select("*")
-                .eq("payment_status", "pending")
+                .eq("status", "Selesai")
                 .order("created_at", { ascending: false })
 
             if (ordersError) throw ordersError
@@ -35,22 +33,16 @@ export default function UnpaidOrdersPage() {
                 return
             }
 
-            // 2. Ambil data order_items secara terpisah (Manual Join)
+            const { data: prodData } = await supabase.from("products").select("name, latitude, longitude, location")
+
             const orderIds = ordersData.map(o => o.id)
             const { data: itemsData, error: itemsError } = await supabase
                 .from("order_items")
                 .select("*")
                 .in("order_id", orderIds)
 
-            if (itemsError) {
-                console.warn("Gagal mengambil rincian item:", itemsError.message)
-            }
+            if (itemsError) throw itemsError
 
-            // 2.5 Ambil data produk untuk lokasi
-            const { data: prodData } = await supabase.from("products").select("name, latitude, longitude, location")
-            if (prodData) setAllProducts(prodData)
-
-            // 3. Gabungkan data
             const combinedData = ordersData.map(order => ({
                 ...order,
                 order_items: itemsData ? itemsData.filter(item => item.order_id === order.id).map(item => {
@@ -61,7 +53,7 @@ export default function UnpaidOrdersPage() {
 
             setOrders(combinedData)
         } catch (err: any) {
-            console.error("Error fetching unpaid orders:", err)
+            console.error("Error fetching completed orders:", err)
             setError(err.message || "Gagal mengambil data pesanan")
         } finally {
             setLoading(false)
@@ -69,7 +61,7 @@ export default function UnpaidOrdersPage() {
     }
 
     useEffect(() => {
-        fetchUnpaidOrders()
+        fetchCompletedOrders()
     }, [])
 
     const filteredOrders = orders.filter(order =>
@@ -89,7 +81,6 @@ export default function UnpaidOrdersPage() {
 
     return (
         <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-24">
-            {/* HEADER */}
             <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
                 <div className="flex items-center justify-between px-5 pt-12 pb-4">
                     <div className="flex items-center gap-3">
@@ -99,24 +90,23 @@ export default function UnpaidOrdersPage() {
                         >
                             <ArrowLeft size={20} strokeWidth={2.5} />
                         </button>
-                        <h1 className="text-lg font-bold text-slate-900 tracking-tight">Belum Dibayar</h1>
+                        <h1 className="text-lg font-bold text-slate-900 tracking-tight">Pesanan Selesai</h1>
                     </div>
                     <button
-                        onClick={fetchUnpaidOrders}
-                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
+                        onClick={fetchCompletedOrders}
+                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
                         disabled={loading}
                     >
                         <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
                     </button>
                 </div>
 
-                {/* SEARCH BAR */}
                 <div className="px-5 pb-4">
                     <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-4 py-2.5">
                         <Search size={16} className="text-slate-400" />
                         <input
                             type="text"
-                            placeholder="Cari nama atau ID pesanan..."
+                            placeholder="Cari pesanan selesai..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
@@ -132,28 +122,20 @@ export default function UnpaidOrdersPage() {
                         <div className="flex-1">
                             <p className="text-xs font-bold text-red-600">Terjadi Error</p>
                             <p className="text-[10px] text-red-500 mt-1">{error}</p>
-                            <button
-                                onClick={fetchUnpaidOrders}
-                                className="mt-2 text-[10px] font-bold text-red-600 underline"
-                            >
-                                Coba Lagi
-                            </button>
+                            <button onClick={fetchCompletedOrders} className="mt-2 text-[10px] font-bold text-red-600 underline">Coba Lagi</button>
                         </div>
                     </div>
                 )}
 
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                        <Loader2 className="animate-spin mb-3 text-indigo-600" size={24} />
-                        <p className="text-xs font-medium">Memuat data pesanan...</p>
+                        <Loader2 className="animate-spin mb-3 text-emerald-600" size={24} />
+                        <p className="text-xs font-medium">Memuat riwayat...</p>
                     </div>
                 ) : filteredOrders.length > 0 ? (
                     <div className="space-y-4">
                         {filteredOrders.map((order) => (
-                            <div
-                                key={order.id}
-                                className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden"
-                            >
+                            <div key={order.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden opacity-90">
                                 <div className="p-5">
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="flex-1 min-w-0">
@@ -161,9 +143,7 @@ export default function UnpaidOrdersPage() {
                                             <p className="text-[10px] text-slate-400 mt-0.5 tracking-wider uppercase font-medium">ID: {order.id.slice(0, 8)}</p>
                                             <div className="mt-2 flex items-start gap-1.5 bg-slate-50 p-2 rounded-lg border border-slate-100">
                                                 <MapPin size={12} className="text-slate-400 shrink-0 mt-0.5" />
-                                                <p className="text-[10px] text-slate-500 leading-relaxed uppercase font-medium line-clamp-2">
-                                                    {order.address}
-                                                </p>
+                                                <p className="text-[10px] text-slate-500 leading-relaxed uppercase font-medium line-clamp-2">{order.address}</p>
                                             </div>
                                             <button
                                                 onClick={() => {
@@ -172,34 +152,27 @@ export default function UnpaidOrdersPage() {
                                                         : encodeURIComponent(order.address);
                                                     window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
                                                 }}
-                                                className="mt-2 flex items-center gap-1.5 text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md hover:bg-indigo-100 transition-colors w-fit"
+                                                className="mt-2 flex items-center gap-1.5 text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md hover:bg-emerald-100 transition-colors w-fit"
                                             >
                                                 <MapPin size={10} />
                                                 Kirim Ke Lokasi Ini (Maps)
                                             </button>
                                         </div>
                                         <div className="flex flex-col items-end">
-                                            <p className="text-sm font-bold text-indigo-600">Rp {order.total_amount.toLocaleString('id-ID')}</p>
-                                            <div className="mt-1 flex flex-col items-end gap-0.5">
-                                                <p className="text-[9px] text-slate-400 font-medium">Sub: Rp {(order.subtotal_amount || 0).toLocaleString('id-ID')}</p>
-                                                <p className="text-[9px] text-slate-400 font-medium">Ongkir: Rp {(order.shipping_amount || 0).toLocaleString('id-ID')}</p>
+                                            <p className="text-sm font-bold text-slate-900">Rp {order.total_amount.toLocaleString('id-ID')}</p>
+                                            <div className="flex items-center gap-1 mt-1">
+                                                <CheckCircle2 size={10} className="text-emerald-500" />
+                                                <span className="text-[10px] text-emerald-500 font-bold uppercase">Selesai</span>
                                             </div>
-                                            <div className="flex items-center gap-1 mt-1.5">
-                                                <Clock size={10} className="text-slate-400" />
-                                                <span className="text-[10px] text-slate-400 font-medium">{formatDate(order.created_at)}</span>
-                                            </div>
+                                            <p className="text-[9px] text-slate-400 mt-1">{formatDate(order.created_at)}</p>
                                         </div>
                                     </div>
 
-                                    <div className="space-y-3 mb-5">
-                                        {order.order_items?.length > 0 ? order.order_items.map((item: any, idx: number) => (
-                                            <div key={idx} className="flex items-center gap-3">
+                                    <div className="space-y-3 mb-4 border-t border-slate-50 pt-4">
+                                        {order.order_items?.map((item: any, idx: number) => (
+                                            <div key={idx} className="flex items-center gap-3 grayscale-[0.5]">
                                                 <div className="w-10 h-10 bg-slate-50 rounded-lg overflow-hidden border border-slate-100 shrink-0">
-                                                    <img
-                                                        src={Array.isArray(item.image_url) ? item.image_url[0] : item.image_url || "/placeholder.png"}
-                                                        className="w-full h-full object-cover"
-                                                        alt={item.product_name}
-                                                    />
+                                                    <img src={Array.isArray(item.image_url) ? item.image_url[0] : item.image_url || "/placeholder.png"} className="w-full h-full object-cover" alt={item.product_name} />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-xs font-semibold text-slate-700 line-clamp-1">{item.product_name}</p>
@@ -215,20 +188,16 @@ export default function UnpaidOrdersPage() {
                                                     )}
                                                 </div>
                                             </div>
-                                        )) : (
-                                            <p className="text-[10px] text-slate-400 italic">Rincian produk tidak tersedia</p>
-                                        )}
+                                        ))}
                                     </div>
 
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => window.open(`https://wa.me/${(order.whatsapp_number || "").replace(/\D/g, '')}?text=Halo ${order.customer_name}, kami dari tim Toko menginformasikan bahwa pesanan Anda #${order.id.slice(0, 8)} belum terbayar. Silakan lakukan pembayaran segera ya.`)}
-                                            className="flex-1 py-2.5 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            <MessageCircle size={16} />
-                                            Hubungi Customer
-                                        </button>
-                                    </div>
+                                    <button
+                                        onClick={() => window.open(`https://wa.me/${(order.whatsapp_number || "").replace(/\D/g, '')}?text=Halo ${order.customer_name}, terima kasih telah berbelanja di toko kami.`)}
+                                        className="w-full py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <MessageCircle size={16} />
+                                        Hubungi Customer
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -236,10 +205,10 @@ export default function UnpaidOrdersPage() {
                 ) : (
                     <div className="text-center py-20 flex flex-col items-center">
                         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-300">
-                            <Inbox size={32} />
+                            <CheckCircle2 size={32} />
                         </div>
-                        <p className="text-sm font-semibold text-slate-700">Tidak ada pesanan tertunda</p>
-                        <p className="text-xs text-slate-400 mt-1">Semua pesanan saat ini sudah terbayar.</p>
+                        <p className="text-sm font-semibold text-slate-700">Belum ada riwayat</p>
+                        <p className="text-xs text-slate-400 mt-1">Pesanan yang telah selesai akan muncul di sini.</p>
                     </div>
                 )}
             </div>

@@ -246,20 +246,34 @@ export default function PaidOrdersPage() {
                                             <h3 className="text-sm font-bold text-slate-900 truncate">{order.customer_name}</h3>
                                             <p className="text-[10px] text-slate-400 mt-0.5 tracking-wider uppercase font-medium">ID: {order.id.slice(0, 8)}</p>
                                             <div className="mt-2 flex items-start gap-1.5 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                                <MapPin size={12} className="text-slate-400 shrink-0 mt-0.5" />
                                                 <p className="text-[10px] text-slate-500 leading-relaxed uppercase font-medium line-clamp-2">
                                                     {order.address}
                                                 </p>
                                             </div>
-                                            {(order.latitude && order.longitude) && (
-                                                <button
-                                                    onClick={() => window.open(`https://www.google.com/maps?q=${order.latitude},${order.longitude}`, '_blank')}
-                                                    className="mt-2 flex items-center gap-1.5 text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md hover:bg-indigo-100 transition-colors w-fit"
-                                                >
-                                                    <MapPin size={10} />
-                                                    Lihat Alamat di Maps
-                                                </button>
-                                            )}
+                                            <button
+                                                onClick={() => {
+                                                    const query = order.latitude && order.longitude
+                                                        ? `${order.latitude},${order.longitude}`
+                                                        : encodeURIComponent(order.address);
+                                                    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                                                }}
+                                                className="mt-2 flex items-center gap-1.5 text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md hover:bg-indigo-100 transition-colors w-fit"
+                                            >
+                                                <MapPin size={10} />
+                                                Kirim Ke Lokasi Ini (Maps)
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const query = order.latitude && order.longitude
+                                                        ? `${order.latitude},${order.longitude}`
+                                                        : encodeURIComponent(order.address);
+                                                    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                                                }}
+                                                className="mt-2 flex items-center gap-1.5 text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md hover:bg-indigo-100 transition-colors w-fit"
+                                            >
+                                                <MapPin size={10} />
+                                                Lihat Alamat di Maps
+                                            </button>
                                         </div>
                                         <div className="flex flex-col items-end">
                                             <p className="text-sm font-bold text-emerald-600">Rp {order.total_amount.toLocaleString('id-ID')}</p>
@@ -321,7 +335,7 @@ export default function PaidOrdersPage() {
                                                             className="mt-1 text-[9px] text-emerald-600 font-medium flex items-center gap-1 hover:underline"
                                                         >
                                                             <MapPin size={8} />
-                                                            Lokasi Produk ({item.product_details.location || 'Toko'})
+                                                            Ambil Produk ({item.product_details.location || 'Toko'})
                                                         </button>
                                                     )}
                                                 </div>

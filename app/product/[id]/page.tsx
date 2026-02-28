@@ -10,6 +10,9 @@ import {
 } from "lucide-react"
 import ProductImageSlider from "@/app/components/ProductImageSlider"
 import ProductList from "@/app/components/ProductList"
+import ProductDetailSkeleton from "@/app/components/ProductDetailSkeleton"
+import { calculateDistance, formatDistance } from "@/lib/geo"
+import { useUserLocation } from "@/hooks/useUserLocation"
 
 export default function ProductDetail() {
   const { id } = useParams()
@@ -18,6 +21,7 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+  const { location: userLoc } = useUserLocation()
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -70,12 +74,7 @@ export default function ProductDetail() {
     router.push("/checkout")
   }
 
-  if (loading) return (
-    <div className="h-screen max-w-md mx-auto text-center flex flex-col items-center justify-center bg-slate-50">
-      <Loader2 className="animate-spin text-slate-400 mb-3" size={28} />
-      <p className="text-xs font-medium text-slate-400">Memuat produk...</p>
-    </div>
-  )
+  if (loading) return <ProductDetailSkeleton />
 
   const imageList = product?.image_url
     ? (Array.isArray(product.image_url) ? product.image_url : [product.image_url])
@@ -159,7 +158,14 @@ export default function ProductDetail() {
             </div>
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Pengiriman</p>
-              <p className="text-xs font-semibold text-slate-700 mt-0.5">Dari <span className="text-slate-900">{product.location || "Gudang Utama"}</span></p>
+              <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                Dari <span className="text-slate-900">{product.location || "Gudang Utama"}</span>
+                {userLoc && product.latitude && product.longitude && (
+                  <span className="ml-1 text-indigo-600 font-bold">
+                    ({formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, product.latitude, product.longitude))} dari lokasi anda)
+                  </span>
+                )}
+              </p>
             </div>
           </div>
         </div>

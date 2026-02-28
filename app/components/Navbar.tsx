@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Home, ShoppingCart, LayoutGrid, Users, Zap,
-  Package, FolderPlus, LayoutDashboard
+  Package, FolderPlus, LayoutDashboard, MessageCircle
 } from "lucide-react";
 
 export default function Navbar() {
@@ -72,6 +72,7 @@ export default function Navbar() {
   const userMenu = [
     { href: "/", label: "Beranda", icon: Home, match: pathname === "/" },
     { href: "/category", label: "Kategori", icon: LayoutGrid, match: pathname === "/category" },
+    { href: "/chat", label: "Chat", icon: MessageCircle, match: pathname === "/chat" },
     { href: "/cart", label: "Keranjang", icon: ShoppingCart, match: pathname === "/cart" },
   ];
 

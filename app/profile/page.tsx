@@ -31,12 +31,12 @@ export default function ProfilePage() {
     { href: "/wishlist", icon: "Heart", label: "Wishlist", color: "text-red-500", bg: "bg-red-50" },
     { href: "/address", icon: "MapPin", label: "Alamat Saya", color: "text-orange-500", bg: "bg-orange-50" },
     { href: "/settings", icon: "Settings", label: "Pengaturan Akun", color: "text-slate-600", bg: "bg-slate-100" },
-    { href: "/help-center", icon: "ShieldCheck", label: "Pusat Bantuan", color: "text-green-600", bg: "bg-green-50" },
+    { href: "/chat", icon: "ShieldCheck", label: "Pusat Bantuan", color: "text-green-600", bg: "bg-green-50" },
   ]
 
   return (
     <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans pb-10">
-      
+
       {/* HEADER FIXED */}
       <header className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-white border-b border-slate-100">
         <div className="w-full max-w-md h-14 flex items-center justify-between px-4">
@@ -49,16 +49,16 @@ export default function ProfilePage() {
 
       {/* CONTENT AREA */}
       <div className="pt-20 px-4">
-        
+
         {/* PROFIL CARD */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center mb-6">
           <div className="relative mb-4">
             <div className="w-24 h-24 rounded-full bg-slate-100 border-4 border-white shadow-md overflow-hidden flex items-center justify-center">
               {user?.user_metadata?.avatar_url ? (
-                <img 
-                  src={user.user_metadata.avatar_url} 
-                  className="w-full h-full object-cover" 
-                  alt="Profile" 
+                <img
+                  src={user.user_metadata.avatar_url}
+                  className="w-full h-full object-cover"
+                  alt="Profile"
                 />
               ) : (
                 <Icons.User size={40} className="text-slate-300" />
@@ -96,9 +96,9 @@ export default function ProfilePage() {
           {menuItems.map((item, idx) => {
             const Icon = (Icons as any)[item.icon] || Icons.Package
             return (
-              <Link 
+              <Link
                 href={item.href}
-                key={idx} 
+                key={idx}
                 className="w-full p-4 flex items-center justify-between active:bg-slate-50 transition-colors group"
               >
                 <div className="flex items-center gap-3">
@@ -114,7 +114,7 @@ export default function ProfilePage() {
         </div>
 
         {/* LOGOUT BUTTON */}
-        <button 
+        <button
           onClick={handleLogout}
           className="w-full mt-6 bg-white p-4 rounded-2xl flex items-center justify-center gap-2 text-red-500 active:bg-red-50 transition-all border border-slate-200 shadow-sm font-semibold"
         >

@@ -3,6 +3,9 @@ import { useEffect, useState, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { LayoutGrid, List, ImageOff, Star, MapPin } from "lucide-react"
 import Link from "next/link" // <-- Import Link
+import ProductCardSkeleton from "./ProductCardSkeleton"
+import { calculateDistance, formatDistance } from "@/lib/geo"
+import { useUserLocation } from "@/hooks/useUserLocation"
 
 function ProductImageSlider({ images, name }: { images?: string[] | string; name?: string }) {
   const [activeIndex, setActiveIndex] = useState(0)
@@ -12,30 +15,30 @@ function ProductImageSlider({ images, name }: { images?: string[] | string; name
     typeof images === "string"
       ? images ? [images] : []
       : Array.isArray(images)
-      ? images.filter((url) => url)
-      : []
+        ? images.filter((url) => url)
+        : []
 
   const isSlider = imageList.length > 1
 
-useEffect(() => {
+  useEffect(() => {
     if (!isSlider) return
 
     // Kasih delay random antara 0 sampai 2000ms sebelum mulai interval
-    const startDelay = Math.random() * 2000 
-    
+    const startDelay = Math.random() * 2000
+
     let interval: NodeJS.Timeout
 
     const timeout = setTimeout(() => {
       interval = setInterval(() => {
         if (!scrollRef.current) return
-        
+
         // Gunakan fungsional update agar tidak perlu memasukkan activeIndex ke dependency
         setActiveIndex((current) => {
           const nextIndex = (current + 1) % imageList.length
           const width = scrollRef.current?.clientWidth || 0
-          scrollRef.current?.scrollTo({ 
-            left: width * nextIndex, 
-            behavior: "smooth" 
+          scrollRef.current?.scrollTo({
+            left: width * nextIndex,
+            behavior: "smooth"
           })
           return nextIndex
         })
@@ -59,9 +62,9 @@ useEffect(() => {
       {imageList.map((url, idx) => (
         // Di dalam ProductImageSlider mapping:
         <div key={idx} className="w-full h-full shrink-0 snap-center">
-          <img 
-            src={url} 
-            alt={`${name ?? "product"}-${idx}`} 
+          <img
+            src={url}
+            alt={`${name ?? "product"}-${idx}`}
             className="w-full h-full object-cover" // Ini kuncinya Lur!
           />
         </div>
@@ -73,11 +76,15 @@ useEffect(() => {
 export default function ProductList() {
   const [view, setView] = useState<"grid" | "list">("grid")
   const [products, setProducts] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const { location: userLoc } = useUserLocation()
 
   useEffect(() => {
     const fetchProducts = async () => {
+      setLoading(true)
       const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false })
       if (!error && data) setProducts(data)
+      setLoading(false)
     }
     fetchProducts()
   }, [])
@@ -95,25 +102,27 @@ export default function ProductList() {
 
       {/* PRODUCT LIST */}
       <div className={view === "grid" ? "grid grid-cols-2 gap-2" : "flex flex-col gap-2 "}>
-        {products.map((p) => {
+        {loading ? (
+          Array(6).fill(0).map((_, i) => (
+            <ProductCardSkeleton key={i} view={view} />
+          ))
+        ) : products.map((p) => {
           const price = p.price || 0
           const original = p.original_price || 0
           const discount = original > price ? Math.round(((original - price) / original) * 100) : 0
 
           return (
             // BUNGKUS DENGAN LINK DI SINI
-            <Link 
-              href={`/product/${p.id}`} 
-              key={p.id} 
+            <Link
+              href={`/product/${p.id}`}
+              key={p.id}
               className="block active:scale-[0.98] transition-transform duration-150"
             >
-              <div className={`bg-white overflow-hidden border border-gray-100 mx-auto h-full w-full ${
-                view === "list" ? "flex flex-row" : "flex flex-col  "
-              }`}>
-                                {/* IMAGE CONTAINER */}
-                <div className={`relative shrink-0 overflow-hidden ${
-                  view === "grid" ? "aspect-square w-full" : "w-28 h-28"
+              <div className={`bg-white overflow-hidden border border-gray-100 mx-auto h-full w-full ${view === "list" ? "flex flex-row" : "flex flex-col  "
                 }`}>
+                {/* IMAGE CONTAINER */}
+                <div className={`relative shrink-0 overflow-hidden ${view === "grid" ? "aspect-square w-full" : "w-28 h-28"
+                  }`}>
                   {/* Badge Lapisan Atas */}
                   <div className="absolute top-0 left-0 z-10 flex flex-col items-start">
                     <span className="bg-indigo-600 text-white text-[7px] font-bold px-1 py-0.5 ">WardenMall</span>
@@ -148,11 +157,16 @@ export default function ProductList() {
                       <span className="text-gray-400 text-[9px] ml-1">{p.sold_count || "0"} terjual</span>
                     </div>
                     <div className="flex items-center text-gray-400 gap-0.5 overflow-hidden">
-  <MapPin size={8} className="text-orange-500 shrink-0" />
-  <span className="text-[9px] truncate font-medium">
-    {p.location || "Lokasi tidak tersedia"}
-  </span>
-</div>
+                      <MapPin size={8} className="text-orange-500 shrink-0" />
+                      <span className="text-[9px] truncate font-medium">
+                        {p.location || "Lokasi tidak tersedia"}
+                        {userLoc && p.latitude && p.longitude && (
+                          <span className="ml-1 text-indigo-600 font-bold">
+                            • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.latitude, p.longitude))}
+                          </span>
+                        )}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

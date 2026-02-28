@@ -3,12 +3,17 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import * as Icons from "lucide-react"
+import ProductCardSkeleton from "../components/ProductCardSkeleton"
+import Skeleton from "../components/Skeleton"
+import { calculateDistance, formatDistance } from "@/lib/geo"
+import { useUserLocation } from "@/hooks/useUserLocation"
 
 export default function FlashSalePage() {
     const [products, setProducts] = useState<any[]>([])
     const [activeBanner, setActiveBanner] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
+    const { location: userLoc } = useUserLocation()
 
     useEffect(() => {
         const fetchData = async () => {
@@ -64,8 +69,26 @@ export default function FlashSalePage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-white max-w-md mx-auto flex items-center justify-center">
-                <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-24">
+                {/* HEADER SKELETON */}
+                <div className="bg-white border-b border-slate-100">
+                    <div className="flex items-center gap-3 px-5 pt-12 pb-4">
+                        <Skeleton className="w-8 h-8 rounded-xl" />
+                        <Skeleton className="h-6 w-32" />
+                    </div>
+                </div>
+
+                {/* BANNER SKELETON */}
+                <div className="mx-4 mt-4">
+                    <Skeleton className="aspect-[21/9] w-full rounded-2xl" />
+                </div>
+
+                {/* PRODUCT GRID SKELETON */}
+                <div className="px-4 mt-12 grid grid-cols-2 gap-3">
+                    {Array(6).fill(0).map((_, i) => (
+                        <ProductCardSkeleton key={i} />
+                    ))}
+                </div>
             </div>
         )
     }
@@ -152,7 +175,14 @@ export default function FlashSalePage() {
                                     {/* PROGRESS BAR (Simulated) */}
                                     <div className="mt-2">
                                         <div className="flex justify-between text-[8px] font-bold text-slate-400 mb-1 px-0.5 uppercase tracking-tighter">
-                                            <span>Stok Terbatas</span>
+                                            <div className="flex items-center gap-1">
+                                                <span>Stok Terbatas</span>
+                                                {userLoc && p.latitude && p.longitude && (
+                                                    <span className="text-indigo-600">
+                                                        • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.latitude, p.longitude))}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span>{p.sold_count || 0} terjual</span>
                                         </div>
                                         <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">

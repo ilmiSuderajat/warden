@@ -229,8 +229,12 @@ export default function AdminDashboard() {
                 <Link href="/admin/orders/paid">
                   <StatCard label="Sudah Dibayar" value={stats.process} icon={Clock} color="bg-indigo-50 text-indigo-600 border-indigo-100" />
                 </Link>
-                <StatCard label="Dikirim" value={stats.shipping} icon={Truck} color="bg-blue-50 text-blue-600 border-blue-100" />
-                <StatCard label="Selesai" value={stats.done} icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 border-emerald-100" />
+                <Link href="/admin/orders/dikirim">
+                  <StatCard label="Dikirim" value={stats.shipping} icon={Truck} color="bg-blue-50 text-blue-600 border-blue-100" />
+                </Link>
+                <Link href="/admin/orders/selesai">
+                  <StatCard label="Selesai" value={stats.done} icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 border-emerald-100" />
+                </Link>
               </div>
             </div>
           </div>

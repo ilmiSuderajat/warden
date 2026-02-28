@@ -5,7 +5,10 @@ import { supabase } from "@/lib/supabase"
 import * as Icons from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Loader2, Package } from "lucide-react"
+import { ArrowLeft, Loader2, Package, MapPin } from "lucide-react"
+import ProductCardSkeleton from "../components/ProductCardSkeleton"
+import { calculateDistance, formatDistance } from "@/lib/geo"
+import { useUserLocation } from "@/hooks/useUserLocation"
 
 export default function CategorySplitPage() {
   const router = useRouter()
@@ -13,6 +16,7 @@ export default function CategorySplitPage() {
   const [selectedCat, setSelectedCat] = useState<string | null>(null)
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const { location: userLoc } = useUserLocation()
 
   // 1. Fetch Kategori
   useEffect(() => {
@@ -55,13 +59,13 @@ export default function CategorySplitPage() {
   return (
     // Container utama hanya sebagai anchor warna
     <div className="bg-slate-50 max-w-md mx-auto font-sans text-slate-900">
-      
+
       {/* --- HEADER FIXED --- */}
       {/* Fixed full width, dengan inner container max-w-md untuk centering */}
       <header className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-white">
         <div className="w-full max-w-md h-14 flex items-center px-4 border-b border-slate-100">
-          <button 
-            onClick={() => router.back()} 
+          <button
+            onClick={() => router.back()}
             className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform touch-manipulation"
           >
             <ArrowLeft size={24} strokeWidth={2.5} />
@@ -77,26 +81,23 @@ export default function CategorySplitPage() {
           {categories.map((cat) => {
             const Icon = (Icons as any)[cat.icon_name] || Package
             const isActive = selectedCat === cat.id
-            
+
             return (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCat(cat.id)}
-                className={`w-full py-3 flex flex-col items-center gap-1 relative transition-colors touch-manipulation ${
-                  isActive ? "bg-indigo-50" : "bg-transparent"
-                }`}
+                className={`w-full py-3 flex flex-col items-center gap-1 relative transition-colors touch-manipulation ${isActive ? "bg-indigo-50" : "bg-transparent"
+                  }`}
               >
                 {isActive && (
                   <span className="absolute left-0 top-2 bottom-2 w-1 bg-indigo-600 rounded-r-full" />
                 )}
-                <div className={`p-1.5 rounded-lg transition-colors ${
-                  isActive ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"
-                }`}>
+                <div className={`p-1.5 rounded-lg transition-colors ${isActive ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"
+                  }`}>
                   <Icon size={18} />
                 </div>
-                <span className={`text-[10px] font-semibold leading-tight line-clamp-2 px-1 text-center ${
-                  isActive ? "text-indigo-600" : "text-slate-500"
-                }`}>
+                <span className={`text-[10px] font-semibold leading-tight line-clamp-2 px-1 text-center ${isActive ? "text-indigo-600" : "text-slate-500"
+                  }`}>
                   {cat.name}
                 </span>
               </button>
@@ -116,8 +117,10 @@ export default function CategorySplitPage() {
           </div>
 
           {loading ? (
-            <div className="flex justify-center items-center h-40">
-              <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+            <div className="grid grid-cols-2 gap-3">
+              {Array(6).fill(0).map((_, i) => (
+                <ProductCardSkeleton key={i} />
+              ))}
             </div>
           ) : products.length > 0 ? (
             <div className="grid grid-cols-2 gap-3">
@@ -142,6 +145,17 @@ export default function CategorySplitPage() {
                     <p className="text-sm font-bold text-red-600">
                       Rp {p.price?.toLocaleString('id-ID')}
                     </p>
+                    <div className="flex items-center gap-1 mt-1 text-slate-400">
+                      <MapPin size={10} className="text-orange-500 shrink-0" />
+                      <span className="text-[10px] truncate font-medium">
+                        {p.location || "Lokasi"}
+                        {userLoc && p.latitude && p.longitude && (
+                          <span className="ml-1 text-indigo-600 font-bold">
+                            • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.latitude, p.longitude))}
+                          </span>
+                        )}
+                      </span>
+                    </div>
                   </div>
                 </Link>
               ))}
