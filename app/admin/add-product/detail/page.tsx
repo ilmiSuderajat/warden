@@ -2,7 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { ArrowLeft, ImagePlus, Loader2, Navigation, Check, Plus } from "lucide-react";
+import {
+  ArrowLeft, ImagePlus, Loader2, Navigation,
+  Check, Plus, Search, Map as MapIcon,
+  ExternalLink, MapPin
+} from "lucide-react";
 import imageCompression from 'browser-image-compression';
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -50,8 +54,9 @@ export default function AddProductPage() {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
           const data = await res.json();
           const address = data.address;
-          const desa = address.village || address.suburb || address.hamlet || address.neighbourhood || address.town || "Lokasi tidak terdeteksi";
+          const desa = address.village || address.suburb || address.hamlet || address.neighbourhood || address.town || address.city || "Lokasi tidak terdeteksi";
           setFormData(prev => ({ ...prev, location: desa, latitude, longitude }));
+          toast.success(`Lokasi terdeteksi: ${desa}`);
         } catch (err) {
           toast.error("Gagal mendeteksi lokasi.");
         } finally {
@@ -70,12 +75,40 @@ export default function AddProductPage() {
             toast.error("Waktu deteksi lokasi habis.");
             break;
           default:
-            toast.error("Terjadi kesalahan yang tidak diketahui saat mendeteksi lokasi.");
+            toast.error("Terjadi kesalahan yang tidak diketahui.");
             break;
         }
         setDetecting(false);
-      }
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
+  };
+
+  const searchLocationByText = async () => {
+    if (!formData.location || formData.location.length < 3) {
+      return toast.error("Masukkan minimal 3 karakter untuk mencari");
+    }
+    setDetecting(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formData.location)}&limit=1`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const spot = data[0];
+        setFormData(prev => ({
+          ...prev,
+          latitude: parseFloat(spot.lat),
+          longitude: parseFloat(spot.lon),
+          location: spot.display_name.split(',')[0] // Ambil bagian pertama saja agar tidak terlalu panjang
+        }));
+        toast.success("Lokasi ditemukan!");
+      } else {
+        toast.error("Lokasi tidak ditemukan. Coba kata kunci lain.");
+      }
+    } catch (err) {
+      toast.error("Error saat mencari lokasi.");
+    } finally {
+      setDetecting(false);
+    }
   };
 
   const handleFileChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -229,27 +262,70 @@ export default function AddProductPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Lokasi</label>
-              <div className="relative">
+            <div className="col-span-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Lokasi Penjemputan Produk</label>
+              <div className="relative group">
                 <input
                   type="text"
-                  placeholder="Deteksi otomatis"
+                  placeholder="Ketik nama lokasi atau desa..."
                   value={formData.location}
-                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all placeholder:text-slate-300 pr-10"
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all placeholder:text-slate-300 pr-24"
                   onChange={e => setFormData({ ...formData, location: e.target.value })}
                   required
                 />
-                <button
-                  type="button"
-                  onClick={detectLocation}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  {detecting ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} />}
-                </button>
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={searchLocationByText}
+                    title="Cari lokasi"
+                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100"
+                  >
+                    {detecting ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={detectLocation}
+                    title="Gunakan lokasi saya"
+                    className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
+                  >
+                    {detecting ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} />}
+                  </button>
+                </div>
               </div>
+
+              {/* Lokasi Detail & Koordinat */}
+              {(formData.latitude && formData.longitude) && (
+                <div className="mt-3 bg-slate-50 border border-slate-100 p-3 rounded-xl animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <MapPin size={14} className="text-emerald-500" />
+                      <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">Pin Lokasi Aktif</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${formData.latitude},${formData.longitude}`, '_blank')}
+                      className="flex items-center gap-1 text-[9px] font-bold text-indigo-600 hover:underline"
+                    >
+                      <span>Lihat di Maps</span>
+                      <ExternalLink size={10} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-white px-2 py-1.5 rounded-lg border border-slate-100 flex flex-col">
+                      <span className="text-[8px] text-slate-400 uppercase font-bold">Latitude</span>
+                      <span className="text-[10px] font-mono font-medium text-slate-700">{formData.latitude.toFixed(6)}</span>
+                    </div>
+                    <div className="bg-white px-2 py-1.5 rounded-lg border border-slate-100 flex flex-col">
+                      <span className="text-[8px] text-slate-400 uppercase font-bold">Longitude</span>
+                      <span className="text-[10px] font-mono font-medium text-slate-700">{formData.longitude.toFixed(6)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
+
+            <div className="col-span-2">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Stok</label>
               <input
                 type="number"

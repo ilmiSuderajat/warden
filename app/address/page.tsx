@@ -18,7 +18,7 @@ export default function AddressListPage() {
     setLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      
+
       if (!user) {
         router.push("/login")
         return
@@ -57,19 +57,19 @@ export default function AddressListPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      
+
       // 1. Reset semua jadi false
       await supabase
         .from("addresses")
         .update({ is_default: false })
         .eq("user_id", user.id)
-      
+
       // 2. Set yang dipilih jadi true
       const { error } = await supabase
         .from("addresses")
         .update({ is_default: true })
         .eq("id", id)
-      
+
       if (!error) {
         fetchAddresses()
         router.refresh()
@@ -81,7 +81,7 @@ export default function AddressListPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans pb-28">
-      
+
       {/* --- HEADER FIXED --- */}
       <header className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-white border-b border-slate-100">
         <div className="w-full max-w-md h-14 flex items-center justify-between px-4">
@@ -97,7 +97,7 @@ export default function AddressListPage() {
 
       {/* --- CONTENT AREA --- */}
       <main className="pt-16 px-4">
-        
+
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             <Icons.Loader2 className="animate-spin mb-2" size={24} />
@@ -106,13 +106,12 @@ export default function AddressListPage() {
         ) : addresses.length > 0 ? (
           <div className="space-y-3 mt-4">
             {addresses.map((addr) => (
-              <div 
-                key={addr.id} 
-                className={`bg-white p-4 rounded-xl border transition-all ${
-                  addr.is_default 
-                    ? "border-indigo-500 shadow-sm bg-indigo-50/30" 
+              <div
+                key={addr.id}
+                className={`bg-white p-4 rounded-xl border transition-all ${addr.is_default
+                    ? "border-indigo-500 shadow-sm bg-indigo-50/30"
                     : "border-slate-200"
-                }`}
+                  }`}
               >
                 {/* Header Kartu */}
                 <div className="flex justify-between items-start mb-2">
@@ -125,7 +124,7 @@ export default function AddressListPage() {
                     )}
                   </div>
                 </div>
-                
+
                 {/* Info Detail */}
                 <p className="text-xs text-slate-500 font-medium mb-1">{addr.phone}</p>
                 <p className="text-sm text-slate-600 leading-relaxed">
@@ -135,14 +134,20 @@ export default function AddressListPage() {
                 {/* Aksi */}
                 <div className="mt-4 pt-3 border-t border-slate-100 flex gap-2">
                   {!addr.is_default && (
-                    <button 
+                    <button
                       onClick={() => handleSetDefault(addr.id)}
                       className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-200 active:scale-95 transition-all"
                     >
                       Jadikan Utama
                     </button>
                   )}
-                  <button 
+                  <button
+                    onClick={() => router.push(`/address/edit/${addr.id}`)}
+                    className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 active:scale-95 transition-all"
+                  >
+                    <Icons.Pencil size={16} />
+                  </button>
+                  <button
                     onClick={() => handleDelete(addr.id)}
                     className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 active:scale-95 transition-all"
                   >
@@ -166,7 +171,7 @@ export default function AddressListPage() {
 
       {/* --- FLOATING BUTTON --- */}
       <div className="fixed bottom-6 left-0 right-0 px-4 max-w-md mx-auto z-40">
-        <button 
+        <button
           onClick={() => router.push("/address/add")}
           className="w-full bg-indigo-600 text-white py-3.5 rounded-xl shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 active:scale-[0.98] transition-all font-semibold"
         >

@@ -17,7 +17,7 @@ export default function ChatSupportPage() {
             icon: MessageCircle,
             color: "text-emerald-500",
             bg: "bg-emerald-50",
-            action: () => window.open("https://wa.me/6281234567890?text=Halo%20Warden%20Support,%20saya%20butuh%20bantuan.")
+            action: () => window.open("https://wa.me/62881012791493?text=Halo%20Warden%20Support,%20saya%20butuh%20bantuan.")
         },
         {
             title: "Panggilan Suara",
@@ -25,7 +25,7 @@ export default function ChatSupportPage() {
             icon: Phone,
             color: "text-blue-500",
             bg: "bg-blue-50",
-            action: () => window.open("tel:+6281234567890")
+            action: () => window.open("tel:+62881012791493")
         },
         {
             title: "Email Support",
