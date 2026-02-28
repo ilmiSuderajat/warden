@@ -57,8 +57,8 @@ export default function MyOrdersPage() {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('id-ID', { 
-      day: 'numeric', month: 'short', year: 'numeric' 
+    return new Date(dateString).toLocaleDateString('id-ID', {
+      day: 'numeric', month: 'short', year: 'numeric'
     });
   }
 
@@ -86,11 +86,10 @@ export default function MyOrdersPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap border ${
-                  isActive 
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
-                  : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap border ${isActive
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                    : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
+                  }`}
               >
                 <Icon size={14} className={isActive ? "text-white" : "text-slate-400"} />
                 <span>{tab.label}</span>
@@ -110,10 +109,10 @@ export default function MyOrdersPage() {
         ) : orders.length > 0 ? (
           orders.map((order) => {
             const isExpanded = expandedOrderId === order.id
-            
+
             return (
-              <div 
-                key={order.id} 
+              <div
+                key={order.id}
                 className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden transition-all duration-300"
               >
                 {/* Card Header */}
@@ -134,10 +133,10 @@ export default function MyOrdersPage() {
                 <div className="p-5">
                   <div className="flex gap-4">
                     <div className="w-16 h-16 bg-slate-100 rounded-xl overflow-hidden shrink-0 border border-slate-50">
-                      <img 
-                        src={order.order_items?.[0]?.image_url || "/placeholder.png"} 
-                        className="w-full h-full object-cover" 
-                        alt="product" 
+                      <img
+                        src={order.order_items?.[0]?.image_url || "/placeholder.png"}
+                        className="w-full h-full object-cover"
+                        alt="product"
                       />
                     </div>
                     <div className="flex-1 min-w-0 py-0.5">
@@ -156,13 +155,12 @@ export default function MyOrdersPage() {
 
                 {/* Action Button */}
                 <div className="px-5 pb-5 pt-0">
-                  <button 
+                  <button
                     onClick={() => toggleExpand(order.id)}
-                    className={`w-full py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
-                      isExpanded 
-                        ? 'bg-slate-100 text-slate-600 border border-slate-200' 
+                    className={`w-full py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isExpanded
+                        ? 'bg-slate-100 text-slate-600 border border-slate-200'
                         : 'bg-white border border-indigo-600 text-indigo-600 hover:bg-indigo-50'
-                    }`}
+                      }`}
                   >
                     {isExpanded ? (
                       <>
@@ -181,7 +179,7 @@ export default function MyOrdersPage() {
                 {/* EXPANDABLE CONTENT (Accordion) - Muncul di bawah tombol */}
                 {isExpanded && (
                   <div className="border-t border-slate-100 bg-slate-50/50 p-5 space-y-5 animate-in slide-in-from-top-2 duration-200">
-                    
+
                     {/* Info Pengiriman */}
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
@@ -243,16 +241,29 @@ export default function MyOrdersPage() {
 
                     {/* Tombol Aksi di dalam Expanded Area */}
                     <div className="pt-2 space-y-2">
-                      <button 
-                        onClick={() => window.open(`https://wa.me/628123456789?text=Halo Admin, saya mau konfirmasi pesanan #${order.id.slice(0,8)}`)}
-                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm shadow-indigo-100 flex items-center justify-center gap-2"
+                      {order.payment_status === "pending" && (
+                        <button
+                          onClick={() => router.push(`/checkout/payment?order_id=${order.id}`)}
+                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 active:scale-[0.98]"
+                        >
+                          <Icons.CreditCard size={18} />
+                          Bayar Sekarang
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => window.open(`https://wa.me/628123456789?text=Halo Admin, saya mau konfirmasi pesanan #${order.id.slice(0, 8)}`)}
+                        className={`w-full py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 ${order.payment_status === "pending"
+                            ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-100"
+                          }`}
                       >
                         <Icons.MessageCircle size={18} />
                         Hubungi Admin via WA
                       </button>
-                      
+
                       {/* Tombol Close Tambahan di bawah sesuai permintaan */}
-                      <button 
+                      <button
                         onClick={() => setExpandedOrderId(null)}
                         className="w-full py-2.5 bg-transparent text-slate-500 text-xs font-medium hover:text-slate-700 transition-colors flex items-center justify-center gap-1"
                       >

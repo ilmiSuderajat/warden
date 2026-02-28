@@ -93,9 +93,7 @@ function PaymentContent() {
 
     try {
       if (selectedMethod === "cod") {
-        // ✅ PERBAIKAN UTAMA: COD tidak lagi update DB langsung dari client.
-        // Semua mutasi status order dilakukan via API route (server-side),
-        // sehingga backend bisa memverifikasi kepemilikan, sesi, dan CSRF token.
+        // ✅ Menggunakan route khusus COD
         const response = await fetch("/api/payment/cod", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -103,6 +101,7 @@ function PaymentContent() {
         })
 
         const data = await response.json()
+        console.log("[Payment] COD Response:", data)
 
         if (!response.ok) throw new Error(data.error || "Gagal konfirmasi COD")
 
@@ -112,6 +111,7 @@ function PaymentContent() {
       }
 
       // Online payment flow
+      console.log("[Payment] Requesting Snap token for order:", orderInfo.id)
       const response = await fetch("/api/payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -119,18 +119,35 @@ function PaymentContent() {
       })
 
       const data = await response.json()
+      console.log("[Payment] API Response:", data)
+
       if (!response.ok) throw new Error(data.error || "Gagal memproses pembayaran")
+      if (!data.token) throw new Error("Snap token tidak ditemukan dalam respon server.")
 
       const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!
       await loadMidtransScript(clientKey)
 
       if (!(window as any).snap) throw new Error("Payment gateway tidak siap")
 
+      console.log("[Payment] Calling Snap with token:", data.token)
         ; (window as any).snap.pay(data.token, {
-          onSuccess: () => { setLoading(false); router.push("/checkout/success") },
-          onPending: () => { setLoading(false); router.push("/orders?status=unpaid") },
-          onError: () => { setLoading(false); alert("Terjadi kesalahan saat pembayaran.") },
+          onSuccess: () => {
+            console.log("[Payment] Success")
+            setLoading(false);
+            router.push("/checkout/success")
+          },
+          onPending: () => {
+            console.log("[Payment] Pending")
+            setLoading(false);
+            router.push("/orders?status=unpaid")
+          },
+          onError: (result: any) => {
+            console.error("[Payment] Error:", result)
+            setLoading(false);
+            alert("Terjadi kesalahan saat pembayaran.")
+          },
           onClose: () => {
+            console.log("[Payment] Closed")
             setLoading(false)
             alert("Pembayaran dibatalkan. Pesanan tersimpan di menu Pesanan.")
             router.push("/orders")

@@ -1,46 +1,45 @@
-// app/api/payment/cod/route.ts
-// ✅ Semua logika update status COD dipindah ke sini (server-side)
-
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+import Midtrans from "midtrans-client"
 
 const isValidUUID = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+
+const snap = new Midtrans.Snap({
+  isProduction: false, // Sandbox
+  serverKey: process.env.MIDTRANS_SERVER_KEY!,
+  clientKey: process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!,
+})
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
     const { orderId } = body
 
-    // ✅ 1. Validasi format UUID
     if (!orderId || !isValidUUID(orderId)) {
       return NextResponse.json({ error: "Order ID tidak valid." }, { status: 400 })
     }
 
     const cookieStore = await cookies()
 
-    // ✅ 2a. Auth client (anon key) — hanya untuk verifikasi sesi user
     const supabaseAuth = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll: () => cookieStore.getAll(),
-          setAll: () => { }, // read-only di route handler
+          setAll: () => { },
         },
       }
     )
 
     const { data: { session } } = await supabaseAuth.auth.getSession()
 
-    // ✅ 3. Tolak request jika tidak ada sesi aktif
     if (!session) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 })
     }
 
-    // ✅ 2b. Admin client (service_role) — untuk bypass RLS saat update
-    //    SUPABASE_SERVICE_ROLE_KEY hanya ada di server, TIDAK pernah ke client
     const supabaseAdmin = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -52,35 +51,62 @@ export async function POST(req: Request) {
       }
     )
 
-    // ✅ 4. Ambil order dan verifikasi kepemilikan (cegah IDOR)
-    const { data: order, error: fetchError } = await supabaseAdmin
+    // 1. Ambil detail order
+    const { data: order, error: orderError } = await supabaseAdmin
       .from("orders")
-      .select("id, payment_status, user_id")
+      .select("*, order_items(*)")
       .eq("id", orderId)
-      .eq("user_id", session.user.id) // ✅ Harus milik user yang login
+      .eq("user_id", session.user.id)
       .maybeSingle()
 
-    if (fetchError || !order) {
+    if (orderError || !order) {
       return NextResponse.json({ error: "Pesanan tidak ditemukan." }, { status: 404 })
     }
 
-    // ✅ 5. Hanya izinkan jika status masih "pending"
     if (order.payment_status !== "pending") {
       return NextResponse.json({ error: "Pesanan sudah diproses." }, { status: 409 })
     }
 
-    // ✅ 6. Update status dengan double-check kepemilikan
-    const { error: updateError } = await supabaseAdmin
+    // 2. Buat parameter Midtrans
+    const parameter = {
+      transaction_details: {
+        order_id: order.id,
+        gross_amount: order.total_amount,
+      },
+      customer_details: {
+        first_name: order.customer_name,
+        phone: order.whatsapp_number,
+      },
+      item_details: order.order_items.map((item: any) => ({
+        id: item.id,
+        price: item.price,
+        quantity: item.quantity,
+        name: item.product_name,
+      })),
+    }
+
+    // Tambahkan biaya pengiriman sebagai item jika ada
+    if (order.shipping_amount > 0) {
+      (parameter.item_details as any[]).push({
+        id: 'shipping-fee',
+        price: order.shipping_amount,
+        quantity: 1,
+        name: 'Ongkos Kirim',
+      })
+    }
+
+    // 3. Request Snap Token
+    const transaction = await snap.createTransaction(parameter)
+
+    // 4. Update order dengan payment_method online
+    await supabaseAdmin
       .from("orders")
-      .update({ payment_status: "processing" })
+      .update({ payment_method: "online" })
       .eq("id", orderId)
-      .eq("user_id", session.user.id)
 
-    if (updateError) throw updateError
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ token: transaction.token })
   } catch (err: any) {
-    console.error("[COD Payment Error]", err)
-    return NextResponse.json({ error: "Terjadi kesalahan server." }, { status: 500 })
+    console.error("[Midtrans Payment Error]", err)
+    return NextResponse.json({ error: "Gagal memproses pembayaran Midtrans." }, { status: 500 })
   }
 }

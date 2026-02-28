@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import {
   LayoutDashboard, Package, Truck, Settings,
@@ -37,7 +38,7 @@ export default function AdminDashboard() {
     setLoading(true)
 
     // 1. Setup Filter Tanggal
-    let dateQuery = supabase.from('orders').select('status, total_amount, created_at, id')
+    let dateQuery = supabase.from('orders').select('status, total_amount, created_at, id, payment_status')
 
     if (timeFilter !== 'all') {
       const now = new Date()
@@ -73,10 +74,13 @@ export default function AdminDashboard() {
     if (orders) {
       const summary = orders.reduce((acc, curr) => {
         acc.totalSales += curr.total_amount || 0;
-        if (curr.status === 'pending') acc.pending++;
-        if (curr.status === 'dikemas') acc.process++;
-        if (curr.status === 'dikirim') acc.shipping++;
-        if (curr.status === 'selesai') acc.done++;
+        // Penjualan yang belum dibayar
+        if (curr.payment_status === 'pending') acc.pending++;
+        // Penjualan yang sudah dibayar (biasanya statusnya 'Perlu Dikemas')
+        if (curr.payment_status === 'paid' && curr.status !== 'Selesai' && curr.status !== 'Dikirim') acc.process++;
+
+        if (curr.status === 'Dikirim') acc.shipping++;
+        if (curr.status === 'Selesai') acc.done++;
         return acc;
       }, { totalSales: 0, pending: 0, process: 0, shipping: 0, done: 0 })
 
@@ -204,8 +208,12 @@ export default function AdminDashboard() {
             <div>
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 px-1">Status Pesanan</h3>
               <div className="grid grid-cols-2 gap-3">
-                <StatCard label="Belum Bayar" value={stats.pending} icon={CreditCard} color="bg-amber-50 text-amber-600 border-amber-100" />
-                <StatCard label="Diproses" value={stats.process} icon={Clock} color="bg-indigo-50 text-indigo-600 border-indigo-100" />
+                <Link href="/admin/orders/unpaid">
+                  <StatCard label="Belum Bayar" value={stats.pending} icon={CreditCard} color="bg-amber-50 text-amber-600 border-amber-100" />
+                </Link>
+                <Link href="/admin/orders/paid">
+                  <StatCard label="Sudah Dibayar" value={stats.process} icon={Clock} color="bg-indigo-50 text-indigo-600 border-indigo-100" />
+                </Link>
                 <StatCard label="Dikirim" value={stats.shipping} icon={Truck} color="bg-blue-50 text-blue-600 border-blue-100" />
                 <StatCard label="Selesai" value={stats.done} icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 border-emerald-100" />
               </div>
