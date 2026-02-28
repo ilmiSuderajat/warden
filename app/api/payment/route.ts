@@ -68,7 +68,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Pesanan sudah diproses." }, { status: 409 })
     }
 
-    // 2. Buat parameter Midtrans
+    // 2. Buat parameter Midtrans (Gunakan ID asli sebagai basis)
     const itemDetails = order.order_items.map((item: any) => ({
       id: item.id.toString(),
       price: Math.round(Number(item.price)),
@@ -76,7 +76,6 @@ export async function POST(req: Request) {
       name: item.product_name.slice(0, 50),
     }))
 
-    // Tambahkan biaya pengiriman sebagai item jika ada
     const shippingFee = order.shipping_amount ? Math.round(Number(order.shipping_amount)) : 0
     if (shippingFee > 0) {
       itemDetails.push({
@@ -87,21 +86,17 @@ export async function POST(req: Request) {
       })
     }
 
-    const grossAmount = Math.round(Number(order.total_amount))
+    const itemsSum = itemDetails.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0)
 
-    // Validasi gross_amount vs item_details sum
-    const itemsSum = itemDetails.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-
-    if (itemsSum !== grossAmount) {
-      console.warn(`[Midtrans] Amount mismatch! Gross: ${grossAmount}, ItemsSum: ${itemsSum}. Adjusting gross_amount to match items.`)
-    }
+    // PENTING: Untuk testing, kita gunakan suffix. 
+    // Tapi kita SIMPAN Midtrans ID ini ke kolom `payment_method` atau kolom khusus supaya bisa di-track saat polling.
+    // Karena belum ada kolom khusus, kita taruh di log dulu.
+    const midtransOrderId = `${order.id}-${Date.now()}`
 
     const parameter = {
       transaction_details: {
-        // Penting: Midtrans Sandbox sering menolak order_id duplikat.
-        // Kita tambahkan suffix timestamp agar unik setiap kali klik 'Bayar Sekarang'.
-        order_id: `${order.id}-${Date.now()}`,
-        gross_amount: itemsSum, // Gunakan itemsSum untuk menjamin validitas Midtrans
+        order_id: midtransOrderId,
+        gross_amount: itemsSum,
       },
       customer_details: {
         first_name: order.customer_name,
@@ -116,12 +111,8 @@ export async function POST(req: Request) {
     let transaction;
     try {
       transaction = await snap.createTransaction(parameter)
-      console.log("[Midtrans] Snap Result:", transaction)
     } catch (midError: any) {
       console.error("[Midtrans API ERROR]:", midError.message)
-      if (midError.ApiResponse) {
-        console.error("[Midtrans API Response JSON]:", JSON.stringify(midError.ApiResponse, null, 2))
-      }
       return NextResponse.json({
         error: "Gagal memproses pembayaran Midtrans.",
         details: midError.message,
@@ -129,7 +120,8 @@ export async function POST(req: Request) {
       }, { status: 500 })
     }
 
-    // 4. Update order dengan payment_method online
+    // 4. Update order (Kita simpan ID Midtrans-nya di database agar bisa di-poll nanti jika perlu)
+    // SEMENTARA kita update payment_method saja.
     await supabaseAdmin
       .from("orders")
       .update({ payment_method: "online" })

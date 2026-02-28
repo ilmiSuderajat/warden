@@ -66,6 +66,29 @@ export default function MyOrdersPage() {
     setExpandedOrderId(prev => prev === orderId ? null : orderId)
   }
 
+  const checkPaymentStatus = async (orderId: string) => {
+    setLoading(true)
+    try {
+      const response = await fetch("/api/payment/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        alert("🎉 " + data.message)
+        fetchOrders() // Refresh data
+      } else {
+        alert("ℹ️ " + (data.message || data.error))
+      }
+    } catch (error) {
+      alert("Gagal mengecek status. Silakan coba lagi nanti.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-24">
       {/* HEADER */}
@@ -87,8 +110,8 @@ export default function MyOrdersPage() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap border ${isActive
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                    : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                  : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
                   }`}
               >
                 <Icon size={14} className={isActive ? "text-white" : "text-slate-400"} />
@@ -158,8 +181,8 @@ export default function MyOrdersPage() {
                   <button
                     onClick={() => toggleExpand(order.id)}
                     className={`w-full py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isExpanded
-                        ? 'bg-slate-100 text-slate-600 border border-slate-200'
-                        : 'bg-white border border-indigo-600 text-indigo-600 hover:bg-indigo-50'
+                      ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                      : 'bg-white border border-indigo-600 text-indigo-600 hover:bg-indigo-50'
                       }`}
                   >
                     {isExpanded ? (
@@ -242,20 +265,30 @@ export default function MyOrdersPage() {
                     {/* Tombol Aksi di dalam Expanded Area */}
                     <div className="pt-2 space-y-2">
                       {order.payment_status === "pending" && (
-                        <button
-                          onClick={() => router.push(`/checkout/payment?order_id=${order.id}`)}
-                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 active:scale-[0.98]"
-                        >
-                          <Icons.CreditCard size={18} />
-                          Bayar Sekarang
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => router.push(`/checkout/payment?order_id=${order.id}`)}
+                            className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 active:scale-[0.98]"
+                          >
+                            <Icons.CreditCard size={18} />
+                            Bayar Sekarang
+                          </button>
+                          <button
+                            onClick={() => checkPaymentStatus(order.id)}
+                            className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-[10px] font-bold transition-all flex flex-col items-center justify-center leading-tight"
+                            title="Klik jika Anda sudah membayar tapi status belum berubah"
+                          >
+                            <Icons.RefreshCw size={14} className="mb-1" />
+                            Cek Status
+                          </button>
+                        </div>
                       )}
 
                       <button
                         onClick={() => window.open(`https://wa.me/628123456789?text=Halo Admin, saya mau konfirmasi pesanan #${order.id.slice(0, 8)}`)}
                         className={`w-full py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 ${order.payment_status === "pending"
-                            ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-100"
+                          ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-100"
                           }`}
                       >
                         <Icons.MessageCircle size={18} />
