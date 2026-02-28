@@ -1,65 +1,86 @@
-// app/api/payment/route.ts
+// app/api/payment/cod/route.ts
+// ✅ Semua logika update status COD dipindah ke sini (server-side)
 
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-const Midtrans = require('midtrans-client');
+import { createServerClient } from "@supabase/ssr"
+import { cookies } from "next/headers"
+import { NextResponse } from "next/server"
+
+const isValidUUID = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { orderId } = body;
+    const body = await req.json()
+    const { orderId } = body
 
-    console.log("Memproses Order ID:", orderId);
-
-    if (!process.env.MIDTRANS_SERVER_KEY) {
-      throw new Error("MIDTRANS_SERVER_KEY tidak ditemukan di env");
+    // ✅ 1. Validasi format UUID
+    if (!orderId || !isValidUUID(orderId)) {
+      return NextResponse.json({ error: "Order ID tidak valid." }, { status: 400 })
     }
 
-    const supabase = createClient(
+    const cookieStore = await cookies()
+
+    // ✅ 2a. Auth client (anon key) — hanya untuk verifikasi sesi user
+    const supabaseAuth = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! // Gunakan Service Role untuk operasi server-side
-    );
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: () => { }, // read-only di route handler
+        },
+      }
+    )
 
-    const snap = new Midtrans.Snap({
-      isProduction: false,
-      serverKey: process.env.MIDTRANS_SERVER_KEY,
-    });
+    const { data: { session } } = await supabaseAuth.auth.getSession()
 
-    const { data: order, error: dbError } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', orderId)
-      .single();
-
-    if (dbError || !order) {
-      return NextResponse.json({ error: "Pesanan tidak ditemukan" }, { status: 404 });
+    // ✅ 3. Tolak request jika tidak ada sesi aktif
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 })
     }
 
-    const parameter = {
-      transaction_details: {
-        order_id: order.id,
-        gross_amount: Math.round(order.total_amount),
-      },
-      // --- TAMBAHKAN BAGIAN INI UNTUK MENGATASI EXAMPLE.COM ---
-  callbacks: {
-    finish: "http://warden-blond.vercel.app/checkout/success", // Akan dipanggil jika 200 (Settlement)
-    unfinish: "http://warden-blond.vercel.app/orders",         // Akan dipanggil jika 201 (Pending/Close)
-    error: "http://warden-blond.vercel.app/orders"             // Akan dipanggil jika gagal
-  },
-      customer_details: {
-        first_name: order.customer_name,
-        phone: order.whatsapp_number,
-        email: "customer@example.com"
+    // ✅ 2b. Admin client (service_role) — untuk bypass RLS saat update
+    //    SUPABASE_SERVICE_ROLE_KEY hanya ada di server, TIDAK pernah ke client
+    const supabaseAdmin = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        cookies: {
+          getAll: () => [],
+          setAll: () => { },
+        },
       }
-    };
+    )
 
-    const transaction = await snap.createTransaction(parameter);
-    return NextResponse.json({ token: transaction.token });
+    // ✅ 4. Ambil order dan verifikasi kepemilikan (cegah IDOR)
+    const { data: order, error: fetchError } = await supabaseAdmin
+      .from("orders")
+      .select("id, payment_status, user_id")
+      .eq("id", orderId)
+      .eq("user_id", session.user.id) // ✅ Harus milik user yang login
+      .maybeSingle()
 
-  } catch (error: any) {
-    console.error("DETEKSI ERROR API:", error.message);
-    return NextResponse.json({ 
-      error: error.message || "Internal Server Error" 
-    }, { status: 500 });
+    if (fetchError || !order) {
+      return NextResponse.json({ error: "Pesanan tidak ditemukan." }, { status: 404 })
+    }
+
+    // ✅ 5. Hanya izinkan jika status masih "pending"
+    if (order.payment_status !== "pending") {
+      return NextResponse.json({ error: "Pesanan sudah diproses." }, { status: 409 })
+    }
+
+    // ✅ 6. Update status dengan double-check kepemilikan
+    const { error: updateError } = await supabaseAdmin
+      .from("orders")
+      .update({ payment_status: "processing" })
+      .eq("id", orderId)
+      .eq("user_id", session.user.id)
+
+    if (updateError) throw updateError
+
+    return NextResponse.json({ success: true })
+  } catch (err: any) {
+    console.error("[COD Payment Error]", err)
+    return NextResponse.json({ error: "Terjadi kesalahan server." }, { status: 500 })
   }
 }

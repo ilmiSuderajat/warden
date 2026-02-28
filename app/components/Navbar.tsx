@@ -4,41 +4,68 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { 
-  Home, ShoppingCart, LayoutGrid, Users, Zap, 
-  Package, FolderPlus, LayoutDashboard 
+import {
+  Home, ShoppingCart, LayoutGrid, Users, Zap,
+  Package, FolderPlus, LayoutDashboard
 } from "lucide-react";
 
 export default function Navbar() {
   const pathname = usePathname();
-  const isAdminPage = pathname.startsWith('/admin');
+  const [isActuallyAdmin, setIsActuallyAdmin] = useState(false);
   const [profileHref, setProfileHref] = useState("/login");
-  
+  const [loading, setLoading] = useState(true);
+
   // Cek apakah halaman profil sedang aktif
   const isProfileActive = pathname === "/profile" || pathname === "/admin/profile" || pathname === "/login";
 
   useEffect(() => {
-    const getDynamicLink = async () => {
+    const checkRole = async () => {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
         setProfileHref("/login");
+        setIsActuallyAdmin(false);
       } else {
-        const { data: adminData } = await supabase
-          .from("admins")
-          .select("email")
-          .eq("email", user.email)
-          .single();
+        // 1. Cek di tabel 'admins' lewat email
+        const { data: adminByEmail } = user.email
+          ? await supabase
+            .from("admins")
+            .select("id")
+            .ilike("email", user.email)
+            .maybeSingle()
+          : { data: null };
 
-        if (adminData) {
-          setProfileHref("/admin/profile"); 
-        } else {
-          setProfileHref("/profile");
-        }
+        // 2. Cek di tabel 'admins' lewat user_id
+        const { data: adminById } = await supabase
+          .from("admins")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        // 3. Cek di tabel 'users'
+        const { data: userRecord } = await supabase
+          .from("users")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        const isAdmin = !!adminByEmail || !!adminById || userRecord?.role === "admin";
+
+        console.log("[Navbar] Client-side role check:", {
+          email: user.email,
+          isAdminByEmail: !!adminByEmail,
+          isAdminById: !!adminById,
+          roleInUsers: userRecord?.role,
+          finalIsAdmin: isAdmin
+        });
+
+        setIsActuallyAdmin(isAdmin);
+        setProfileHref(isAdmin ? "/admin/profile" : "/profile");
       }
+      setLoading(false);
     };
 
-    getDynamicLink();
+    checkRole();
   }, [pathname]);
 
   // Definisi Menu User
@@ -56,12 +83,19 @@ export default function Navbar() {
     { href: "/admin/add-product", label: "Produk", icon: Package, match: pathname.includes("add-product") },
   ];
 
-  const currentMenu = isAdminPage ? adminMenu : userMenu;
+  // Menu berubah based on role, bukan cuma URL
+  const currentMenu = isActuallyAdmin ? adminMenu : userMenu;
+
+  if (loading) return (
+    <nav className="max-w-md mx-auto fixed bottom-0 left-0 right-0 h-16 bg-gray-50 border-t border-slate-100 z-50 flex items-center justify-center">
+      <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+    </nav>
+  );
 
   return (
     <nav className="max-w-md mx-auto fixed bottom-0 left-0 right-0 h-16 bg-gray-50 border-t border-slate-100 z-50">
       <div className="flex justify-around items-center h-full px-2">
-        
+
         {/* Render Menu Dinamis */}
         {currentMenu.map((item) => {
           const isActive = item.match;
@@ -69,13 +103,12 @@ export default function Navbar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${
-                isActive ? 'text-indigo-600' : 'text-gray-600'
-              }`}
+              className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${isActive ? 'text-indigo-600' : 'text-gray-600'
+                }`}
             >
               <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
               <span className={`text-[10px] font-semibold`}>{item.label}</span>
-              
+
               {/* Indikator Garis Bawah saat Aktif */}
               {isActive && (
                 <div className="absolute bottom-0 h-0.5 w-6 bg-indigo-600 rounded-full"></div>
@@ -87,13 +120,12 @@ export default function Navbar() {
         {/* Menu Akun (Selalu di ujung) */}
         <Link
           href={profileHref}
-          className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${
-            isProfileActive ? 'text-indigo-600' : 'text-gray-600'
-          }`}
+          className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${isProfileActive ? 'text-indigo-600' : 'text-gray-600'
+            }`}
         >
           <Users size={20} strokeWidth={isProfileActive ? 2.5 : 2} />
           <span className={`text-[10px] font-semibold`}>Akun</span>
-          
+
           {isProfileActive && (
             <div className="absolute bottom-0 h-0.5 w-6 bg-slate-900 rounded-full"></div>
           )}

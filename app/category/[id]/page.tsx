@@ -17,15 +17,15 @@ function CategoryContent() {
     const fetchCategoryData = async () => {
       if (!params.id) return;
       setLoading(true);
-      
+
       try {
         // 1. Ambil Nama Kategori biar Header-nya bener
         const { data: catData } = await supabase
           .from("categories")
           .select("name")
           .eq("id", params.id)
-          .single();
-        
+          .maybeSingle();
+
         if (catData) setCategoryName(catData.name);
 
         // 2. Ambil Produk lewat tabel junction 'product_categories'
@@ -55,8 +55,8 @@ function CategoryContent() {
     <div className="min-h-screen bg-gray-50 pb-20 font-sans">
       {/* HEADER NAVBAR FIXED */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-4 py-4 max-w-md mx-auto flex items-center gap-4">
-        <button 
-          onClick={() => router.back()} 
+        <button
+          onClick={() => router.back()}
           className="p-2 hover:bg-gray-100 rounded-full active:scale-90 transition-all text-gray-800"
         >
           <Icons.ArrowLeft size={20} />
@@ -84,9 +84,9 @@ function CategoryContent() {
               const imgUrl = Array.isArray(p.image_url) ? p.image_url[0] : p.image_url;
 
               return (
-                <Link 
-                  href={`/product/${p.id}`} 
-                  key={p.id} 
+                <Link
+                  href={`/product/${p.id}`}
+                  key={p.id}
                   className="bg-white  overflow-hidden border border-gray-100 shadow-sm flex flex-col active:scale-95 transition-all"
                 >
                   <div className="aspect-square relative bg-gray-50">
@@ -119,7 +119,7 @@ function CategoryContent() {
               <Icons.ShoppingBag size={48} />
             </div>
             <p className="text-gray-400 text-xs font-bold px-12">Waduh Lur, kategori <span className="text-orange-500">"{categoryName}"</span> ini stoknya lagi kosong.</p>
-            <button 
+            <button
               onClick={() => router.push('/')}
               className="mt-6 text-[10px] font-black uppercase tracking-widest text-orange-500 border-b-2 border-orange-500 pb-1"
             >

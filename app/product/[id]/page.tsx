@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { 
-  ArrowLeft, Share2, Star, MapPin, X, 
+import {
+  ArrowLeft, Share2, Star, MapPin, X,
   Store, ShoppingCart, Heart, MessageCircle, Maximize2, Loader2
 } from "lucide-react"
 import ProductImageSlider from "@/app/components/ProductImageSlider"
@@ -20,7 +20,7 @@ export default function ProductDetail() {
 
   useEffect(() => {
     const fetchDetail = async () => {
-      const { data } = await supabase.from("products").select("*").eq("id", id).single()
+      const { data } = await supabase.from("products").select("*").eq("id", id).maybeSingle()
       if (data) setProduct(data)
       setLoading(false)
     }
@@ -30,7 +30,7 @@ export default function ProductDetail() {
   const handleAddToCart = async (silent = false) => {
     setIsProcessing(true)
     const { data: { user } } = await supabase.auth.getUser()
-    
+
     if (!user) {
       router.push("/login")
       setIsProcessing(false)
@@ -43,7 +43,7 @@ export default function ProductDetail() {
         .select("*")
         .eq("user_id", user.id)
         .eq("product_id", product.id)
-        .single()
+        .maybeSingle()
 
       if (existingItem) {
         await supabase
@@ -76,13 +76,13 @@ export default function ProductDetail() {
     </div>
   )
 
-  const imageList = product?.image_url 
-    ? (Array.isArray(product.image_url) ? product.image_url : [product.image_url]) 
+  const imageList = product?.image_url
+    ? (Array.isArray(product.image_url) ? product.image_url : [product.image_url])
     : []
 
   return (
     <div className="bg-slate-50/80 min-h-screen pb-28 max-w-md mx-auto relative font-sans text-slate-800">
-      
+
       {/* IMAGE PREVIEW FULLSCREEN */}
       {isPreviewOpen && (
         <div className="fixed max-w-md mx-auto inset-0 z-100 bg-black flex flex-col justify-center items-center animate-in fade-in">
@@ -137,7 +137,7 @@ export default function ProductDetail() {
               <Heart size={20} className="text-slate-400 hover:text-red-500" />
             </button>
           </div>
-          
+
           <div className="mt-5 pt-4 border-t border-slate-100/80">
             <p className="text-2xl font-bold text-red-600 tracking-tight">
               Rp {product.price?.toLocaleString('id-ID')}
@@ -185,16 +185,16 @@ export default function ProductDetail() {
       <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-slate-100 max-w-md mx-auto p-4">
         <div className="flex items-center gap-3">
           {/* Tombol Chat/Toko */}
-          <button 
+          <button
             onClick={() => router.push("/")}
             className="flex flex-col items-center justify-center text-slate-500 hover:text-slate-700 transition-colors w-12 shrink-0"
           >
             <Store size={22} />
             <span className="text-[9px] font-semibold mt-0.5">Toko</span>
           </button>
-          
+
           {/* Tombol Keranjang */}
-          <button 
+          <button
             onClick={() => handleAddToCart()}
             disabled={isProcessing}
             className="flex items-center justify-center bg-white border-2 border-indigo-800 text-indigo-800 w-14 h-12 rounded-xl active:scale-95 transition-all disabled:opacity-50 shrink-0"
@@ -203,7 +203,7 @@ export default function ProductDetail() {
           </button>
 
           {/* Tombol Beli Sekarang */}
-          <button 
+          <button
             onClick={handleBuyNow}
             disabled={isProcessing}
             className="flex-1 bg-indigo-800 hover:bg-slate-800 text-white h-12 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-400 shadow-sm flex items-center justify-center gap-2"

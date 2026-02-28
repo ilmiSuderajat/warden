@@ -44,8 +44,8 @@ export default function CheckoutPage() {
         .eq("user_id", user.id)
         .order("is_default", { ascending: false })
         .limit(1)
-        .single();
-      
+        .maybeSingle();
+
       setAddress(addrData);
 
       const { data: cartData } = await supabase
@@ -85,7 +85,7 @@ export default function CheckoutPage() {
 
   const updateQuantity = async (cartId: string, newQty: number) => {
     const prevItems = [...cartItems];
-    
+
     // Optimistic UI Update
     let newItems;
     if (newQty < 1) {
@@ -93,7 +93,7 @@ export default function CheckoutPage() {
       setCartItems(newItems);
       if (newItems.length === 0) setShippingFee(0);
     } else {
-      newItems = cartItems.map(item => 
+      newItems = cartItems.map(item =>
         item.cart_id === cartId ? { ...item, quantity: newQty } : item
       );
       setCartItems(newItems);
@@ -105,14 +105,14 @@ export default function CheckoutPage() {
     } else {
       await supabase.from("cart").update({ quantity: newQty }).eq("id", cartId);
     }
-    
+
     // Hitung ulang ongkir jika perlu
     if (address && newItems.length > 0) updateShipping(newItems, address);
   };
 
   const totalPrice = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
-// ... (kode atas tetap sama)
+  // ... (kode atas tetap sama)
 
   const handlePlaceOrder = async () => {
     if (!address || cartItems.length === 0) {
@@ -124,7 +124,7 @@ export default function CheckoutPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User tidak ditemukan");
-      
+
       // 1. Buat Order ke Supabase
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
@@ -136,9 +136,9 @@ export default function CheckoutPage() {
           shipping_amount: shippingFee,
           distance_km: distance,
           total_amount: totalPrice + shippingFee,
-          payment_status: "pending", 
+          payment_status: "pending",
           user_id: user.id
-        }]).select().single();
+        }]).select().maybeSingle();
 
       if (orderError) throw orderError;
 
@@ -158,7 +158,7 @@ export default function CheckoutPage() {
       // --- PERBAIKAN DI SINI ---
       // Kita arahkan ke payment sambil membawa order_id di URL
       // Di CheckoutPage handlePlaceOrder
-router.push(`/checkout/payment?order_id=${orderData.id}`);
+      router.push(`/checkout/payment?order_id=${orderData.id}`);
 
     } catch (error: any) {
       console.error(error);
@@ -167,7 +167,7 @@ router.push(`/checkout/payment?order_id=${orderData.id}`);
     }
   };
 
-// ... (sisa UI tetap sama)
+  // ... (sisa UI tetap sama)
 
   if (loading) {
     return (
@@ -191,18 +191,18 @@ router.push(`/checkout/payment?order_id=${orderData.id}`);
       </div>
 
       <div className="p-5 space-y-5">
-        
+
         {/* ALAMAT PENGIRIMAN */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="flex justify-between items-center px-5 py-3 border-b border-slate-50 bg-slate-50/40">
-             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Kirim Ke</span>
-             {address && (
-                <button onClick={() => router.push("/address")} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-                    Ubah <Icons.Pencil size={12} />
-                </button>
-             )}
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Kirim Ke</span>
+            {address && (
+              <button onClick={() => router.push("/address")} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                Ubah <Icons.Pencil size={12} />
+              </button>
+            )}
           </div>
-          
+
           <div className="p-5">
             {address ? (
               <div className="flex gap-4">
@@ -213,14 +213,14 @@ router.push(`/checkout/payment?order_id=${orderData.id}`);
                   <p className="text-sm font-bold text-slate-800">{address.name} • {address.phone}</p>
                   <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{address.detail}, {address.city}</p>
                   <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 rounded-full border border-emerald-100">
-                    <Icons.Route size={12} className="text-emerald-600"/>
+                    <Icons.Route size={12} className="text-emerald-600" />
                     <span className="text-[11px] font-bold text-emerald-700">{distance.toFixed(1)} KM dari toko</span>
                   </div>
                 </div>
               </div>
             ) : (
-              <button 
-                onClick={() => router.push("/address/add")} 
+              <button
+                onClick={() => router.push("/address/add")}
                 className="w-full py-10 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors flex flex-col items-center gap-2"
               >
                 <Icons.PlusCircle size={24} />
@@ -233,10 +233,10 @@ router.push(`/checkout/payment?order_id=${orderData.id}`);
         {/* ITEM BELANJA */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="flex justify-between items-center px-5 py-3 border-b border-slate-50 bg-slate-50/40">
-             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pesananmu</span>
-             <span className="text-xs font-medium text-slate-500">{cartItems.length} Item</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pesananmu</span>
+            <span className="text-xs font-medium text-slate-500">{cartItems.length} Item</span>
           </div>
-          
+
           <div className="divide-y divide-slate-50">
             {cartItems.map((item: any) => (
               <div key={item.cart_id} className="p-4 flex justify-between items-center gap-4">
@@ -249,17 +249,17 @@ router.push(`/checkout/payment?order_id=${orderData.id}`);
                     <p className="text-xs text-slate-400 mt-1 font-medium">Rp {item.price.toLocaleString('id-ID')}</p>
                   </div>
                 </div>
-                
+
                 {/* Quantity Control */}
                 <div className="flex items-center gap-0 shrink-0 border border-slate-200 rounded-full bg-white shadow-sm">
-                  <button 
+                  <button
                     onClick={() => updateQuantity(item.cart_id, item.quantity - 1)}
                     className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors"
                   >
                     <Icons.Minus size={14} />
                   </button>
                   <span className="w-6 text-center text-xs font-bold text-slate-700">{item.quantity}</span>
-                  <button 
+                  <button
                     onClick={() => updateQuantity(item.cart_id, item.quantity + 1)}
                     className="w-8 h-8 flex items-center justify-center bg-slate-900 text-white rounded-full hover:bg-slate-700 transition-colors"
                   >
@@ -294,7 +294,7 @@ router.push(`/checkout/payment?order_id=${orderData.id}`);
 
       {/* FLOATING ACTION BUTTON */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-100 p-5 max-w-md mx-auto z-50">
-        <button 
+        <button
           onClick={handlePlaceOrder}
           disabled={isProcessing || !address || cartItems.length === 0}
           className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-bold transition-all active:scale-[0.98] disabled:bg-indigo-300 disabled:cursor-not-allowed shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"

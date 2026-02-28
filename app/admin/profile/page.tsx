@@ -14,20 +14,30 @@ export default function AdminProfilePage() {
   useEffect(() => {
     const getProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         router.push("/login");
         return;
       }
 
       // Keamanan: Cek apakah user adalah admin
-      const { data: adminData } = await supabase
+      // 1. Cek di tabel 'admins'
+      const { data: adminRecord } = await supabase
         .from("admins")
-        .select("email")
-        .eq("email", user.email)
-        .single();
+        .select("id")
+        .or(`user_id.eq.${user.id},email.eq.${user.email}`)
+        .maybeSingle();
 
-      if (!adminData) {
+      // 2. Cek di tabel 'users'
+      const { data: userRecord } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const isAdmin = adminRecord || userRecord?.role === "admin";
+
+      if (!isAdmin) {
         router.push("/profile"); // Redirect ke profil user biasa jika bukan admin
         return;
       }
@@ -62,7 +72,7 @@ export default function AdminProfilePage() {
 
   return (
     <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-24">
-      
+
       {/* HEADER */}
       <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
         <div className="flex items-center justify-between px-5 pt-12 pb-4">
@@ -83,7 +93,7 @@ export default function AdminProfilePage() {
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm text-center relative overflow-hidden">
           {/* Decorative Background Pattern (Optional) */}
           <div className="absolute inset-x-0 top-0 h-20 bg-indigo-600 rounded-t-2xl"></div>
-          
+
           <div className="relative pt-2">
             <div className="w-24 h-24 rounded-full bg-slate-200 border-4 border-white mx-auto shadow-lg overflow-hidden flex items-center justify-center">
               {user?.user_metadata?.avatar_url ? (
@@ -92,7 +102,7 @@ export default function AdminProfilePage() {
                 <Icons.User size={40} className="text-slate-400" />
               )}
             </div>
-            
+
             <div className="mt-4">
               <h2 className="text-lg font-bold text-slate-900">
                 {user?.user_metadata?.full_name || "Admin Warden"}
@@ -113,12 +123,12 @@ export default function AdminProfilePage() {
       {/* MENU LIST ADMIN */}
       <div className="px-5 space-y-3">
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide ml-1 mb-2">Akses Cepat</p>
-        
+
         {adminMenus.map((item, idx) => {
           const Icon = (Icons as any)[item.icon];
           return (
             <Link
-              key={idx} 
+              key={idx}
               href={item.link}
               className="w-full bg-white p-4 rounded-xl flex items-center justify-between group hover:bg-slate-50 transition-colors border border-slate-100 shadow-sm"
             >
@@ -136,7 +146,7 @@ export default function AdminProfilePage() {
 
       {/* LOGOUT BUTTON */}
       <div className="px-5 mt-8">
-        <button 
+        <button
           onClick={handleLogout}
           className="w-full bg-white border border-red-100 text-red-600 p-4 rounded-xl flex items-center justify-center gap-2 hover:bg-red-50 active:scale-[0.98] transition-all font-semibold text-sm"
         >
