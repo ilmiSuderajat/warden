@@ -315,7 +315,7 @@ export default function ManageFlashSalePage() {
                                 autoFocus
                                 placeholder="Jumlah terjual"
                                 className="w-full pl-8 pr-3 py-2 bg-white border border-orange-200 rounded-xl text-xs text-slate-700 outline-none focus:ring-1 focus:ring-orange-400 transition-all"
-                                value={editingSoldCount.value}
+                                value={editingSoldCount!.value}
                                 onChange={e => setEditingSoldCount({ id: p.id, value: e.target.value })}
                                 onKeyDown={e => {
                                   if (e.key === "Enter") handleSaveSoldCount()
