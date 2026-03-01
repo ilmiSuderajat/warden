@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import * as Icons from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import Skeleton from "@/app/components/Skeleton";
 
 export default function CartPage() {
   const router = useRouter();
@@ -80,9 +81,31 @@ export default function CartPage() {
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * (item.quantity || 1)), 0);
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-slate-50 gap-3">
-      <Icons.Loader2 className="animate-spin text-slate-400" size={28} />
-      <p className="text-xs font-medium text-slate-400">Memuat keranjang...</p>
+    <div className="min-h-screen bg-slate-50/80 max-w-md mx-auto relative pb-32">
+      <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
+        <div className="flex items-center justify-between px-5 pt-12 pb-4">
+          <Skeleton className="w-8 h-8 rounded-xl" />
+          <Skeleton className="h-6 w-24" />
+          <div className="w-8"></div>
+        </div>
+      </div>
+      <div className="p-5 space-y-3">
+        {Array(3).fill(0).map((_, i) => (
+          <div key={i} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex gap-4">
+            <Skeleton className="w-20 h-20 rounded-xl" />
+            <div className="flex-1 flex flex-col justify-between py-1">
+              <div>
+                <Skeleton className="h-4 w-3/4 mb-2" />
+                <Skeleton className="h-5 w-1/2" />
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <Skeleton className="h-8 w-24 rounded-full" />
+                <Skeleton className="w-6 h-6 rounded-md" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 

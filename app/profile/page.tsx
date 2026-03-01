@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import * as Icons from "lucide-react"
 import { useRouter } from "next/navigation"
-import Link from "next/link" // Perbaikan: Import Link yang benar
+import Link from "next/link"
+import Skeleton from "@/app/components/Skeleton"
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -50,77 +51,110 @@ export default function ProfilePage() {
       {/* CONTENT AREA */}
       <div className="pt-20 px-4">
 
-        {/* PROFIL CARD */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center mb-6">
-          <div className="relative mb-4">
-            <div className="w-24 h-24 rounded-full bg-slate-100 border-4 border-white shadow-md overflow-hidden flex items-center justify-center">
-              {user?.user_metadata?.avatar_url ? (
-                <img
-                  src={user.user_metadata.avatar_url}
-                  className="w-full h-full object-cover"
-                  alt="Profile"
-                />
-              ) : (
-                <Icons.User size={40} className="text-slate-300" />
-              )}
+        {loading ? (
+          <>
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center mb-6">
+              <Skeleton className="w-24 h-24 rounded-full mb-4" />
+              <Skeleton className="h-6 w-32 mb-2" />
+              <Skeleton className="h-4 w-40" />
             </div>
-            <button className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full border border-slate-200 shadow-sm active:scale-95 transition-transform">
-              <Icons.Camera size={14} className="text-slate-600" />
-            </button>
-          </div>
-
-          <h2 className="text-lg font-bold text-slate-800">
-            {user?.user_metadata?.full_name || "Sobat Warden"}
-          </h2>
-          <p className="text-xs text-slate-400 font-medium mt-1">
-            {user?.email || "Belum Login"}
-          </p>
-        </div>
-
-        {/* STATS SECTION */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          {[
-            { label: "Poin", val: "1.2k" },
-            { label: "Voucher", val: "5" },
-            { label: "Saldo", val: "Rp 0" }
-          ].map((stat, i) => (
-            <div key={i} className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm">
-              <p className="text-sm font-bold text-slate-800">{stat.val}</p>
-              <p className="text-[10px] font-medium text-slate-400 uppercase mt-0.5">{stat.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* MENU LIST */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
-          {menuItems.map((item, idx) => {
-            const Icon = (Icons as any)[item.icon] || Icons.Package
-            return (
-              <Link
-                href={item.href}
-                key={idx}
-                className="w-full p-4 flex items-center justify-between active:bg-slate-50 transition-colors group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${item.bg}`}>
-                    <Icon size={18} className={item.color} />
-                  </div>
-                  <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">{item.label}</span>
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col items-center gap-1 shadow-sm">
+                  <Skeleton className="h-4 w-10" />
+                  <Skeleton className="h-3 w-12" />
                 </div>
-                <Icons.ChevronRight size={18} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
-              </Link>
-            )
-          })}
-        </div>
+              ))}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm divide-y divide-slate-50 mb-6">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="w-9 h-9 rounded-lg" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                  <Skeleton className="w-4 h-4 rounded-full" />
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* PROFIL CARD */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center mb-6">
+              <div className="relative mb-4">
+                <div className="w-24 h-24 rounded-full bg-slate-100 border-4 border-white shadow-md overflow-hidden flex items-center justify-center">
+                  {user?.user_metadata?.avatar_url ? (
+                    <img
+                      src={user.user_metadata.avatar_url}
+                      className="w-full h-full object-cover"
+                      alt="Profile"
+                    />
+                  ) : (
+                    <Icons.User size={40} className="text-slate-300" />
+                  )}
+                </div>
+                <button className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full border border-slate-200 shadow-sm active:scale-95 transition-transform">
+                  <Icons.Camera size={14} className="text-slate-600" />
+                </button>
+              </div>
 
-        {/* LOGOUT BUTTON */}
-        <button
-          onClick={handleLogout}
-          className="w-full mt-6 bg-white p-4 rounded-2xl flex items-center justify-center gap-2 text-red-500 active:bg-red-50 transition-all border border-slate-200 shadow-sm font-semibold"
-        >
-          <Icons.LogOut size={18} />
-          <span className="text-sm">Keluar Akun</span>
-        </button>
+              <h2 className="text-lg font-bold text-slate-800">
+                {user?.user_metadata?.full_name || "Sobat Warden"}
+              </h2>
+              <p className="text-xs text-slate-400 font-medium mt-1">
+                {user?.email || "Belum Login"}
+              </p>
+            </div>
+
+            {/* STATS SECTION */}
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {[
+                { label: "Poin", val: "1.2k" },
+                { label: "Voucher", val: "5" },
+                { label: "Saldo", val: "Rp 0" }
+              ].map((stat, i) => (
+                <div key={i} className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm">
+                  <p className="text-sm font-bold text-slate-800">{stat.val}</p>
+                  <p className="text-[10px] font-medium text-slate-400 uppercase mt-0.5">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* MENU LIST */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
+              {menuItems.map((item, idx) => {
+                const Icon = (Icons as any)[item.icon] || Icons.Package
+                return (
+                  <Link
+                    href={item.href}
+                    key={idx}
+                    className="w-full p-4 flex items-center justify-between active:bg-slate-50 transition-colors group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${item.bg}`}>
+                        <Icon size={18} className={item.color} />
+                      </div>
+                      <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">{item.label}</span>
+                    </div>
+                    <Icons.ChevronRight size={18} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
+                  </Link>
+                )
+              })}
+            </div>
+
+            {/* LOGOUT BUTTON */}
+            <button
+              onClick={handleLogout}
+              className="w-full mt-6 bg-white p-4 rounded-2xl flex items-center justify-center gap-2 text-red-500 active:bg-red-50 transition-all border border-slate-200 shadow-sm font-semibold"
+            >
+              <Icons.LogOut size={18} />
+              <span className="text-sm">Keluar Akun</span>
+            </button>
+          </>
+        )}
+
+        {/* FOOTER INFO */}
 
         {/* FOOTER INFO */}
         <div className="mt-8 text-center">

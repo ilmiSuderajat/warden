@@ -19,6 +19,7 @@ export default function AddProductPage() {
   const [detecting, setDetecting] = useState(false);
   const [files, setFiles] = useState<(File | null)[]>([null, null, null]);
   const [previews, setPreviews] = useState<string[]>(["", "", ""]);
+  const [isReady, setIsReady] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -168,7 +169,8 @@ export default function AddProductPage() {
           stock: parseInt(formData.stock),
           category_id: selectedCategory,
           latitude: formData.latitude,
-          longitude: formData.longitude
+          longitude: formData.longitude,
+          is_ready: isReady
         }]);
 
       if (productError) throw productError;
@@ -201,6 +203,26 @@ export default function AddProductPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="p-5 space-y-5">
+
+        {/* TOGGLE READY */}
+        <div className="bg-indigo-600 p-4 rounded-xl text-white shadow-lg shadow-indigo-100 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+              <Check className="text-white" size={20} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold">Stok Ready?</h3>
+              <p className="text-[10px] text-white/70">Produk akan muncul di halaman Jajanan Ready</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsReady(!isReady)}
+            className={`w-12 h-6 rounded-full relative transition-all duration-300 ${isReady ? 'bg-emerald-400' : 'bg-white/20'}`}
+          >
+            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ${isReady ? 'right-1' : 'left-1'}`}></div>
+          </button>
+        </div>
 
         {/* UPLOAD FOTO */}
         <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm">

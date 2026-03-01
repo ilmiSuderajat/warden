@@ -5,6 +5,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { ArrowLeft, Plus, Search, Filter, MoreVertical, LayoutDashboard, ShoppingBag, Users, Settings, Package, Truck, CheckCircle2, AlertCircle, Clock, ChevronRight, LogOut, ArrowRight, Tag, Camera, MapPin, Loader2, CreditCard, Image as ImageIcon, TrendingUp, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import Skeleton from "@/app/components/Skeleton"
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("dashboard")
@@ -165,30 +166,52 @@ export default function AdminDashboard() {
             {/* Main Stats Card (Dark Mode) */}
             <div className="bg-slate-900 p-6 rounded-2xl text-white shadow-lg relative overflow-hidden">
               <div className="relative z-10">
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <p className="text-slate-400 text-xs font-medium mb-1">Total Omzet</p>
-                    <h2 className="text-2xl font-bold tracking-tight">Rp {stats.totalSales.toLocaleString('id-ID')}</h2>
+                {loading ? (
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="space-y-2">
+                        <Skeleton className="h-3 w-20 bg-slate-700" />
+                        <Skeleton className="h-8 w-40 bg-slate-700" />
+                      </div>
+                      <Skeleton className="w-10 h-10 rounded-lg bg-slate-700" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/10">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="space-y-2">
+                          <Skeleton className="h-2 w-10 bg-slate-700" />
+                          <Skeleton className="h-5 w-12 bg-slate-700" />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="p-2 bg-white/10 rounded-lg">
-                    <TrendingUp size={20} className="text-emerald-400" />
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-start mb-6">
+                      <div>
+                        <p className="text-slate-400 text-xs font-medium mb-1">Total Omzet</p>
+                        <h2 className="text-2xl font-bold tracking-tight">Rp {stats.totalSales.toLocaleString('id-ID')}</h2>
+                      </div>
+                      <div className="p-2 bg-white/10 rounded-lg">
+                        <TrendingUp size={20} className="text-emerald-400" />
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/10">
-                  <div>
-                    <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Users</p>
-                    <p className="text-lg font-bold">{stats.totalUsers}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Produk</p>
-                    <p className="text-lg font-bold">{products.length}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Kategori</p>
-                    <p className="text-lg font-bold">{categories.length}</p>
-                  </div>
-                </div>
+                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/10">
+                      <div>
+                        <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Users</p>
+                        <p className="text-lg font-bold">{stats.totalUsers}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Produk</p>
+                        <p className="text-lg font-bold">{products.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Kategori</p>
+                        <p className="text-lg font-bold">{categories.length}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               {/* Decorative Element */}
               <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl"></div>
@@ -200,7 +223,17 @@ export default function AdminDashboard() {
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide">Kategori Terlaris</h3>
               </div>
               <div className="bg-white rounded-xl border border-slate-100 p-5 space-y-4">
-                {categorySales.length > 0 ? categorySales.map((c, i) => (
+                {loading ? (
+                  Array(3).fill(0).map((_, i) => (
+                    <div key={i} className="space-y-2">
+                      <div className="flex justify-between">
+                        <Skeleton className="h-3 w-20" />
+                        <Skeleton className="h-3 w-10" />
+                      </div>
+                      <Skeleton className="h-1.5 w-full rounded-full" />
+                    </div>
+                  ))
+                ) : categorySales.length > 0 ? categorySales.map((c, i) => (
                   <div key={i} className="space-y-1.5">
                     <div className="flex justify-between text-xs font-medium">
                       <span className="text-slate-600">{c.name}</span>
@@ -223,18 +256,46 @@ export default function AdminDashboard() {
             <div>
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 px-1">Status Pesanan</h3>
               <div className="grid grid-cols-2 gap-3">
-                <Link href="/admin/orders/unpaid">
-                  <StatCard label="Belum Bayar" value={stats.pending} icon={CreditCard} color="bg-amber-50 text-amber-600 border-amber-100" />
-                </Link>
-                <Link href="/admin/orders/paid">
-                  <StatCard label="Sudah Dibayar" value={stats.process} icon={Clock} color="bg-indigo-50 text-indigo-600 border-indigo-100" />
-                </Link>
-                <Link href="/admin/orders/dikirim">
-                  <StatCard label="Dikirim" value={stats.shipping} icon={Truck} color="bg-blue-50 text-blue-600 border-blue-100" />
-                </Link>
-                <Link href="/admin/orders/selesai">
-                  <StatCard label="Selesai" value={stats.done} icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 border-emerald-100" />
-                </Link>
+                {loading ? (
+                  Array(4).fill(0).map((_, i) => (
+                    <div key={i} className="p-5 rounded-xl border border-slate-100 bg-white space-y-3">
+                      <div className="flex justify-between">
+                        <Skeleton className="w-8 h-8 rounded-lg" />
+                        <Skeleton className="w-6 h-6" />
+                      </div>
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  ))
+                ) : (
+                  <>
+                    <Link href="/admin/orders/unpaid">
+                      <StatCard label="Belum Bayar" value={stats.pending} icon={CreditCard} color="bg-amber-50 text-amber-600 border-amber-100" />
+                    </Link>
+                    <Link href="/admin/orders/paid">
+                      <StatCard label="Sudah Dibayar" value={stats.process} icon={Clock} color="bg-indigo-50 text-indigo-600 border-indigo-100" />
+                    </Link>
+                    <Link href="/admin/orders/dikirim">
+                      <StatCard label="Dikirim" value={stats.shipping} icon={Truck} color="bg-blue-50 text-blue-600 border-blue-100" />
+                    </Link>
+                    <Link href="/admin/orders/selesai">
+                      <StatCard label="Selesai" value={stats.done} icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 border-emerald-100" />
+                    </Link>
+                    <Link href="/admin/ready">
+                      <div className="col-span-2 p-5 rounded-xl border border-indigo-100 bg-indigo-50/50 flex items-center justify-between transition-all hover:bg-indigo-50 active:scale-[0.98]">
+                        <div className="flex items-center gap-4">
+                          <div className="p-2 bg-white rounded-lg shadow-sm text-indigo-600">
+                            <Package size={20} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900 leading-tight">Kelola Jajanan Ready</p>
+                            <p className="text-[10px] text-slate-500 font-medium">Atur stok yang siap kirim</p>
+                          </div>
+                        </div>
+                        <ArrowRight size={16} className="text-indigo-400" />
+                      </div>
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -243,6 +304,18 @@ export default function AdminDashboard() {
         {/* --- TAB BANNERS --- */}
         {activeTab === "banners" && (
           <div className="space-y-4 animate-in fade-in duration-300 pt-2">
+            {/* Link ke Kelola Banner Promo */}
+            <Link
+              href="/admin/banners"
+              className="flex items-center justify-between w-full bg-gradient-to-r from-indigo-600 to-indigo-700 text-white p-4 rounded-xl shadow-sm shadow-indigo-100 active:scale-[0.98] transition-all"
+            >
+              <div>
+                <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Halaman Home</span>
+                <h3 className="text-sm font-bold">Kelola Banner Promo Slider</h3>
+              </div>
+              <ChevronRight size={20} />
+            </Link>
+
             <div className="flex justify-between items-center mb-2 px-1">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide">Kelola Banner Flash Sale</h3>
               <button

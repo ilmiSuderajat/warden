@@ -124,13 +124,21 @@ export default function ProductList() {
                 <div className={`relative shrink-0 overflow-hidden ${view === "grid" ? "aspect-square w-full" : "w-28 h-28"
                   }`}>
                   {/* Badge Lapisan Atas */}
-                  <div className="absolute top-0 left-0 z-10 flex flex-col items-start">
-                    <span className="bg-indigo-600 text-white text-[7px] font-bold px-1 py-0.5 ">WardenMall</span>
-                    {p.is_flash_sale && <span className="bg-orange-500 text-white text-[7px] font-bold px-1 py-0.5 italic">FLASH</span>}
+                  <div className="absolute top-0 left-0 z-10 flex flex-col items-start gap-0.5 p-1">
+                    <span className="bg-indigo-600 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm">WardenMall</span>
+                    {p.is_flash_sale && <span className="bg-orange-500 text-white text-[7px] font-bold px-1.5 py-0.5 italic rounded-sm shadow-sm">FLASH</span>}
+                    {p.is_ready && <span className="bg-emerald-500 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm">READY</span>}
                   </div>
 
                   {/* Slider Gambar */}
                   <ProductImageSlider images={p.image_url} name={p.name} />
+
+                  {/* Stok Habis Overlay */}
+                  {(p.stock === 0 || p.stock === null) && (
+                    <div className="absolute inset-0 bg-black/50 z-20 flex items-center justify-center">
+                      <span className="bg-red-600 text-white text-[10px] font-extrabold px-3 py-1 rounded-md shadow-lg uppercase tracking-wider">Stok Habis</span>
+                    </div>
+                  )}
                 </div>
                 {/* INFO */}
                 <div className="p-2 flex flex-col justify-between flex-1 min-w-0">

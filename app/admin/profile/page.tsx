@@ -61,6 +61,7 @@ export default function AdminProfilePage() {
     { icon: "FolderPlus", label: "Kelola Kategori", color: "text-emerald-600", bg: "bg-emerald-50", link: "/admin/add-category/detail" },
     { icon: "Zap", label: "Pengaturan Flash Sale", color: "text-amber-600", bg: "bg-amber-50", link: "/admin/flash-sale" },
     { icon: "Users", label: "Daftar Pelanggan", color: "text-blue-600", bg: "bg-blue-50", link: "#" },
+    { icon: "Image", label: "Kelola Banner", color: "text-purple-600", bg: "bg-purple-50", link: "/admin/banners" },
   ];
 
   if (loading) return (

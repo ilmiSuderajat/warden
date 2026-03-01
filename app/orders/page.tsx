@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import * as Icons from "lucide-react"
 import { useRouter } from "next/navigation"
+import Skeleton from "@/app/components/Skeleton"
 
 export default function MyOrdersPage() {
   const [activeTab, setActiveTab] = useState("all")
@@ -126,9 +127,24 @@ export default function MyOrdersPage() {
       {/* LIST CONTENT */}
       <div className="p-5 space-y-4">
         {loading ? (
-          <div className="flex flex-col max-w-md -mx-auto text-center items-center justify-center py-20 text-slate-400">
-            <Icons.Loader2 className="animate-spin mb-3 text-indigo-600" size={24} />
-            <p className="text-xs font-medium">Memuat pesanan...</p>
+          <div className="space-y-4">
+            {Array(3).fill(0).map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-5">
+                <div className="flex justify-between items-center mb-4">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-5 w-24 rounded-full" />
+                </div>
+                <div className="flex gap-4">
+                  <Skeleton className="w-16 h-16 rounded-xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/4" />
+                    <Skeleton className="h-5 w-1/2 mt-2" />
+                  </div>
+                </div>
+                <Skeleton className="h-10 w-full rounded-xl mt-5" />
+              </div>
+            ))}
           </div>
         ) : orders.length > 0 ? (
           orders.map((order) => {

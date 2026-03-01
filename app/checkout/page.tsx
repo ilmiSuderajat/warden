@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { ArrowLeft, MapPin, Truck, ShieldCheck, ChevronRight, Loader2, Pencil, Route, PlusCircle, Minus, Plus, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation";
+import Skeleton from "@/app/components/Skeleton";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -172,9 +173,43 @@ export default function CheckoutPage() {
 
   if (loading) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-3 bg-slate-50">
-        <Loader2 className="animate-spin text-indigo-600" size={32} />
-        <p className="text-sm font-medium text-slate-400">Menyiapkan checkout...</p>
+      <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-28">
+        <div className="bg-white border-b border-slate-100 sticky top-0 z-40 backdrop-blur-lg ">
+          <div className="flex items-center gap-3 px-5 pt-12 pb-4">
+            <Skeleton className="w-8 h-8 rounded-xl" />
+            <Skeleton className="h-6 w-40" />
+          </div>
+        </div>
+        <div className="p-5 space-y-5">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 flex gap-4">
+            <Skeleton className="w-12 h-12 rounded-2xl shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-6 w-1/3 rounded-full mt-2" />
+            </div>
+          </div>
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="p-4 space-y-4">
+              <Skeleton className="h-3 w-20" />
+              <div className="flex justify-between items-center gap-4">
+                <div className="flex items-center gap-3 flex-1">
+                  <Skeleton className="w-16 h-16 rounded-2xl" />
+                  <div className="flex-1 space-y-1">
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-3 w-1/4" />
+                  </div>
+                </div>
+                <Skeleton className="h-8 w-20 rounded-full" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 space-y-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-8 w-full mt-4" />
+          </div>
+        </div>
       </div>
     );
   }

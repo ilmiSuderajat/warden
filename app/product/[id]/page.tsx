@@ -21,6 +21,8 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+  const [isWishlisted, setIsWishlisted] = useState(false)
+  const [wishlistLoading, setWishlistLoading] = useState(false)
   const { location: userLoc } = useUserLocation()
 
   useEffect(() => {
@@ -31,6 +33,77 @@ export default function ProductDetail() {
     }
     fetchDetail()
   }, [id])
+
+  // Cek apakah sudah di wishlist
+  useEffect(() => {
+    const checkWishlist = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session || !id) return
+
+      const { data } = await supabase
+        .from("wishlists")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .eq("product_id", id)
+        .maybeSingle()
+
+      setIsWishlisted(!!data)
+    }
+    checkWishlist()
+  }, [id])
+
+  const handleToggleWishlist = async () => {
+    setWishlistLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      router.push("/login")
+      setWishlistLoading(false)
+      return
+    }
+
+    try {
+      if (isWishlisted) {
+        await supabase
+          .from("wishlists")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("product_id", id)
+        setIsWishlisted(false)
+        toast.success("Dihapus dari wishlist")
+      } else {
+        await supabase
+          .from("wishlists")
+          .insert([{ user_id: user.id, product_id: id }])
+        setIsWishlisted(true)
+        toast.success("Ditambahkan ke wishlist ❤️")
+      }
+    } catch (error) {
+      toast.error("Gagal mengupdate wishlist")
+    } finally {
+      setWishlistLoading(false)
+    }
+  }
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}/product/${id}`
+    const shareData = {
+      title: product?.name || "Produk WardenMall",
+      text: `Cek ${product?.name} di WardenMall! Harga Rp ${product?.price?.toLocaleString('id-ID')}`,
+      url
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+      } else {
+        await navigator.clipboard.writeText(url)
+        toast.success("Link produk disalin!")
+      }
+    } catch (error) {
+      // User cancelled share
+    }
+  }
 
   const handleAddToCart = async (silent = false) => {
     setIsProcessing(true)
@@ -95,18 +168,17 @@ export default function ProductDetail() {
         </div>
       )}
 
-      {/* NAVBAR ATAS (Clean Style) */}
+      {/* NAVBAR ATAS */}
       <nav className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-100 flex items-center h-14 px-4 max-w-md mx-auto">
         <button onClick={() => router.back()} className="p-2 -ml-2 hover:bg-slate-50 rounded-xl transition-colors">
           <ArrowLeft size={20} className="text-slate-700" />
         </button>
         <div className="flex-1"></div>
-        <button className="p-2 hover:bg-slate-50 rounded-xl transition-colors mr-1">
+        <button onClick={handleShare} className="p-2 hover:bg-slate-50 rounded-xl transition-colors mr-1">
           <Share2 size={20} className="text-slate-500" />
         </button>
         <button onClick={() => router.push("/cart")} className="p-2 hover:bg-slate-50 rounded-xl transition-colors relative">
           <ShoppingCart size={20} className="text-slate-700" />
-          {/* Indicator merah bisa diganti logic count keranjang nanti */}
           <span className="absolute top-1.5 right-1.5 bg-red-500 w-2 h-2 rounded-full border-2 border-white"></span>
         </button>
       </nav>
@@ -133,8 +205,19 @@ export default function ProductDetail() {
                 <span className="text-xs text-slate-400">• {product.sold_count || "0"} Terjual</span>
               </div>
             </div>
-            <button className="p-2 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors shrink-0">
-              <Heart size={20} className="text-slate-400 hover:text-red-500" />
+            <button
+              onClick={handleToggleWishlist}
+              disabled={wishlistLoading}
+              className={`p-2 border rounded-xl transition-all shrink-0 active:scale-90 ${isWishlisted
+                ? 'border-red-200 bg-red-50'
+                : 'border-slate-100 hover:bg-slate-50'
+                }`}
+            >
+              {wishlistLoading ? (
+                <Loader2 size={20} className="animate-spin text-slate-400" />
+              ) : (
+                <Heart size={20} className={isWishlisted ? 'text-red-500 fill-red-500' : 'text-slate-400'} />
+              )}
             </button>
           </div>
 
@@ -188,10 +271,9 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* BOTTOM ACTION BAR - Clean & Solid */}
+      {/* BOTTOM ACTION BAR */}
       <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-slate-100 max-w-md mx-auto p-4">
         <div className="flex items-center gap-3">
-          {/* Tombol Chat/Toko */}
           <button
             onClick={() => router.push("/")}
             className="flex flex-col items-center justify-center text-slate-500 hover:text-slate-700 transition-colors w-12 shrink-0"
@@ -200,7 +282,6 @@ export default function ProductDetail() {
             <span className="text-[9px] font-semibold mt-0.5">Toko</span>
           </button>
 
-          {/* Tombol Keranjang */}
           <button
             onClick={() => handleAddToCart()}
             disabled={isProcessing}
@@ -209,7 +290,6 @@ export default function ProductDetail() {
             {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <ShoppingCart size={18} />}
           </button>
 
-          {/* Tombol Beli Sekarang */}
           <button
             onClick={handleBuyNow}
             disabled={isProcessing}

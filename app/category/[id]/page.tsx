@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import * as Icons from "lucide-react";
 import Link from "next/link";
+import ProductCardSkeleton from "../../components/ProductCardSkeleton";
 
 function CategoryContent() {
   const params = useParams();
@@ -70,9 +71,10 @@ function CategoryContent() {
       {/* CONTENT AREA */}
       <div className="pt-20 px-3 max-w-md mx-auto">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-32 opacity-20">
-            <Icons.Loader2 size={32} className="animate-spin text-orange-500 mb-2" />
-            <span className="text-[10px] font-black uppercase tracking-tighter">Nyiapin Barang...</span>
+          <div className="grid grid-cols-2 gap-3">
+            {Array(6).fill(0).map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))}
           </div>
         ) : products.length > 0 ? (
           <div className="grid grid-cols-2 gap-3">
