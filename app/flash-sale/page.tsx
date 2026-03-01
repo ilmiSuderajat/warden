@@ -19,18 +19,17 @@ export default function FlashSalePage() {
         const fetchData = async () => {
             setLoading(true)
 
-            // 1. Fetch Active Banner
-            const { data: bannerData } = await supabase
+            const { data: bannerData, error: bannerError } = await supabase
                 .from("flash_sale_banners")
                 .select("*")
                 .eq("is_active", true)
                 .order("created_at", { ascending: false })
                 .limit(1)
                 .maybeSingle()
-
+            console.log("BANNER DATA:", bannerData)      // <-- tambah ini
+            console.log("BANNER ERROR:", bannerError)
             if (bannerData) setActiveBanner(bannerData)
 
-            // 2. Fetch Flash Sale Products
             const { data: productData } = await supabase
                 .from("products")
                 .select("*")
@@ -44,7 +43,6 @@ export default function FlashSalePage() {
         fetchData()
     }, [])
 
-    // Countdown Timer Logic
     useEffect(() => {
         if (!activeBanner?.end_date) return
 
@@ -63,27 +61,24 @@ export default function FlashSalePage() {
                 setTimeLeft({ hours, minutes, seconds })
             }
         }, 1000)
-
+        // Tepat sebelum return utama
+        console.log("activeBanner:", activeBanner)
+        console.log("end_date:", activeBanner?.end_date)
         return () => clearInterval(interval)
     }, [activeBanner])
 
     if (loading) {
         return (
             <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-24">
-                {/* HEADER SKELETON */}
                 <div className="bg-white border-b border-slate-100">
                     <div className="flex items-center gap-3 px-5 pt-12 pb-4">
                         <Skeleton className="w-8 h-8 rounded-xl" />
                         <Skeleton className="h-6 w-32" />
                     </div>
                 </div>
-
-                {/* BANNER SKELETON */}
                 <div className="mx-4 mt-4">
                     <Skeleton className="aspect-[21/9] w-full rounded-2xl" />
                 </div>
-
-                {/* PRODUCT GRID SKELETON */}
                 <div className="px-4 mt-12 grid grid-cols-2 gap-3">
                     {Array(6).fill(0).map((_, i) => (
                         <ProductCardSkeleton key={i} />
@@ -101,48 +96,68 @@ export default function FlashSalePage() {
                     <Link href="/" className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
                         <Icons.ArrowLeft size={20} />
                     </Link>
-                    <h1 className="text-lg font-bold text-slate-900 tracking-tight">WardenFlash Sale</h1>
+                    <h1 className="text-lg font-bold text-slate-900 tracking-tight">Warden Flash Sale</h1>
                 </div>
             </div>
 
-            {/* BANNER PROMO */}
-            {activeBanner && (
-                <div className="mx-4 mt-4 relative group">
-                    <div className="relative aspect-[21/9] rounded-2xl overflow-hidden shadow-xl shadow-indigo-100 border border-white">
-                        <img
-                            src={activeBanner.image_url}
-                            alt={activeBanner.title}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/80 via-indigo-900/40 to-transparent flex flex-col justify-center px-6">
-                            <span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full w-fit mb-2 animate-bounce">
-                                FLASH SALE!
-                            </span>
-                            <h2 className="text-white text-xl font-extrabold leading-tight mb-1 drop-shadow-md">
-                                {activeBanner.title}
-                            </h2>
-                            <p className="text-white/90 text-sm font-medium drop-shadow-sm">
-                                {activeBanner.discount_text}
-                            </p>
-                        </div>
-                    </div>
 
-                    {/* TIMER OVERLAY */}
-                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-lg px-4 py-2 border border-slate-100 flex items-center gap-3">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Berakhir:</span>
-                        <div className="flex gap-1.5 items-center">
-                            <TimeBlock value={timeLeft.hours} label="Jam" />
-                            <span className="text-indigo-400 font-bold">:</span>
-                            <TimeBlock value={timeLeft.minutes} label="Men" />
-                            <span className="text-indigo-400 font-bold">:</span>
-                            <TimeBlock value={timeLeft.seconds} label="Det" />
+
+            {/* ── CENTERED COUNTDOWN SECTION ── */}
+            {activeBanner?.end_date && (
+                <div className="mx-4 mt-5">
+                    <div className="relative rounded-2xl overflow-hidden">
+                        {/* Background */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800" />
+                        {/* Noise texture */}
+                        <div
+                            className="absolute inset-0 opacity-[0.12] mix-blend-overlay"
+                            style={{
+                                backgroundImage:
+                                    "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E\")",
+                            }}
+                        />
+                        {/* Glow orbs */}
+                        <div className="absolute -top-6 -right-6 w-28 h-28 bg-violet-400/30 rounded-full blur-2xl" />
+                        <div className="absolute -bottom-8 -left-4 w-24 h-24 bg-indigo-300/20 rounded-full blur-2xl" />
+
+                        {/* Content */}
+                        <div className="relative z-10 py-4 px-5 flex flex-col items-center gap-3">
+                            {/* Label */}
+                            <div className="flex items-center gap-2">
+                                <Icons.Zap size={13} className="text-orange-400 fill-orange-400" />
+                                <span className="text-[10px] font-semibold text-white/60 uppercase tracking-[0.18em]">
+                                    Berakhir dalam
+                                </span>
+                                <Icons.Zap size={13} className="text-orange-400 fill-orange-400" />
+                            </div>
+
+                            {/* Timer blocks */}
+                            <div className="flex items-center gap-2">
+                                <BigTimeBlock value={timeLeft.hours} label="Jam" />
+                                <Colon />
+                                <BigTimeBlock value={timeLeft.minutes} label="Menit" />
+                                <Colon />
+                                <BigTimeBlock value={timeLeft.seconds} label="Detik" />
+                            </div>
                         </div>
+
+                        {/* Bottom shimmer */}
+                        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                     </div>
                 </div>
             )}
 
+            {/* SECTION HEADER */}
+            <div className="px-4 mt-5 mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <div className="w-1 h-4 bg-indigo-600 rounded-full" />
+                    <span className="text-sm font-bold text-slate-800">Produk Flash Sale</span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-medium">{products.length} produk</span>
+            </div>
+
             {/* PRODUCT GRID */}
-            <div className="px-4 mt-12 grid grid-cols-2 gap-3 pb-10">
+            <div className="px-4 grid grid-cols-2 gap-3 pb-10">
                 {products.map((p) => {
                     const price = p.price || 0
                     const original = p.original_price || 0
@@ -172,7 +187,7 @@ export default function FlashSalePage() {
                                         )}
                                     </div>
 
-                                    {/* PROGRESS BAR (Simulated) */}
+                                    {/* PROGRESS BAR */}
                                     <div className="mt-2">
                                         <div className="flex justify-between text-[8px] font-bold text-slate-400 mb-1 px-0.5 uppercase tracking-tighter">
                                             <div className="flex items-center gap-1">
@@ -189,7 +204,7 @@ export default function FlashSalePage() {
                                             <div
                                                 className="h-full bg-gradient-to-r from-orange-400 to-red-500 rounded-full"
                                                 style={{ width: `${Math.min(((p.sold_count || 5) / 50) * 100, 95)}%` }}
-                                            ></div>
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -209,12 +224,26 @@ export default function FlashSalePage() {
     )
 }
 
-function TimeBlock({ value, label }: { value: number, label: string }) {
+function BigTimeBlock({ value, label }: { value: number; label: string }) {
     return (
-        <div className="flex flex-col items-center">
-            <div className="bg-slate-900 text-white font-black text-xs min-w-[24px] py-0.5 rounded flex items-center justify-center">
-                {value.toString().padStart(2, '0')}
+        <div className="flex flex-col items-center gap-1">
+            <div className="relative min-w-[56px] h-[52px] bg-white/10 border border-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm overflow-hidden">
+                {/* inner top gloss */}
+                <div className="absolute inset-x-0 top-0 h-1/2 bg-white/5" />
+                <span className="text-2xl font-bold text-white tabular-nums relative z-10">
+                    {value.toString().padStart(2, "0")}
+                </span>
             </div>
+            <span className="text-[9px] text-white/50 font-semibold uppercase tracking-widest">{label}</span>
+        </div>
+    )
+}
+
+function Colon() {
+    return (
+        <div className="flex flex-col gap-1.5 pb-5">
+            <div className="w-1 h-1 rounded-full bg-white/40" />
+            <div className="w-1 h-1 rounded-full bg-white/40" />
         </div>
     )
 }
