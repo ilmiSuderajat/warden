@@ -18,7 +18,8 @@ export default function ConditionalSearchBar() {
   const isFlashSale = pathname.startsWith("/flash-sale");
   const isReady = pathname.startsWith("/ready");
   const isChatPage = pathname.startsWith('/chat');
-  if (isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isProductDetailPage || isAdressPage || isFlashSale || isReady || isChatPage) return null;
+  const isWishlist = pathname.startsWith('/wishlist');
+  if (isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isProductDetailPage || isAdressPage || isFlashSale || isReady || isChatPage || isWishlist) return null;
 
   return (
     <Suspense fallback={<div className="h-16 bg-white animate-pulse" />}>
