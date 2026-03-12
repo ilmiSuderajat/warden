@@ -188,18 +188,17 @@ export default function ShippedOrdersPage() {
                                                 <MapPin size={12} className="text-slate-400 shrink-0 mt-0.5" />
                                                 <p className="text-[10px] text-slate-500 leading-relaxed uppercase font-medium line-clamp-2">{order.address}</p>
                                             </div>
+                                            {order.latitude && order.longitude && (
                                             <button
                                                 onClick={() => {
-                                                    const query = order.latitude && order.longitude
-                                                        ? `${order.latitude},${order.longitude}`
-                                                        : encodeURIComponent(order.address);
-                                                    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                                                    window.open(`https://www.google.com/maps?q=${order.latitude},${order.longitude}`, '_blank');
                                                 }}
                                                 className="mt-2 flex items-center gap-1.5 text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition-colors w-fit"
                                             >
                                                 <MapPin size={10} />
                                                 Kirim Ke Lokasi Ini (Maps)
                                             </button>
+                                            )}
                                         </div>
                                         <div className="flex flex-col items-end">
                                             <p className="text-sm font-bold text-blue-600">Rp {order.total_amount.toLocaleString('id-ID')}</p>
