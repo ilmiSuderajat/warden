@@ -163,7 +163,7 @@ function SearchContent() {
           </div>
         ) : (
           // Empty State
-          <div className="flex flex-col items-center justify-center h-[60vh] text-center px-8">
+          <div className="flex flex-col items-center mt-60  justify-center h-[60vh] text-center px-8">
             <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
               <ImageOff size={36} className="text-slate-300" />
             </div>

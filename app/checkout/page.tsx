@@ -138,6 +138,9 @@ export default function CheckoutPage() {
           address: orderAddress,
           latitude: address.latitude ?? null,
           longitude: address.longitude ?? null,
+          maps_link: (address.latitude && address.longitude) 
+            ? `https://www.google.com/maps/place/${address.latitude},${address.longitude}/@${address.latitude},${address.longitude},17z` 
+            : null,
           subtotal_amount: totalPrice,
           shipping_amount: shippingFee,
           distance_km: distance,

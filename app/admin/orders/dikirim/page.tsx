@@ -189,15 +189,16 @@ export default function ShippedOrdersPage() {
                                                 <p className="text-[10px] text-slate-500 leading-relaxed uppercase font-medium line-clamp-2">{order.address}</p>
                                             </div>
                                             {order.latitude && order.longitude && (
-                                            <button
-                                                onClick={() => {
-                                                    window.open(`https://www.google.com/maps/place/${order.latitude},${order.longitude}/@${order.latitude},${order.longitude},17z`, '_blank');
-                                                }}
-                                                className="mt-2 flex items-center gap-1.5 text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition-colors w-fit"
-                                            >
-                                                <MapPin size={10} />
-                                                Kirim Ke Lokasi Ini (Maps)
-                                            </button>
+                                                <button
+                                                    onClick={() => {
+                                                        const url = order.maps_link || `https://www.google.com/maps/place/${order.latitude},${order.longitude}/@${order.latitude},${order.longitude},17z`;
+                                                        window.open(url, '_blank');
+                                                    }}
+                                                    className="mt-2 flex items-center gap-1.5 text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition-colors w-fit"
+                                                >
+                                                    <MapPin size={10} />
+                                                    Kirim Ke Lokasi Ini (Maps)
+                                                </button>
                                             )}
                                         </div>
                                         <div className="flex flex-col items-end">
