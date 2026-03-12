@@ -37,6 +37,20 @@ export default function ShippedOrdersPage() {
 
             const { data: prodData } = await supabase.from("products").select("name, latitude, longitude, location")
 
+            // Ambil lat/lng alamat pembeli sebagai fallback untuk order lama yang tidak punya koordinat
+            const userIds = [...new Set(ordersData.map((o: any) => o.user_id))]
+            const { data: addrData } = await supabase
+                .from("addresses")
+                .select("user_id, latitude, longitude")
+                .in("user_id", userIds)
+                .eq("is_default", true)
+
+            // Buat map user_id -> koordinat
+            const addrMap: Record<string, { latitude: number, longitude: number }> = {}
+            addrData?.forEach((a: any) => {
+                if (a.latitude && a.longitude) addrMap[a.user_id] = { latitude: a.latitude, longitude: a.longitude }
+            })
+
             const orderIds = ordersData.map(o => o.id)
             const { data: itemsData, error: itemsError } = await supabase
                 .from("order_items")
@@ -45,13 +59,19 @@ export default function ShippedOrdersPage() {
 
             if (itemsError) throw itemsError
 
-            const combinedData = ordersData.map(order => ({
-                ...order,
-                order_items: itemsData ? itemsData.filter(item => item.order_id === order.id).map(item => {
-                    const p = prodData?.find(p => p.name === item.product_name)
-                    return { ...item, product_details: p }
-                }) : []
-            }))
+            const combinedData = ordersData.map((order: any) => {
+                // Gunakan koordinat dari order jika ada, fallback ke alamat default pembeli
+                const coords = addrMap[order.user_id]
+                return {
+                    ...order,
+                    latitude: order.latitude ?? coords?.latitude ?? null,
+                    longitude: order.longitude ?? coords?.longitude ?? null,
+                    order_items: itemsData ? itemsData.filter((item: any) => item.order_id === order.id).map((item: any) => {
+                        const p = prodData?.find((p: any) => p.name === item.product_name)
+                        return { ...item, product_details: p }
+                    }) : []
+                }
+            })
 
             setOrders(combinedData)
         } catch (err: any) {

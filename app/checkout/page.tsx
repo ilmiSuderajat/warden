@@ -136,6 +136,8 @@ export default function CheckoutPage() {
           customer_name: address.name,
           whatsapp_number: address.phone,
           address: orderAddress,
+          latitude: address.latitude ?? null,
+          longitude: address.longitude ?? null,
           subtotal_amount: totalPrice,
           shipping_amount: shippingFee,
           distance_km: distance,
