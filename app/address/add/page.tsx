@@ -294,7 +294,7 @@ export default function AddAddressPage() {
               value={formData.city}
               className="w-full bg-white border border-slate-200 p-3.5 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm"
               placeholder="Contoh: Jakarta Selatan"
-              onChange={(e) => setFormData({ ...formData, kecamatan: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
             />
           </div>
 
@@ -305,7 +305,7 @@ export default function AddAddressPage() {
               value={formData.kecamatan}
               className="w-full bg-white border border-slate-200 p-3.5 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm"
               placeholder="Contoh: Tebet"
-              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, kecamatan: e.target.value })}
             />
           </div>
 
