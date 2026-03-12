@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   ArrowLeft, MapPin, Navigation, Info,
   Loader2, CheckCircle2, ChevronLeft,
@@ -14,6 +14,20 @@ export default function AddAddressPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [detecting, setDetecting] = useState(false)
+
+  // Scroll focused input into view when virtual keyboard opens
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const onResize = () => {
+      const focused = document.activeElement as HTMLElement | null
+      if (focused && (focused.tagName === "INPUT" || focused.tagName === "TEXTAREA")) {
+        setTimeout(() => focused.scrollIntoView({ block: "center", behavior: "smooth" }), 100)
+      }
+    }
+    vv.addEventListener("resize", onResize)
+    return () => vv.removeEventListener("resize", onResize)
+  }, [])
 
   const [formData, setFormData] = useState({
     name: "",
@@ -262,7 +276,7 @@ export default function AddAddressPage() {
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5 pb-10">
+        <form onSubmit={handleSubmit} className="space-y-5 pb-52">
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-500 ml-1 uppercase tracking-wider">Nama Penerima</label>
