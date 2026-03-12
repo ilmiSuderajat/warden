@@ -191,7 +191,7 @@ export default function ShippedOrdersPage() {
                                             {order.latitude && order.longitude && (
                                             <button
                                                 onClick={() => {
-                                                    window.open(`https://www.google.com/maps?q=${order.latitude},${order.longitude}`, '_blank');
+                                                    window.open(`https://www.google.com/maps/place/${order.latitude},${order.longitude}/@${order.latitude},${order.longitude},17z`, '_blank');
                                                 }}
                                                 className="mt-2 flex items-center gap-1.5 text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition-colors w-fit"
                                             >
