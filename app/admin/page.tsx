@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
-import { ArrowLeft, Plus, Search, Filter, MoreVertical, LayoutDashboard, ShoppingBag, Users, Settings, Package, Truck, CheckCircle2, AlertCircle, Clock, ChevronRight, LogOut, ArrowRight, Tag, Camera, MapPin, Loader2, CreditCard, Image as ImageIcon, TrendingUp, Trash2 } from "lucide-react"
+import { ArrowLeft, Plus, Search, Filter, MoreVertical, LayoutDashboard, ShoppingBag, Users, Settings, Package, Truck, CheckCircle2, AlertCircle, Clock, ChevronRight, LogOut, ArrowRight, Tag, Camera, MapPin, Loader2, CreditCard, Image as ImageIcon, TrendingUp, Trash2, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
 import Skeleton from "@/app/components/Skeleton"
 
@@ -52,7 +52,7 @@ export default function AdminDashboard() {
     const { data: prod } = await supabase.from('products').select('*')
     const { data: cat } = await supabase.from('categories').select('*')
     const { data: ban } = await supabase.from('flash_sale_banners').select('*').order('created_at', { ascending: false })
-    const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
+    const { count: userCount } = await supabase.from('users').select('*', { count: 'exact', head: true })
 
     // 2. Ambil Item Terjual (Mapping via Nama Produk)
     const orderIds = orders?.map(o => o.id) || []
@@ -279,6 +279,34 @@ export default function AdminDashboard() {
                     </Link>
                     <Link href="/admin/orders/selesai">
                       <StatCard label="Selesai" value={stats.done} icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 border-emerald-100" />
+                    </Link>
+                    <Link href="/admin/customers">
+                      <div className="col-span-2 p-5 rounded-xl border border-blue-100 bg-white text-slate-900 flex items-center justify-between transition-all hover:bg-blue-50 active:scale-[0.98] shadow-sm">
+                        <div className="flex items-center gap-4">
+                          <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                            <Users size={20} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900 leading-tight">Daftar Pelanggan</p>
+                            <p className="text-[10px] text-slate-500 font-medium">Lihat user yang terdaftar</p>
+                          </div>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-300" />
+                      </div>
+                    </Link>
+                    <Link href="/admin/chat">
+                      <div className="col-span-2 p-5 rounded-xl border border-indigo-100 bg-indigo-600 text-white flex items-center justify-between transition-all hover:bg-indigo-700 active:scale-[0.98] shadow-lg shadow-indigo-200">
+                        <div className="flex items-center gap-4">
+                          <div className="p-2 bg-white/20 rounded-lg shadow-sm text-white">
+                            <MessageCircle size={20} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-white leading-tight">Live Chat</p>
+                            <p className="text-[10px] text-indigo-100 font-medium">Pusat Bantuan Pelanggan</p>
+                          </div>
+                        </div>
+                        <ChevronRight size={16} className="text-indigo-200" />
+                      </div>
                     </Link>
                     <Link href="/admin/ready">
                       <div className="col-span-2 p-5 rounded-xl border border-indigo-100 bg-indigo-50/50 flex items-center justify-between transition-all hover:bg-indigo-50 active:scale-[0.98]">

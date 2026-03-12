@@ -28,6 +28,7 @@ export const viewport = {
 
 
 import { Toaster } from "sonner";
+import ChatWidget from "./components/ChatWidget";
 
 export default function RootLayout({
   children,
@@ -43,6 +44,7 @@ export default function RootLayout({
         {children}
         <ConditionalSearchBar />
         <ConditionalNavbar />
+        <ChatWidget />
       </body>
     </html>
   );
