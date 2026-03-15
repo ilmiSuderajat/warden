@@ -225,7 +225,7 @@ export default function CheckoutPage() {
           subtotal_amount: totalPrice,
           shipping_amount: shippingFee,
           distance_km: distance,
-          total_amount: totalPrice + shippingFee,
+          total_amount: Math.max(0, totalPrice + shippingFee - discountAmount),
           payment_status: "pending",
           user_id: user.id,
           voucher_code: appliedVoucher ? appliedVoucher.code : null,
