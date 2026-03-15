@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Check, Home, ShoppingBag, PartyPopper, Loader2, ShieldCheck } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
 // --- Bagian 1: Konten Utama Halaman ---
 function SuccessContent() {
@@ -19,6 +20,16 @@ function SuccessContent() {
       router.replace('/orders')
       return
     }
+    
+    // Clear cart after successful order
+    const clearCart = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            await supabase.from("cart").delete().eq("user_id", user.id);
+        }
+    };
+    
+    clearCart();
     localStorage.removeItem('pendingOrder')
   }, [transactionStatus, router])
 

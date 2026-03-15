@@ -257,9 +257,6 @@ export default function CheckoutPage() {
       }));
       await supabase.from("order_items").insert(itemsToInsert);
 
-      // 3. Hapus Cart
-      await supabase.from("cart").delete().eq("user_id", user.id);
-
       // --- PERBAIKAN DI SINI ---
       // Kita arahkan ke payment sambil membawa order_id di URL
       // Di CheckoutPage handlePlaceOrder
