@@ -15,7 +15,7 @@ const loadMidtransScript = (clientKey: string) => {
     if ((window as any).snap) { resolve(); return }
 
     const existingScript = document.querySelector(
-      'script[src="https://app.sandbox.midtrans.com/snap/snap.js"]'
+      'script[src="https://app.midtrans.com/snap/snap.js"]'
     )
     if (existingScript) {
       existingScript.addEventListener("load", () => resolve())
@@ -23,7 +23,7 @@ const loadMidtransScript = (clientKey: string) => {
     }
 
     const script = document.createElement("script")
-    script.src = "https://app.sandbox.midtrans.com/snap/snap.js"
+    script.src = "https://app.midtrans.com/snap/snap.js"
     script.setAttribute("data-client-key", clientKey)
     script.async = true
     script.onload = () => resolve()
