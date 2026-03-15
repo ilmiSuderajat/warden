@@ -20,26 +20,26 @@ export default function Home() {
             <div className="px-4 mb-4">
                 <Link href="/promo">
                     <div className="relative rounded-2xl overflow-hidden group active:scale-[0.98] transition-all duration-200 cursor-pointer shadow-md shadow-amber-500/10 border border-amber-100">
-                        <div className="absolute inset-0 bg-gradient-to-r from-amber-50 to-orange-50" />
+                        <div className="absolute inset-0 bg-indigo-600" />
                         <div className="absolute -right-4 -top-4 w-24 h-24 bg-amber-400/20 rounded-full blur-xl" />
 
                         <div className="relative z-10 px-5 py-4 flex items-center justify-between gap-4">
                             <div className="flex flex-col flex-1">
-                                <div className="inline-flex items-center gap-1.5 mb-1.5 self-start bg-white/60 backdrop-blur-sm px-2.5 py-1 rounded-full border border-amber-200/50 text-amber-600">
+                                <div className="inline-flex items-center gap-1.5 mb-1.5 self-start bg-white/60 backdrop-blur-sm px-2.5 py-1 rounded-full border border-amber-200/50 text-white">
                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                                     <span className="text-[10px] font-extrabold uppercase tracking-wide">
                                         Spesial Diskon
                                     </span>
                                 </div>
-                                <h2 className="text-lg font-extrabold text-slate-800 tracking-tight">
+                                <h2 className="text-lg font-extrabold text-white tracking-tight">
                                     Klaim Voucher Promo
                                 </h2>
-                                <p className="text-slate-500 text-xs mt-1 font-medium">
+                                <p className="text-white text-xs mt-1 font-medium">
                                     Ada potongan harga & gratis ongkir
                                 </p>
                             </div>
 
-                            <div className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center bg-white shadow-sm border border-amber-100 text-amber-500 transition-transform duration-300 group-hover:scale-110">
+                            <div className="flex-shrink-0 w-12 h-12   flex items-center justify-center bg-indigo-600 rounded-xl border-amber-100 text-white transition-transform duration-300 group-hover:scale-110">
                                 <ChevronRight size={24} strokeWidth={2.5} />
                             </div>
                         </div>
