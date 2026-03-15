@@ -20,9 +20,9 @@ export default function ChatWidget() {
   const isHidden = pathname.startsWith("/admin") || pathname.startsWith("/login") || pathname.startsWith("/register");
   const isChatPage = pathname.startsWith("/chat");
 
+  if (!isChatPage) return null;
   useEffect(() => {
     if (isHidden) return;
-    if (isChatPage) return;
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
@@ -210,8 +210,8 @@ export default function ChatWidget() {
                 return (
                   <div key={msg.id} className={`flex ${isAdmin ? "justify-start" : "justify-end"}`}>
                     <div className={`max-w-[85%] rounded-2xl px-4 py-2 ${isAdmin
-                        ? 'bg-white border border-slate-100 text-slate-700 rounded-tl-none shadow-sm'
-                        : 'bg-indigo-600 text-white rounded-tr-none shadow-md shadow-indigo-100'
+                      ? 'bg-white border border-slate-100 text-slate-700 rounded-tl-none shadow-sm'
+                      : 'bg-indigo-600 text-white rounded-tr-none shadow-md shadow-indigo-100'
                       }`}>
                       <p className="text-[13px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
                       <p className={`text-[9px] mt-1 text-right ${isAdmin ? 'text-slate-400' : 'text-indigo-200'}`}>
