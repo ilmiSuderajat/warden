@@ -16,6 +16,12 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Voucher states
+  const [voucherCode, setVoucherCode] = useState("");
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [isCheckingVoucher, setIsCheckingVoucher] = useState(false);
+
   const TARIF_PER_KM = 2000;
   const ONGKIR_MINIMAL = 10000;
 
@@ -114,7 +120,82 @@ export default function CheckoutPage() {
 
   const totalPrice = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
-  // ... (kode atas tetap sama)
+  // Fungsi untuk Mengecek dan Mengaplikasikan Voucher
+  const applyVoucher = async () => {
+    if (!voucherCode.trim()) {
+      toast.error("Masukkan kode voucher terlebih dahulu!");
+      return;
+    }
+
+    setIsCheckingVoucher(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("vouchers")
+        .select("*")
+        .eq("code", voucherCode.toUpperCase())
+        .eq("is_active", true)
+        .or(`start_date.lte.${nowIso},start_date.is.null`)
+        .or(`end_date.gte.${nowIso},end_date.is.null`)
+        .single();
+
+      if (error || !data) {
+        toast.error("Voucher tidak ditemukan atau sudah tidak aktif");
+        setAppliedVoucher(null);
+        setDiscountAmount(0);
+        return;
+      }
+
+      // Cek Batas Penggunaan
+      if (data.usage_limit && data.used_count >= data.usage_limit) {
+        toast.error("Kuota voucher ini sudah habis digunakan");
+        setAppliedVoucher(null);
+        setDiscountAmount(0);
+        return;
+      }
+
+      // Cek Minimal Pembelian
+      if (data.min_order_amount && totalPrice < data.min_order_amount) {
+        toast.error(`Voucher ini memerlukan minimal belanja Rp ${data.min_order_amount.toLocaleString('id-ID')}`);
+        setAppliedVoucher(null);
+        setDiscountAmount(0);
+        return;
+      }
+
+      // Hitung Diskon
+      let calculatedDiscount = 0;
+      if (data.discount_type === 'percentage') {
+        calculatedDiscount = totalPrice * (data.discount_value / 100);
+        if (data.max_discount_amount && calculatedDiscount > data.max_discount_amount) {
+          calculatedDiscount = data.max_discount_amount;
+        }
+      } else {
+        calculatedDiscount = data.discount_value;
+      }
+
+      // Diskon tidak boleh melebihi total belanja
+      if (calculatedDiscount > totalPrice) {
+        calculatedDiscount = totalPrice;
+      }
+
+      setDiscountAmount(calculatedDiscount);
+      setAppliedVoucher(data);
+      toast.success("Voucher berhasil digunakan!");
+
+    } catch (err) {
+      console.error(err);
+      toast.error("Terjadi kesalahan saat mengecek voucher");
+    } finally {
+      setIsCheckingVoucher(false);
+    }
+  };
+
+  const removeVoucher = () => {
+    setVoucherCode("");
+    setAppliedVoucher(null);
+    setDiscountAmount(0);
+    toast.info("Penggunaan voucher dibatalkan");
+  };
 
   const handlePlaceOrder = async () => {
     if (!address || cartItems.length === 0) {
@@ -146,10 +227,25 @@ export default function CheckoutPage() {
           distance_km: distance,
           total_amount: totalPrice + shippingFee,
           payment_status: "pending",
-          user_id: user.id
+          user_id: user.id,
+          voucher_code: appliedVoucher ? appliedVoucher.code : null,
+          discount_amount: discountAmount
         }]).select().maybeSingle();
 
       if (orderError) throw orderError;
+
+      // 1.5 Update Voucher Used Count jika menggunakan voucher
+      if (appliedVoucher) {
+        try {
+          // Attempt using RPC if defined
+          await supabase.rpc('increment_voucher_usage', { v_id: appliedVoucher.id });
+        } catch (e) {
+          // Fallback manual increment jika RPC belum dibuat
+          await supabase.from("vouchers")
+            .update({ used_count: appliedVoucher.used_count + 1 })
+            .eq("id", appliedVoucher.id);
+        }
+      }
 
       // 2. Buat Order Items
       const itemsToInsert = cartItems.map((item: any) => ({
@@ -314,6 +410,49 @@ export default function CheckoutPage() {
           </div>
         </div>
 
+        {/* INPUT VOUCHER DISKON */}
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-indigo-500"></span> Diskon & Promo
+            </span>
+          </div>
+          
+          {appliedVoucher ? (
+            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                  <ShieldCheck size={14} /> Voucher Terpasang!
+                </p>
+                <p className="text-sm font-extrabold text-emerald-600 mt-1 uppercase font-mono tracking-wider">{appliedVoucher.code}</p>
+              </div>
+              <button 
+                onClick={removeVoucher}
+                className="text-xs font-bold text-red-500 hover:text-red-700 bg-white px-3 py-1.5 rounded-full shadow-sm"
+              >
+                Hapus
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="Masukkan Kode Voucher"
+                value={voucherCode}
+                onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 uppercase transition-all"
+              />
+              <button 
+                onClick={applyVoucher}
+                disabled={isCheckingVoucher || !voucherCode}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm px-5 py-3 rounded-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center shrink-0"
+              >
+                {isCheckingVoucher ? <Loader2 size={16} className="animate-spin" /> : 'Pakai'}
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* RINCIAN PEMBAYARAN */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 space-y-4">
           <div className="flex justify-between text-sm">
@@ -324,11 +463,17 @@ export default function CheckoutPage() {
             <span className="text-slate-500">Ongkos Kirim ({distance.toFixed(1)} km)</span>
             <span className="text-slate-700 font-medium">Rp {shippingFee.toLocaleString('id-ID')}</span>
           </div>
+          {discountAmount > 0 && (
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-emerald-600 font-medium">Diskon Voucher</span>
+              <span className="text-emerald-600 font-bold">- Rp {discountAmount.toLocaleString('id-ID')}</span>
+            </div>
+          )}
           <div className="border-t border-dashed border-slate-200 pt-4 mt-4">
             <div className="flex justify-between items-center">
               <span className="text-sm font-bold text-slate-700">Total Tagihan</span>
               <span className="text-xl font-extrabold text-slate-900">
-                Rp {(totalPrice + shippingFee).toLocaleString('id-ID')}
+                Rp {Math.max(0, totalPrice + shippingFee - discountAmount).toLocaleString('id-ID')}
               </span>
             </div>
           </div>

@@ -81,6 +81,8 @@ export interface Database {
           longitude: number | null
           payment_method: string | null
           payment_status: string | null
+          voucher_code: string | null
+          discount_amount: number | null
         }
         Insert: {
           id?: string
@@ -101,6 +103,8 @@ export interface Database {
           longitude?: number | null
           payment_method?: string | null
           payment_status?: string | null
+          voucher_code?: string | null
+          discount_amount?: number | null
         }
         Update: {
           id?: string
@@ -121,6 +125,8 @@ export interface Database {
           longitude?: number | null
           payment_method?: string | null
           payment_status?: string | null
+          voucher_code?: string | null
+          discount_amount?: number | null
         }
       }
       order_items: {
