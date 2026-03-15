@@ -7,7 +7,7 @@ const isValidUUID = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 
 const snap = new Midtrans.Snap({
-  isProduction: false, // Sandbox
+  isProduction: true, // Sandbox
   serverKey: process.env.MIDTRANS_SERVER_KEY!,
   clientKey: process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!,
 })
