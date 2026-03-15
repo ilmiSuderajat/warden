@@ -342,6 +342,50 @@ export interface Database {
               created_at?: string
           }
       }
+      vouchers: {
+          Row: {
+              id: string
+              code: string
+              discount_type: string
+              discount_value: number
+              min_order_amount: number | null
+              max_discount_amount: number | null
+              start_date: string | null
+              end_date: string | null
+              usage_limit: number | null
+              used_count: number | null
+              is_active: boolean | null
+              created_at: string | null
+          }
+          Insert: {
+              id?: string
+              code: string
+              discount_type: string
+              discount_value: number
+              min_order_amount?: number | null
+              max_discount_amount?: number | null
+              start_date?: string | null
+              end_date?: string | null
+              usage_limit?: number | null
+              used_count?: number | null
+              is_active?: boolean | null
+              created_at?: string | null
+          }
+          Update: {
+              id?: string
+              code?: string
+              discount_type?: string
+              discount_value?: number
+              min_order_amount?: number | null
+              max_discount_amount?: number | null
+              start_date?: string | null
+              end_date?: string | null
+              usage_limit?: number | null
+              used_count?: number | null
+              is_active?: boolean | null
+              created_at?: string | null
+          }
+      }
     }
   }
 }

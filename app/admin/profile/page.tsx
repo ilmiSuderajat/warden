@@ -62,6 +62,7 @@ export default function AdminProfilePage() {
     { icon: "Zap", label: "Pengaturan Flash Sale", color: "text-amber-600", bg: "bg-amber-50", link: "/admin/flash-sale" },
     { icon: "Users", label: "Daftar Pelanggan", color: "text-blue-600", bg: "bg-blue-50", link: "/admin/customers" },
     { icon: "Image", label: "Kelola Banner", color: "text-purple-600", bg: "bg-purple-50", link: "/admin/banners" },
+    { icon: "Tag", label: "Kelola Voucher", color: "text-teal-600", bg: "bg-teal-50", link: "/admin/vouchers" },
   ];
 
   if (loading) return (
