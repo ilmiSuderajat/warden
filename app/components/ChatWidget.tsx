@@ -19,6 +19,16 @@ export default function ChatWidget() {
   const isChatPage = pathname === "/chat";
 
   useEffect(() => {
+    const handleOpenChat = () => {
+      setIsOpen(true);
+      markAsRead();
+    };
+
+    window.addEventListener('open-warden-chat', handleOpenChat);
+    return () => window.removeEventListener('open-warden-chat', handleOpenChat);
+  }, [user, unreadCount]);
+
+  useEffect(() => {
     if (!isChatPage) return;
     
     const checkUser = async () => {
