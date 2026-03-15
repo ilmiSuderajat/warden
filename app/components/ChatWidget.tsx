@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { MessageCircle, X, Send, Loader2, Phone, Mail, ChevronRight } from "lucide-react";
+import { MessageCircle, X, Send, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
@@ -16,9 +16,11 @@ export default function ChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
-  const isHidden = pathname.startsWith("/admin") || pathname.startsWith("/login") || pathname.startsWith("/register");
+  const isChatPage = pathname.startsWith("/chat");
 
   useEffect(() => {
+    if (!isChatPage) return;
+    
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
@@ -44,14 +46,14 @@ export default function ChatWidget() {
       authListener.subscription.unsubscribe();
       supabase.removeAllChannels();
     };
-  }, [isHidden]);
+  }, [isChatPage]);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && isChatPage) {
       scrollToBottom();
       markAsRead();
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, isChatPage]);
 
   const fetchMessages = async (userId: string) => {
     try {
@@ -152,11 +154,7 @@ export default function ChatWidget() {
     }
   };
 
-  const handleQuickQuestion = (question: string) => {
-    setNewMessage(question);
-  };
-
-  if (isHidden || !user) return null;
+  if (!isChatPage || !user) return null;
 
   return (
     <>
@@ -199,43 +197,10 @@ export default function ChatWidget() {
                 <Loader2 size={24} className="animate-spin" />
               </div>
             ) : messages.length === 0 ? (
-              <div className="flex flex-col h-full space-y-4 pt-2">
-                <div className="flex items-center gap-2 px-1">
-                  <div className="h-px bg-slate-200 flex-1"></div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Fast Response</span>
-                  <div className="h-px bg-slate-200 flex-1"></div>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-2">
-                  <a href="https://wa.me/62881012791493?text=Halo%20Warden%20Support,%20saya%20butuh%20bantuan." target="_blank" rel="noreferrer" className="flex flex-col items-center justify-center p-3 bg-white border border-emerald-100 rounded-2xl shadow-sm hover:border-emerald-300 transition-colors gap-1 group">
-                    <MessageCircle size={20} className="text-emerald-500 group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-bold text-slate-600">WhatsApp</span>
-                  </a>
-                  <a href="tel:+62881012791493" className="flex flex-col items-center justify-center p-3 bg-white border border-blue-100 rounded-2xl shadow-sm hover:border-blue-300 transition-colors gap-1 group">
-                    <Phone size={20} className="text-blue-500 group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-bold text-slate-600">Telepon</span>
-                  </a>
-                  <a href="mailto:support@warden.id" className="flex flex-col items-center justify-center p-3 bg-white border border-indigo-100 rounded-2xl shadow-sm hover:border-indigo-300 transition-colors gap-1 group">
-                    <Mail size={20} className="text-indigo-500 group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-bold text-slate-600">Email</span>
-                  </a>
-                </div>
-
-                <div className="flex-1 mt-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1 mb-2 block">Pertanyaan Populer</span>
-                  <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
-                    {["Bagaimana cara melacak pesanan saya?", "Apakah bisa bayar di tempat (COD)?", "Bagaimana kebijakan pengembalian barang?", "Kenapa pembayaran saya gagal?"].map((faq, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleQuickQuestion(faq)}
-                        className="w-full p-3 flex items-center justify-between text-left hover:bg-slate-50 transition-colors group"
-                      >
-                        <span className="text-[11px] font-semibold text-slate-600 group-hover:text-slate-900">{faq}</span>
-                        <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-400" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-2 opacity-50">
+                <MessageCircle size={32} />
+                <p className="text-xs font-medium">Belum ada chat.</p>
+                <p className="text-[10px]">Tanyakan soal produk, pesanan, atau stok.</p>
               </div>
             ) : (
               messages.map((msg) => {
