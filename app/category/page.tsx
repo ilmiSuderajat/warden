@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import * as Icons from "lucide-react"
 import Link from "next/link"
@@ -16,7 +16,13 @@ export default function CategorySplitPage() {
   const [selectedCat, setSelectedCat] = useState<string | null>(null)
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [isFetchingMore, setIsFetchingMore] = useState(false)
   const { location: userLoc } = useUserLocation()
+  
+  const loaderRef = useRef<HTMLDivElement>(null)
+  const PAGE_SIZE = 8
 
   // 1. Fetch Kategori
   useEffect(() => {
@@ -30,31 +36,67 @@ export default function CategorySplitPage() {
     fetchCats()
   }, [])
 
-  // 2. Fetch Produk
+  const fetchProducts = async (catId: string, pageNum: number) => {
+    if (pageNum === 0) setLoading(true)
+    else setIsFetchingMore(true)
+
+    const from = pageNum * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("category_id", catId)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      if (error) throw error
+
+      if (data) {
+        if (pageNum === 0) {
+          setProducts(data)
+        } else {
+          setProducts(prev => [...prev, ...data])
+        }
+        setHasMore(data.length === PAGE_SIZE)
+      }
+    } catch (err) {
+      console.error("Error fetching products:", err)
+      if (pageNum === 0) setProducts([])
+    } finally {
+      setLoading(false)
+      setIsFetchingMore(false)
+    }
+  }
+
+  // 2. Initial Fetch on Category Change
   useEffect(() => {
     if (!selectedCat) return
+    setPage(0)
+    setHasMore(true)
+    fetchProducts(selectedCat, 0)
+  }, [selectedCat])
 
-    const fetchProducts = async () => {
-      setLoading(true)
-      try {
-        const { data, error } = await supabase
-          .from("products")
-          .select("*")
-          .eq("category_id", selectedCat)
-          .order('created_at', { ascending: false })
+  // 3. Infinite Scroll Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !isFetchingMore && selectedCat) {
+          const nextPage = page + 1
+          setPage(nextPage)
+          fetchProducts(selectedCat, nextPage)
+        }
+      },
+      { threshold: 1.0 }
+    )
 
-        if (error) throw error
-        setProducts(data || [])
-      } catch (error) {
-        console.error("Error fetching products")
-        setProducts([])
-      } finally {
-        setLoading(false)
-      }
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current)
     }
 
-    fetchProducts()
-  }, [selectedCat])
+    return () => observer.disconnect()
+  }, [hasMore, loading, isFetchingMore, page, selectedCat])
 
   return (
     // Container utama hanya sebagai anchor warna
@@ -116,7 +158,7 @@ export default function CategorySplitPage() {
             </h2>
           </div>
 
-          {loading ? (
+          {loading && products.length === 0 ? (
             <div className="grid grid-cols-2 gap-3">
               {Array(6).fill(0).map((_, i) => (
                 <ProductCardSkeleton key={i} />
@@ -160,11 +202,24 @@ export default function CategorySplitPage() {
                 </Link>
               ))}
             </div>
-          ) : (
+          ) : !loading && (
             <div className="text-center py-16 text-slate-400 text-sm">
               Produk Kosong
             </div>
           )}
+
+          {/* INFINITE SCROLL LOADER */}
+          <div ref={loaderRef} className="py-8 flex justify-center">
+            {isFetchingMore && (
+              <div className="flex items-center gap-2 text-indigo-600">
+                <Loader2 size={24} className="animate-spin" />
+                <span className="text-xs font-bold">Memuat...</span>
+              </div>
+            )}
+            {!hasMore && products.length > 0 && (
+              <p className="text-[10px] text-slate-400 font-medium italic">Semua produk telah tampil</p>
+            )}
+          </div>
         </div>
       </main>
     </div>

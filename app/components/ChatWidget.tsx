@@ -16,7 +16,7 @@ export default function ChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
-  const isChatPage = pathname.startsWith("/chat");
+  const isChatPage = pathname === "/chat";
 
   useEffect(() => {
     if (!isChatPage) return;

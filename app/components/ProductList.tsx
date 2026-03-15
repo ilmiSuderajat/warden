@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState, useRef } from "react"
 import { supabase } from "@/lib/supabase"
-import { LayoutGrid, List, ImageOff, Star, MapPin } from "lucide-react"
+import { LayoutGrid, List, ImageOff, Star, MapPin, Loader2 } from "lucide-react"
 import Link from "next/link" // <-- Import Link
 import ProductCardSkeleton from "./ProductCardSkeleton"
 import { calculateDistance, formatDistance } from "@/lib/geo"
@@ -77,17 +77,68 @@ export default function ProductList() {
   const [view, setView] = useState<"grid" | "list">("grid")
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [isFetchingMore, setIsFetchingMore] = useState(false)
   const { location: userLoc } = useUserLocation()
+  
+  const loaderRef = useRef<HTMLDivElement>(null)
+  const PAGE_SIZE = 8
+
+  const fetchProducts = async (pageNum: number) => {
+    if (pageNum === 0) setLoading(true)
+    else setIsFetchingMore(true)
+
+    const from = pageNum * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(from, to)
+
+      if (error) throw error
+
+      if (data) {
+        if (pageNum === 0) {
+          setProducts(data)
+        } else {
+          setProducts(prev => [...prev, ...data])
+        }
+        setHasMore(data.length === PAGE_SIZE)
+      }
+    } catch (err) {
+      console.error("Error fetching products:", err)
+    } finally {
+      setLoading(false)
+      setIsFetchingMore(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true)
-      const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false })
-      if (!error && data) setProducts(data)
-      setLoading(false)
-    }
-    fetchProducts()
+    fetchProducts(0)
   }, [])
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !isFetchingMore) {
+          const nextPage = page + 1
+          setPage(nextPage)
+          fetchProducts(nextPage)
+        }
+      },
+      { threshold: 1.0 }
+    )
+
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current)
+    }
+
+    return () => observer.disconnect()
+  }, [hasMore, loading, isFetchingMore, page])
 
   return (
     <div className="px-2 pb-24 max-w-md mx-auto mt-2 bg-gray-50/50">
@@ -102,85 +153,96 @@ export default function ProductList() {
 
       {/* PRODUCT LIST */}
       <div className={view === "grid" ? "grid grid-cols-2 gap-2" : "flex flex-col gap-2 "}>
-        {loading ? (
+        {loading && products.length === 0 ? (
           Array(6).fill(0).map((_, i) => (
             <ProductCardSkeleton key={i} view={view} />
           ))
-        ) : products.map((p) => {
-          const price = p.price || 0
-          const original = p.original_price || 0
-          const discount = original > price ? Math.round(((original - price) / original) * 100) : 0
+        ) : (
+          products.map((p) => {
+            const price = p.price || 0
+            const original = p.original_price || 0
+            const discount = original > price ? Math.round(((original - price) / original) * 100) : 0
 
-          return (
-            // BUNGKUS DENGAN LINK DI SINI
-            <Link
-              href={`/product/${p.id}`}
-              key={p.id}
-              className="block active:scale-[0.98] transition-transform duration-150"
-            >
-              <div className={`bg-white overflow-hidden border border-gray-100 mx-auto h-full w-full ${view === "list" ? "flex flex-row" : "flex flex-col  "
-                }`}>
-                {/* IMAGE CONTAINER */}
-                <div className={`relative shrink-0 overflow-hidden ${view === "grid" ? "aspect-square w-full" : "w-28 h-28"
+            return (
+              <Link
+                href={`/product/${p.id}`}
+                key={p.id}
+                className="block active:scale-[0.98] transition-transform duration-150"
+              >
+                <div className={`bg-white overflow-hidden border border-gray-100 mx-auto h-full w-full ${view === "list" ? "flex flex-row" : "flex flex-col  "
                   }`}>
-                  {/* Badge Lapisan Atas */}
-                  <div className="absolute top-0 left-0 z-10 flex flex-col items-start gap-0.5 p-1">
-                    <span className="bg-indigo-600 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm">WardenMall</span>
-                    {p.is_flash_sale && <span className="bg-orange-500 text-white text-[7px] font-bold px-1.5 py-0.5 italic rounded-sm shadow-sm">FLASH</span>}
-                    {p.is_ready && <span className="bg-emerald-500 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm">READY</span>}
-                  </div>
-
-                  {/* Slider Gambar */}
-                  <ProductImageSlider images={p.image_url} name={p.name} />
-
-                  {/* Stok Habis Overlay */}
-                  {(p.stock === 0 || p.stock === null) && (
-                    <div className="absolute inset-0 bg-black/50 z-20 flex items-center justify-center">
-                      <span className="bg-red-600 text-white text-[10px] font-extrabold px-3 py-1 rounded-md shadow-lg uppercase tracking-wider">Stok Habis</span>
+                  {/* IMAGE CONTAINER */}
+                  <div className={`relative shrink-0 overflow-hidden ${view === "grid" ? "aspect-square w-full" : "w-28 h-28"
+                    }`}>
+                    <div className="absolute top-0 left-0 z-10 flex flex-col items-start gap-0.5 p-1">
+                      <span className="bg-indigo-600 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm">WardenMall</span>
+                      {p.is_flash_sale && <span className="bg-orange-500 text-white text-[7px] font-bold px-1.5 py-0.5 italic rounded-sm shadow-sm">FLASH</span>}
+                      {p.is_ready && <span className="bg-emerald-500 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm">READY</span>}
                     </div>
-                  )}
-                </div>
-                {/* INFO */}
-                <div className="p-2 flex flex-col justify-between flex-1 min-w-0">
-                  <div>
-                    <p className="text-[11px] leading-[1.2] text-gray-800 line-clamp-2 mb-1 font-medium">{p.name}</p>
-                    <div className="flex flex-col leading-tight">
-                      <span className="text-red-500 font-bold text-[13px]">Rp {price.toLocaleString("id-ID")}</span>
-                      {discount > 0 && (
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className="text-[9px] text-gray-400 line-through truncate">Rp {original.toLocaleString("id-ID")}</span>
-                          <span className="text-[9px] text-red-500 font-bold">-{discount}%</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* META */}
-                  <div className="mt-1 space-y-0.5">
-                    <div className="flex items-center gap-1">
-                      <div className="flex items-center text-orange-400">
-                        <Star size={8} fill="currentColor" />
-                        <span className="text-[9px] font-bold ml-0.5 text-gray-700">{p.rating || "5.0"}</span>
+                    <ProductImageSlider images={p.image_url} name={p.name} />
+
+                    {(p.stock === 0 || p.stock === null) && (
+                      <div className="absolute inset-0 bg-black/50 z-20 flex items-center justify-center">
+                        <span className="bg-red-600 text-white text-[10px] font-extrabold px-3 py-1 rounded-md shadow-lg uppercase tracking-wider">Stok Habis</span>
                       </div>
-                      <span className="text-gray-400 text-[9px] ml-1">{p.sold_count || "0"} terjual</span>
-                    </div>
-                    <div className="flex items-center text-gray-400 gap-0.5 overflow-hidden">
-                      <MapPin size={8} className="text-orange-500 shrink-0" />
-                      <span className="text-[9px] truncate font-medium">
-                        {p.location || "Lokasi tidak tersedia"}
-                        {userLoc && p.latitude && p.longitude && (
-                          <span className="ml-1 text-indigo-600 font-bold">
-                            • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.latitude, p.longitude))}
-                          </span>
+                    )}
+                  </div>
+                  {/* INFO */}
+                  <div className="p-2 flex flex-col justify-between flex-1 min-w-0">
+                    <div>
+                      <p className="text-[11px] leading-[1.2] text-gray-800 line-clamp-2 mb-1 font-medium">{p.name}</p>
+                      <div className="flex flex-col leading-tight">
+                        <span className="text-red-500 font-bold text-[13px]">Rp {price.toLocaleString("id-ID")}</span>
+                        {discount > 0 && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-[9px] text-gray-400 line-through truncate">Rp {original.toLocaleString("id-ID")}</span>
+                            <span className="text-[9px] text-red-500 font-bold">-{discount}%</span>
+                          </div>
                         )}
-                      </span>
+                      </div>
+                    </div>
+
+                    {/* META */}
+                    <div className="mt-1 space-y-0.5">
+                      <div className="flex items-center gap-1">
+                        <div className="flex items-center text-orange-400">
+                          <Star size={8} fill="currentColor" />
+                          <span className="text-[9px] font-bold ml-0.5 text-gray-700">{p.rating || "5.0"}</span>
+                        </div>
+                        <span className="text-gray-400 text-[9px] ml-1">{p.sold_count || "0"} terjual</span>
+                      </div>
+                      <div className="flex items-center text-gray-400 gap-0.5 overflow-hidden">
+                        <MapPin size={8} className="text-orange-500 shrink-0" />
+                        <span className="text-[9px] truncate font-medium">
+                          {p.location || "Lokasi tidak tersedia"}
+                          {userLoc && p.latitude && p.longitude && (
+                            <span className="ml-1 text-indigo-600 font-bold">
+                              • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.latitude, p.longitude))}
+                            </span>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </Link>
-          )
-        })}
+              </Link>
+            )
+          })
+        )}
+      </div>
+
+      {/* INFINITE SCROLL LOADER */}
+      <div ref={loaderRef} className="py-8 flex justify-center">
+        {isFetchingMore && (
+          <div className="flex items-center gap-2 text-indigo-600">
+            <Loader2 size={24} className="animate-spin" />
+            <span className="text-xs font-bold">Memuat lebih banyak...</span>
+          </div>
+        )}
+        {!hasMore && products.length > 0 && (
+          <p className="text-xs text-slate-400 font-medium italic">Semua produk telah dimuat</p>
+        )}
       </div>
     </div>
   )
