@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Icons from "lucide-react";
@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import Skeleton from "@/app/components/Skeleton";
 
-// ── Inline Confirmation Modal ──────────────────────────────────────────────
+// ── Inline Confirmation Modal (Clean Version) ──────────────────────────────
 function ConfirmModal({
   open,
   title,
@@ -21,42 +21,38 @@ function ConfirmModal({
   onCancel: () => void;
 }) {
   if (!open) return null;
+
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center"
-      style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
+      className="fixed inset-0 z-[100] flex items-end justify-center max-w-md mx-auto bg-slate-900/40 backdrop-blur-sm transition-opacity"
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-md rounded-t-3xl p-6 pb-10"
-        style={{ background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.08)" }}
+        className="w-full max-w-md rounded-t-3xl p-6 pb-10 bg-white animate-slide-up shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Handle bar */}
-        <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-6" />
+        <div className="w-12 h-1.5 rounded-full bg-slate-200 mx-auto mb-8" />
 
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-red-500/15 border border-red-500/25 flex items-center justify-center mb-4">
-            <Icons.Trash2 size={24} className="text-red-400" />
+        <div className="flex flex-col items-center text-center mb-8">
+          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-5 border border-red-100">
+            <Icons.Trash2 size={28} className="text-red-500" />
           </div>
-          <h3 className="text-white font-black text-lg mb-1">{title}</h3>
-          <p className="text-white/50 text-sm">{description}</p>
+          <h3 className="text-slate-900 font-bold text-xl mb-2">{title}</h3>
+          <p className="text-slate-500 text-sm leading-relaxed">{description}</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-4">
           <button
             onClick={onCancel}
-            className="h-12 rounded-2xl font-bold text-sm text-white/70 transition-all active:scale-95"
-            style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)" }}
+            className="h-14 rounded-2xl font-semibold text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95"
           >
             Batal
           </button>
           <button
             onClick={onConfirm}
-            className="h-12 rounded-2xl font-bold text-sm text-white transition-all active:scale-95 shadow-lg"
-            style={{ background: "linear-gradient(135deg, #ef4444, #dc2626)", boxShadow: "0 8px 20px rgba(239,68,68,0.35)" }}
+            className="h-14 rounded-2xl font-semibold text-sm text-white bg-red-500 hover:bg-red-600 transition-all active:scale-95 shadow-lg shadow-red-500/20"
           >
-            Kosongkan
+            Hapus Semua
           </button>
         </div>
       </div>
@@ -120,13 +116,12 @@ export default function CartPage() {
 
   const removeItem = async (id: string) => {
     setRemovingId(id);
-    // Small delay for exit animation feel
     setTimeout(async () => {
       setCartItems((prev) => prev.filter((item) => item.id !== id));
       setRemovingId(null);
       const { error } = await supabase.from("cart").delete().eq("id", id);
       if (error) fetchCart();
-    }, 180);
+    }, 200);
   };
 
   const handleClearConfirm = async () => {
@@ -143,37 +138,37 @@ export default function CartPage() {
     0
   );
 
-  // ── Loading skeleton ──────────────────────────────────────────────────────
+  // Simple CSS animation for modal
+  const style = `
+    @keyframes slide-up {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+  `;
+
+  // ── Loading skeleton (Clean Mode) ────────────────────────────────────────
   if (loading)
     return (
-      <div
-        className="min-h-screen max-w-md mx-auto pb-36"
-        style={{ background: "linear-gradient(160deg, #0f172a 0%, #1a1a2e 100%)" }}
-      >
-        <div className="sticky top-0 z-40 px-5 pt-14 pb-4" style={{ background: "rgba(15,23,42,0.85)", backdropFilter: "blur(12px)" }}>
+      <div className="min-h-screen max-w-md mx-auto bg-slate-50 pb-36">
+        <style>{style}</style>
+        <div className="sticky top-0 z-40 px-5 pt-14 pb-4 bg-white/80 backdrop-blur-xl border-b border-slate-200">
           <div className="flex items-center justify-between">
-            <Skeleton className="w-9 h-9 rounded-xl" />
-            <Skeleton className="h-5 w-24 rounded-lg" />
-            <div className="w-9" />
+            <Skeleton className="w-10 h-10 rounded-full bg-slate-200" />
+            <Skeleton className="h-5 w-28 rounded-lg bg-slate-200" />
+            <div className="w-10" />
           </div>
         </div>
-        <div className="p-4 space-y-3">
+        <div className="p-5 space-y-4">
           {Array(3)
             .fill(0)
             .map((_, i) => (
-              <div
-                key={i}
-                className="rounded-2xl p-4 flex gap-4"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
-              >
-                <Skeleton className="w-20 h-20 rounded-xl shrink-0" />
-                <div className="flex-1 space-y-2 py-1">
-                  <Skeleton className="h-4 w-3/4 rounded-lg" />
-                  <Skeleton className="h-5 w-1/2 rounded-lg" />
-                  <div className="flex justify-between pt-2">
-                    <Skeleton className="h-8 w-24 rounded-full" />
-                    <Skeleton className="w-7 h-7 rounded-xl" />
-                  </div>
+              <div key={i} className="rounded-2xl p-4 flex gap-4 bg-white border border-slate-100 shadow-sm">
+                <Skeleton className="w-24 h-24 rounded-xl shrink-0 bg-slate-100" />
+                <div className="flex-1 space-y-3 py-1">
+                  <Skeleton className="h-4 w-full rounded-lg bg-slate-100" />
+                  <Skeleton className="h-4 w-1/2 rounded-lg bg-slate-100" />
+                  <Skeleton className="h-6 w-20 rounded-lg mt-4 bg-slate-100" />
                 </div>
               </div>
             ))}
@@ -183,40 +178,31 @@ export default function CartPage() {
 
   // ── Main render ───────────────────────────────────────────────────────────
   return (
-    <div
-      className="min-h-screen font-sans max-w-md mx-auto relative pb-36"
-      style={{ background: "linear-gradient(160deg, #0f172a 0%, #1a1a2e 100%)" }}
-    >
-      {/* Clear confirmation modal */}
+    <div className="min-h-screen font-sans max-w-md mx-auto relative pb-36 bg-slate-50 text-slate-900">
+      <style>{style}</style>
+      
       <ConfirmModal
         open={showClearModal}
-        title="Kosongkan Keranjang?"
-        description="Semua item akan dihapus dari keranjangmu."
+        title="Hapus Semua Item?"
+        description="Tindakan ini akan menghapus semua produk di keranjang belanja kamu."
         onConfirm={handleClearConfirm}
         onCancel={() => setShowClearModal(false)}
       />
 
       {/* ── HEADER ── */}
-      <div
-        className="sticky top-0 z-40"
-        style={{ background: "rgba(15,23,42,0.85)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}
-      >
+      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200">
         <div className="flex items-center justify-between px-5 pt-14 pb-4">
           <button
             onClick={() => router.back()}
-            className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
-            style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)" }}
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 transition-colors active:scale-90"
           >
-            <Icons.ArrowLeft size={18} className="text-white/80" strokeWidth={2.5} />
+            <Icons.ArrowLeft size={20} className="text-slate-700" strokeWidth={2.5} />
           </button>
 
           <div className="flex items-center gap-2">
-            <h1 className="text-base font-black text-white tracking-tight">Keranjang</h1>
+            <h1 className="text-lg font-bold text-slate-900 tracking-tight">Keranjang</h1>
             {cartItems.length > 0 && (
-              <span
-                className="text-[11px] font-bold px-2 py-0.5 rounded-full text-white"
-                style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
-              >
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
                 {cartItems.length}
               </span>
             )}
@@ -225,117 +211,94 @@ export default function CartPage() {
           {cartItems.length > 0 ? (
             <button
               onClick={() => setShowClearModal(true)}
-              className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
-              style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.2)" }}
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors group active:scale-90"
             >
-              <Icons.Trash2 size={16} className="text-red-400" />
+              <Icons.Trash2 size={18} className="text-slate-400 group-hover:text-red-500 transition-colors" />
             </button>
           ) : (
-            <div className="w-9" />
+            <div className="w-10" />
           )}
         </div>
       </div>
 
       {/* ── CART ITEMS ── */}
-      <div className="p-4 space-y-3">
+      <div className="p-5 space-y-4">
         {cartItems.length > 0 ? (
-          cartItems.map((item, i) => (
+          cartItems.map((item) => (
             <div
               key={item.id}
-              className="rounded-2xl p-4 flex gap-4 transition-all duration-200"
+              className="bg-white rounded-2xl overflow-hidden transition-all duration-300 border border-slate-100 shadow-sm"
               style={{
-                background: removingId === item.id ? "rgba(239,68,68,0.06)" : "rgba(255,255,255,0.04)",
-                border: removingId === item.id ? "1px solid rgba(239,68,68,0.2)" : "1px solid rgba(255,255,255,0.08)",
-                opacity: removingId === item.id ? 0.4 : 1,
-                transform: removingId === item.id ? "scale(0.97)" : "scale(1)",
+                opacity: removingId === item.id ? 0.5 : 1,
+                transform: removingId === item.id ? "scale(0.96)" : "scale(1)",
               }}
             >
-              {/* Product image */}
-              <div
-                className="w-20 h-20 rounded-2xl overflow-hidden shrink-0"
-                style={{ border: "1px solid rgba(255,255,255,0.08)" }}
-              >
-                <img
-                  src={item.image_url}
-                  alt={item.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              {/* Detail */}
-              <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
-                <div>
-                  <h3 className="text-sm font-bold text-white/90 line-clamp-2 leading-snug">{item.name}</h3>
-                  <p
-                    className="text-sm font-black mt-1.5"
-                    style={{
-                      background: "linear-gradient(90deg,#e0e7ff,#a5b4fc)",
-                      WebkitBackgroundClip: "text",
-                      WebkitTextFillColor: "transparent",
-                    }}
-                  >
-                    Rp {item.price.toLocaleString("id-ID")}
-                  </p>
+              <div className="flex gap-4 p-4">
+                {/* Product image */}
+                <div className="w-24 h-24 rounded-xl overflow-hidden shrink-0 bg-slate-100 border border-slate-50">
+                  <img
+                    src={item.image_url}
+                    alt={item.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
 
-                {/* Quantity + Remove row */}
-                <div className="flex items-center justify-between mt-3">
-                  {/* Qty pill */}
-                  <div
-                    className="flex items-center gap-1 rounded-full p-1"
-                    style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
-                  >
-                    <button
-                      onClick={() => updateQuantity(item.id, -1, item.quantity)}
-                      className="w-7 h-7 flex items-center justify-center rounded-full transition-colors"
-                      style={{ background: "rgba(255,255,255,0.07)" }}
-                    >
-                      <Icons.Minus size={13} className="text-white/70" />
-                    </button>
-                    <span className="w-6 text-center text-xs font-black text-white">
-                      {item.quantity}
-                    </span>
-                    <button
-                      onClick={() => updateQuantity(item.id, 1, item.quantity)}
-                      className="w-7 h-7 flex items-center justify-center rounded-full transition-colors"
-                      style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
-                    >
-                      <Icons.Plus size={13} className="text-white" />
-                    </button>
+                {/* Detail */}
+                <div className="flex-1 flex flex-col justify-between min-w-0 py-0.5">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-800 line-clamp-2 leading-snug mb-1">
+                      {item.name}
+                    </h3>
+                    <p className="text-base font-bold text-indigo-600">
+                      Rp {item.price.toLocaleString("id-ID")}
+                    </p>
                   </div>
 
-                  {/* Remove button */}
-                  <button
-                    onClick={() => removeItem(item.id)}
-                    className="w-8 h-8 flex items-center justify-center rounded-xl transition-all active:scale-90"
-                    style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.15)" }}
-                  >
-                    <Icons.X size={14} className="text-red-400" />
-                  </button>
+                  <div className="flex items-center justify-between mt-3">
+                    {/* Modern Quantity Selector */}
+                    <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                      <button
+                        onClick={() => updateQuantity(item.id, -1, item.quantity)}
+                        className="w-9 h-9 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors active:bg-slate-300"
+                      >
+                        <Icons.Minus size={14} strokeWidth={2.5} />
+                      </button>
+                      <span className="w-8 text-center text-sm font-bold text-slate-700 select-none">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => updateQuantity(item.id, 1, item.quantity)}
+                        className="w-9 h-9 flex items-center justify-center text-indigo-600 hover:bg-indigo-100 transition-colors bg-indigo-50"
+                      >
+                        <Icons.Plus size={14} strokeWidth={2.5} />
+                      </button>
+                    </div>
+
+                    {/* Remove button */}
+                    <button
+                      onClick={() => removeItem(item.id)}
+                      className="p-2 rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors active:scale-90"
+                    >
+                      <Icons.Trash2 size={18} strokeWidth={2} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           ))
         ) : (
           /* ── EMPTY STATE ── */
-          <div className="flex flex-col items-center justify-center py-24 text-center px-8">
-            <div
-              className="w-24 h-24 rounded-3xl flex items-center justify-center mb-6"
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
-            >
-              <Icons.ShoppingBag size={36} className="text-white/20" />
+          <div className="flex flex-col items-center justify-center py-20 text-center px-8">
+            <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mb-6 border border-slate-200">
+              <Icons.ShoppingBag size={32} className="text-slate-400" />
             </div>
-            <h3 className="text-white font-black text-xl mb-2">Keranjang Kosong</h3>
-            <p className="text-white/40 text-sm leading-relaxed mb-8">
-              Belum ada item di keranjangmu. Yuk mulai belanja!
+            <h3 className="text-slate-900 font-bold text-xl mb-2">Keranjang Kosong</h3>
+            <p className="text-slate-500 text-sm leading-relaxed mb-8 max-w-xs">
+              Yah, keranjangmu masih kosong. Yuk mulai belanja dan temukan produk favoritmu!
             </p>
             <Link
               href="/"
-              className="px-8 py-3 rounded-2xl text-sm font-black text-white transition-all active:scale-95"
-              style={{
-                background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-                boxShadow: "0 8px 24px rgba(99,102,241,0.35)",
-              }}
+              className="px-8 py-3.5 rounded-2xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-600/30"
             >
               Mulai Belanja
             </Link>
@@ -345,32 +308,28 @@ export default function CartPage() {
 
       {/* ── FOOTER CHECKOUT ── */}
       {cartItems.length > 0 && (
-        <div
-          className="fixed bottom-0 left-0 right-0 z-50 max-w-md mx-auto p-4"
-          style={{
-            background: "rgba(15,23,42,0.90)",
-            backdropFilter: "blur(16px)",
-            borderTop: "1px solid rgba(255,255,255,0.07)",
-          }}
-        >
-          {/* Subtotal row */}
-          <div className="flex items-center justify-between mb-3 px-1">
-            <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Total</span>
-            <span className="text-xl font-black text-white">
-              Rp {subtotal.toLocaleString("id-ID")}
-            </span>
+        <div className="fixed bottom-0 left-0 right-0 z-50 max-w-md mx-auto bg-white border-t border-slate-200 p-5 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+          
+          {/* Summary Details */}
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Total Pembayaran</p>
+              <p className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                Rp {subtotal.toLocaleString("id-ID")}
+              </p>
+            </div>
+            <div className="text-right">
+               <p className="text-xs font-medium text-slate-700">{cartItems.length} Item</p>
+               <p className="text-xs text-slate-400">Belum termasuk ongkir</p>
+            </div>
           </div>
 
           {/* Checkout CTA */}
           <button
             onClick={() => router.push("/checkout")}
-            className="w-full h-14 rounded-2xl font-black text-sm text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-            style={{
-              background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
-              boxShadow: "0 10px 28px rgba(99,102,241,0.40)",
-            }}
+            className="w-full h-14 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98] bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/30"
           >
-            <span>Lanjut Checkout</span>
+            <span>Lanjut ke Pembayaran</span>
             <Icons.ArrowRight size={18} strokeWidth={2.5} />
           </button>
         </div>

@@ -83,7 +83,7 @@ export default function AddressListPage() {
     <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans pb-28">
 
       {/* --- HEADER FIXED --- */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-white border-b border-slate-100">
+      <header className="fixed top-0 left-0 right-0 z-50 max-w-md mx-auto flex justify-center bg-white border-b border-slate-100">
         <div className="w-full max-w-md h-14 flex items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <button onClick={() => router.back()} className="p-1 text-slate-700 active:scale-95 transition-transform">
