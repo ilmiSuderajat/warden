@@ -17,12 +17,10 @@ export default function ChatWidget() {
   const pathname = usePathname();
 
   // Hide widget on admin pages or login/register pages
-  const isHidden = pathname.startsWith("/admin") || pathname.startsWith("/login") || pathname.startsWith("/register");
-  const isChatPage = pathname.startsWith("/chat");
+  const isHidden = !pathname.startsWith("/chat");
+  if (isHidden) return null;
 
-  if (!isChatPage) return null;
   useEffect(() => {
-    if (isHidden) return;
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
@@ -156,7 +154,7 @@ export default function ChatWidget() {
     }
   };
 
-  if (isHidden || isChatPage || !user) return null;
+  if (isHidden || !user) return null;
 
   return (
     <>

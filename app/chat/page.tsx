@@ -9,7 +9,6 @@ import {
 
 export default function ChatSupportPage() {
     const router = useRouter()
-
     const supportChannels = [
         {
             title: "WhatsApp",
