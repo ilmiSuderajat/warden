@@ -326,7 +326,7 @@ export default function LiveChatPage() {
                   className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${isAdmin
                     ? "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
                     : "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
-                  } ${isTemp ? "opacity-70" : ""}`}
+                    } ${isTemp ? "opacity-70" : ""}`}
                 >
                   <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
                   <p className={`text-[9px] mt-1 text-right ${isAdmin ? "text-slate-400" : "text-indigo-200"}`}>
@@ -342,12 +342,12 @@ export default function LiveChatPage() {
 
       {/* Input Area — fixed at bottom, respects keyboard via 100dvh */}
       <form onSubmit={sendMessage} className="p-3 bg-white border-t border-slate-100 shrink-0">
-        <div className="flex items-center gap-2 bg-slate-50 p-1.5 pl-4 rounded-full border border-slate-200">
+        <div className="flex items-center mb-20 gap-2 bg-slate-50 p-1.5 pl-4 rounded-full border border-slate-200">
           <input
             ref={inputRef}
             type="text"
             placeholder="Ketik pesan..."
-            className="flex-1 bg-transparent border-none outline-none text-slate-700"
+            className="flex-1  bg-transparent border-none outline-none text-slate-700"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onFocus={handleInputFocus}
