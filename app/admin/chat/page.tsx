@@ -1,16 +1,33 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { Search, MessageCircle, Send, Loader2, User, ChevronLeft, CheckCircle2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
+interface ChatMessage {
+  id: string;
+  user_id: string;
+  message: string;
+  sender_type: "user" | "admin";
+  is_read?: boolean;
+  created_at: string;
+}
+
+interface ChatUser {
+  user_id: string;
+  name: string;
+  last_message: string;
+  last_message_time: string;
+  unread_count: number;
+}
+
 export default function AdminChatPage() {
   const router = useRouter();
-  const [users, setUsers] = useState<any[]>([]);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [users, setUsers] = useState<ChatUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
@@ -18,61 +35,15 @@ export default function AdminChatPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetchUsers();
+  // Refs to avoid stale closures in realtime callbacks
+  const selectedUserRef = useRef(selectedUser);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-    // Subscribe to ALL chats for admin
-    const channel = supabase
-      .channel('admin:chats')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chats' }, payload => {
-        const msg = payload.new;
+  useEffect(() => { selectedUserRef.current = selectedUser; }, [selectedUser]);
 
-        // Update user list
-        setUsers(prev => {
-          const uIdx = prev.findIndex(u => u.user_id === msg.user_id);
-          let newUsers = [...prev];
-
-          if (uIdx > -1) {
-            newUsers[uIdx].last_message = msg.message;
-            newUsers[uIdx].last_message_time = msg.created_at;
-            if (msg.sender_type === "user") {
-              // Jika ini chat aktif, jangan tambah unread. Jika tidak, tambah unread.
-              if (selectedUser?.user_id !== msg.user_id) {
-                newUsers[uIdx].unread_count = (newUsers[uIdx].unread_count || 0) + 1;
-              }
-            }
-          } else {
-            // New user chatted, we should refetch or optimistically add
-            fetchUsers(false); // just refetch in background
-          }
-
-          // Sort by last message time
-          return newUsers.sort((a, b) => new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime());
-        });
-
-        // Update active chat if currently viewing this user
-        if (selectedUser && msg.user_id === selectedUser.user_id) {
-          setMessages(prev => [...prev, msg]);
-          if (msg.sender_type === "user") {
-            markAsRead(msg.user_id);
-          }
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [selectedUser]); // re-bind when selectedUser changes
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const fetchUsers = async (showLoading = true) => {
+  const fetchUsers = useCallback(async (showLoading = true) => {
     if (showLoading) setLoadingUsers(true);
     try {
-      // 1. Dapatkan pesan terbaru & unread counts per user
       const { data: chatsData, error: chatsError } = await supabase
         .from("chats")
         .select("*")
@@ -80,8 +51,8 @@ export default function AdminChatPage() {
 
       if (chatsError) throw chatsError;
 
-      const userMap = new Map();
-      chatsData.forEach(chat => {
+      const userMap = new Map<string, { user_id: string; last_message: string; last_message_time: string; unread_count: number }>();
+      (chatsData || []).forEach((chat: ChatMessage) => {
         if (!userMap.has(chat.user_id)) {
           userMap.set(chat.user_id, {
             user_id: chat.user_id,
@@ -91,16 +62,12 @@ export default function AdminChatPage() {
           });
         }
 
-        // Hitung unread (pesan dari user yang is_read == false)
         if (chat.sender_type === "user" && !chat.is_read) {
-          const u = userMap.get(chat.user_id);
+          const u = userMap.get(chat.user_id)!;
           u.unread_count += 1;
         }
       });
 
-      // 2. Dapatkan nama user dari tabel addresses atau public.users
-      // Karena kita asumsikan 'users' dari auth admin API ribet, kita ambil nama pembeli dari addresses.
-      // Jika mereka belum punya address, pakai UUID-nya saja.
       const userIds = Array.from(userMap.keys());
       if (userIds.length > 0) {
         const { data: addrData } = await supabase
@@ -109,10 +76,10 @@ export default function AdminChatPage() {
           .in("user_id", userIds)
           .eq("is_default", true);
 
-        const nameMap = new Map();
-        addrData?.forEach(a => nameMap.set(a.user_id, a.name));
+        const nameMap = new Map<string, string>();
+        addrData?.forEach((a: { user_id: string; name: string }) => nameMap.set(a.user_id, a.name));
 
-        const finalUsers = Array.from(userMap.values()).map(u => ({
+        const finalUsers: ChatUser[] = Array.from(userMap.values()).map(u => ({
           ...u,
           name: nameMap.get(u.user_id) || `User ${u.user_id.slice(0, 5)}`
         }));
@@ -121,39 +88,94 @@ export default function AdminChatPage() {
       } else {
         setUsers([]);
       }
-
     } catch (err) {
       console.error("Error fetching chat users:", err);
       toast.error("Gagal memuat daftar chat");
     } finally {
       if (showLoading) setLoadingUsers(false);
     }
-  };
+  }, []);
 
-  const loadChat = async (user: any) => {
-    setSelectedUser(user);
-    setLoadingChat(true);
+  // Realtime subscription — single channel for all chats
+  useEffect(() => {
+    fetchUsers();
 
-    // Clear unread optimistically
-    setUsers(prev => prev.map(u => u.user_id === user.user_id ? { ...u, unread_count: 0 } : u));
-    markAsRead(user.user_id);
+    const channel = supabase
+      .channel('admin:chats')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chats' }, payload => {
+        const msg = payload.new as ChatMessage;
 
-    try {
-      const { data, error } = await supabase
-        .from("chats")
-        .select("*")
-        .eq("user_id", user.user_id)
-        .order("created_at", { ascending: true });
+        // Update user list
+        setUsers(prev => {
+          const uIdx = prev.findIndex(u => u.user_id === msg.user_id);
+          const newUsers = [...prev];
 
-      if (error) throw error;
-      setMessages(data || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Gagal memuat isi chat");
-    } finally {
-      setLoadingChat(false);
-    }
-  };
+          if (uIdx > -1) {
+            newUsers[uIdx] = {
+              ...newUsers[uIdx],
+              last_message: msg.message,
+              last_message_time: msg.created_at,
+            };
+            if (msg.sender_type === "user") {
+              // Only increment unread if this user is NOT currently selected
+              const current = selectedUserRef.current;
+              if (!current || current.user_id !== msg.user_id) {
+                newUsers[uIdx] = {
+                  ...newUsers[uIdx],
+                  unread_count: (newUsers[uIdx].unread_count || 0) + 1
+                };
+              }
+            }
+          } else {
+            // New user chatted — refetch in background
+            fetchUsers(false);
+          }
+
+          return newUsers.sort((a, b) => new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime());
+        });
+
+        // Update active chat if currently viewing this user
+        const current = selectedUserRef.current;
+        if (current && msg.user_id === current.user_id) {
+          setMessages(prev => {
+            // Deduplicate: if a temp message exists with same text+sender, replace it
+            const tempIdx = prev.findIndex(
+              m => m.id.startsWith("temp-") &&
+                m.message === msg.message &&
+                m.sender_type === msg.sender_type
+            );
+
+            if (tempIdx > -1) {
+              const updated = [...prev];
+              updated[tempIdx] = msg;
+              return updated;
+            }
+
+            // Check if we already have this message (by real id)
+            if (prev.some(m => m.id === msg.id)) {
+              return prev;
+            }
+
+            return [...prev, msg];
+          });
+
+          if (msg.sender_type === "user") {
+            markAsRead(msg.user_id);
+          }
+        }
+      })
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchUsers]); // Only mount once — uses refs for selectedUser
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const markAsRead = async (userId: string) => {
     try {
@@ -172,6 +194,31 @@ export default function AdminChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const loadChat = async (chatUser: ChatUser) => {
+    setSelectedUser(chatUser);
+    setLoadingChat(true);
+
+    // Clear unread optimistically
+    setUsers(prev => prev.map(u => u.user_id === chatUser.user_id ? { ...u, unread_count: 0 } : u));
+    markAsRead(chatUser.user_id);
+
+    try {
+      const { data, error } = await supabase
+        .from("chats")
+        .select("*")
+        .eq("user_id", chatUser.user_id)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      setMessages(data || []);
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal memuat isi chat");
+    } finally {
+      setLoadingChat(false);
+    }
+  };
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedUser) return;
@@ -179,14 +226,16 @@ export default function AdminChatPage() {
     const msg = newMessage.trim();
     setNewMessage("");
 
+    // Optimistic UI — keep temp message until realtime replaces it
     const tempId = `temp-${Date.now()}`;
-    setMessages(prev => [...prev, {
+    const tempMsg: ChatMessage = {
       id: tempId,
       user_id: selectedUser.user_id,
       message: msg,
       sender_type: "admin",
       created_at: new Date().toISOString()
-    }]);
+    };
+    setMessages(prev => [...prev, tempMsg]);
 
     try {
       const { error } = await supabase
@@ -199,7 +248,7 @@ export default function AdminChatPage() {
         }]);
 
       if (error) throw error;
-      setMessages(prev => prev.filter(m => m.id !== tempId));
+      // Realtime INSERT event will replace the temp message via dedup logic
     } catch (error) {
       console.error("Error sending response:", error);
       toast.error("Gagal membalas pesan");
@@ -208,8 +257,8 @@ export default function AdminChatPage() {
   };
 
   const handleAIReply = async () => {
-    if (!selectedUser) return
-    setLoadingAI(true)
+    if (!selectedUser) return;
+    setLoadingAI(true);
     try {
       const res = await fetch("/api/ai-chat", {
         method: "POST",
@@ -218,26 +267,26 @@ export default function AdminChatPage() {
           userId: selectedUser.user_id,
           userName: selectedUser.name
         })
-      })
-      const data = await res.json()
+      });
+      const data = await res.json();
       if (data.reply) {
-        setNewMessage(data.reply)
+        setNewMessage(data.reply);
       } else {
-        toast.error("AI gagal generate balasan")
+        toast.error("AI gagal generate balasan");
       }
     } catch (err) {
-      console.error(err)
-      toast.error("Terjadi kesalahan saat menggunakan AI")
+      console.error(err);
+      toast.error("Terjadi kesalahan saat menggunakan AI");
     } finally {
-      setLoadingAI(false)
+      setLoadingAI(false);
     }
-  }
+  };
 
   const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans max-w-5xl mx-auto border-x border-slate-200 shadow-xl">
-      {/* HEADER TINGKAT ATAS */}
+      {/* HEADER */}
       <div className="h-16 bg-white border-b border-slate-200 flex items-center px-4 shrink-0 shadow-sm z-10 w-full">
         <button onClick={() => router.push("/admin")} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
           <ChevronLeft size={20} strokeWidth={2.5} />
@@ -262,7 +311,7 @@ export default function AdminChatPage() {
                 placeholder="Cari pembeli..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-00 text-gray-800"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400 text-gray-800"
               />
             </div>
           </div>
@@ -343,7 +392,7 @@ export default function AdminChatPage() {
               </div>
 
               {/* Chat Messages */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#f8fafc] bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#f8fafc]">
                 {loadingChat ? (
                   <div className="flex justify-center items-center h-full text-indigo-600">
                     <Loader2 size={32} className="animate-spin" />

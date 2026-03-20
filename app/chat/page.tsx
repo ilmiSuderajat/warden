@@ -50,7 +50,7 @@ export default function ChatPage() {
     return (
         <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans text-slate-900 pb-20">
             {/* --- HEADER FIXED --- */}
-            <header className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-white">
+            <header className="fixed max-w-md mx-auto top-0 left-0 right-0 z-50 flex justify-center bg-white">
                 <div className="w-full max-w-md h-14 flex items-center px-4 border-b border-slate-100">
                     <button
                         onClick={() => router.back()}
@@ -143,9 +143,9 @@ export default function ChatPage() {
                     <div className="relative z-10">
                         <h3 className="text-lg font-bold mb-1">Masih butuh bantuan?</h3>
                         <p className="text-indigo-100 text-[13px] mb-5 leading-relaxed opacity-90">Tim kami siap membantu Anda setiap hari pukul 08:00 - 22:00 WIB.</p>
-                        
+
                         <div className="grid gap-3">
-                            <button 
+                            <button
                                 onClick={openLiveChat}
                                 className="w-full flex items-center justify-between p-4 bg-white rounded-2xl text-indigo-600 font-bold text-sm shadow-sm active:scale-[0.98] transition-all"
                             >
@@ -156,7 +156,7 @@ export default function ChatPage() {
                                 <ArrowRight size={18} />
                             </button>
 
-                            <a 
+                            <a
                                 href="mailto:support@warden.id"
                                 className="w-full flex items-center justify-between p-4 bg-indigo-500/30 rounded-2xl text-white font-bold text-sm border border-indigo-400/30 active:scale-[0.98] transition-all"
                             >

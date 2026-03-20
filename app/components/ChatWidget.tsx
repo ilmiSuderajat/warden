@@ -1,71 +1,64 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { MessageCircle, X, Send, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { usePathname } from "next/navigation";
 
+interface ChatMessage {
+  id: string;
+  user_id: string;
+  message: string;
+  sender_type: "user" | "admin";
+  is_read?: boolean;
+  created_at: string;
+}
+
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
+  // Refs to avoid stale closures in realtime callbacks
+  const isOpenRef = useRef(isOpen);
+  const userRef = useRef(user);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
+  useEffect(() => { userRef.current = user; }, [user]);
+
   const isChatPage = pathname === "/chat";
 
-  useEffect(() => {
-    const handleOpenChat = () => {
-      setIsOpen(true);
-      markAsRead();
-    };
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
 
-    window.addEventListener('open-warden-chat', handleOpenChat);
-    return () => window.removeEventListener('open-warden-chat', handleOpenChat);
-  }, [user, unreadCount]);
+  const markAsRead = useCallback(async () => {
+    const currentUser = userRef.current;
+    if (!currentUser) return;
 
-  useEffect(() => {
-    if (!isChatPage) return;
-    
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user || null);
-      if (session?.user) {
-        fetchMessages(session.user.id);
-        setupRealtime(session.user.id);
-      }
-    };
+    try {
+      await supabase
+        .from("chats")
+        .update({ is_read: true })
+        .eq("user_id", currentUser.id)
+        .eq("sender_type", "admin")
+        .eq("is_read", false);
 
-    checkUser();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null);
-      if (session?.user) {
-        fetchMessages(session.user.id);
-        setupRealtime(session.user.id);
-      } else {
-        setMessages([]);
-      }
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-      supabase.removeAllChannels();
-    };
-  }, [isChatPage]);
-
-  useEffect(() => {
-    if (isOpen && isChatPage) {
-      scrollToBottom();
-      markAsRead();
+      setUnreadCount(0);
+    } catch (err) {
+      console.error("Error marking read", err);
     }
-  }, [messages, isOpen, isChatPage]);
+  }, []);
 
-  const fetchMessages = async (userId: string) => {
+  const fetchMessages = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from("chats")
@@ -76,9 +69,11 @@ export default function ChatWidget() {
       if (error) throw error;
       setMessages(data || []);
 
-      // Hitung unread dari admin (jika panel tertutup)
-      if (!isOpen) {
-        const unreadMsgs = data.filter(m => m.sender_type === "admin" && !m.is_read);
+      // Count unread from admin (when panel is closed)
+      if (!isOpenRef.current) {
+        const unreadMsgs = (data || []).filter(
+          (m: ChatMessage) => m.sender_type === "admin" && !m.is_read
+        );
         setUnreadCount(unreadMsgs.length);
       }
     } catch (err) {
@@ -86,44 +81,133 @@ export default function ChatWidget() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const setupRealtime = (userId: string) => {
-    supabase
-      .channel('public:chats')
+  const setupRealtime = useCallback((userId: string) => {
+    // Cleanup previous channel if any
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
+    const channel = supabase
+      .channel(`user-chat:${userId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chats', filter: `user_id=eq.${userId}` },
         (payload) => {
-          setMessages(prev => [...prev, payload.new]);
-          if (payload.new.sender_type === "admin" && !isOpen) {
+          const newMsg = payload.new as ChatMessage;
+
+          setMessages(prev => {
+            // Deduplicate: if a temp message exists with same text+sender, replace it
+            const tempIdx = prev.findIndex(
+              m => m.id.startsWith("temp-") &&
+                m.message === newMsg.message &&
+                m.sender_type === newMsg.sender_type
+            );
+
+            if (tempIdx > -1) {
+              // Replace temp with real message
+              const updated = [...prev];
+              updated[tempIdx] = newMsg;
+              return updated;
+            }
+
+            // Check if we already have this message (by real id)
+            if (prev.some(m => m.id === newMsg.id)) {
+              return prev;
+            }
+
+            return [...prev, newMsg];
+          });
+
+          // Update unread count for admin messages when panel is closed
+          if (newMsg.sender_type === "admin" && !isOpenRef.current) {
             setUnreadCount(prev => prev + 1);
           }
         }
       )
       .subscribe();
-  };
 
-  const markAsRead = async () => {
-    if (!user || unreadCount === 0) return;
+    channelRef.current = channel;
+  }, []);
 
-    try {
-      await supabase
-        .from("chats")
-        .update({ is_read: true })
-        .eq("user_id", user.id)
-        .eq("sender_type", "admin")
-        .eq("is_read", false);
+  // Auth listener — always active (not gated by isChatPage)
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user ? { id: session.user.id } : null;
+      setUser(currentUser);
 
-      setUnreadCount(0);
-    } catch (err) {
-      console.error("Error marking read", err);
+      if (currentUser) {
+        fetchMessages(currentUser.id);
+        setupRealtime(currentUser.id);
+      } else {
+        setLoading(false);
+      }
+    };
+
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const currentUser = session?.user ? { id: session.user.id } : null;
+      setUser(currentUser);
+
+      if (currentUser) {
+        fetchMessages(currentUser.id);
+        setupRealtime(currentUser.id);
+      } else {
+        setMessages([]);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+    };
+  }, [fetchMessages, setupRealtime]);
+
+  // Event listener for "open-warden-chat" from the Chat page
+  useEffect(() => {
+    const handleOpenChat = () => {
+      setIsOpen(true);
+      markAsRead();
+    };
+
+    window.addEventListener('open-warden-chat', handleOpenChat);
+    return () => window.removeEventListener('open-warden-chat', handleOpenChat);
+  }, [markAsRead]);
+
+  // Scroll to bottom when messages change or chat opens
+  useEffect(() => {
+    if (isOpen && isChatPage) {
+      scrollToBottom();
+      markAsRead();
     }
-  };
+  }, [messages, isOpen, isChatPage, scrollToBottom, markAsRead]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // Detect virtual keyboard in webview via visualViewport API
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+
+    const handleResize = () => {
+      // When keyboard opens, visualViewport.height shrinks
+      const fullHeight = window.innerHeight;
+      const viewportHeight = vv.height;
+      const kbHeight = Math.max(0, Math.round(fullHeight - viewportHeight));
+      setKeyboardHeight(kbHeight);
+    };
+
+    vv.addEventListener("resize", handleResize);
+    vv.addEventListener("scroll", handleResize);
+    return () => {
+      vv.removeEventListener("resize", handleResize);
+      vv.removeEventListener("scroll", handleResize);
+    };
+  }, []);
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,15 +216,16 @@ export default function ChatWidget() {
     const msg = newMessage.trim();
     setNewMessage("");
 
-    // Optimistic UI
+    // Optimistic UI — keep the temp message until realtime replaces it
     const tempId = `temp-${Date.now()}`;
-    setMessages(prev => [...prev, {
+    const tempMsg: ChatMessage = {
       id: tempId,
       user_id: user.id,
       message: msg,
       sender_type: "user",
       created_at: new Date().toISOString()
-    }]);
+    };
+    setMessages(prev => [...prev, tempMsg]);
 
     try {
       const { error } = await supabase
@@ -152,15 +237,12 @@ export default function ChatWidget() {
         }]);
 
       if (error) throw error;
-      // Note: we don't need to update state here because REALTIME will trigger an INSERT event.
-      // But since we did Optimistic UI, we shouldn't rely on realtime to duplicate it, 
-      // or we just let Realtime handle it and remove optimistic UI.
-      // Let's remove optimistic UI from state actually, then let realtime fetch it, to avoid duplicates.
-      setMessages(prev => prev.filter(m => m.id !== tempId)); // remove temp
+      // Realtime INSERT event will replace the temp message via dedup logic
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error("Gagal mengirim pesan");
-      setMessages(prev => prev.filter(m => m.id !== tempId)); // remove temp on error
+      // Remove temp message on error
+      setMessages(prev => prev.filter(m => m.id !== tempId));
     }
   };
 
@@ -174,7 +256,8 @@ export default function ChatWidget() {
           setIsOpen(!isOpen);
           if (!isOpen) markAsRead();
         }}
-        className={`fixed bottom-[80px] md:bottom-6 right-5 p-4 rounded-full shadow-lg shadow-indigo-200 transition-all z-50 text-white ${isOpen ? 'bg-slate-800' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+        style={{ bottom: `${80 + keyboardHeight}px` }}
+        className={`fixed md:bottom-6 right-5 p-4 rounded-full shadow-lg shadow-indigo-200 transition-all z-50 text-white ${isOpen ? 'bg-slate-800' : 'bg-indigo-600 hover:bg-indigo-700'}`}
       >
         {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
 
@@ -188,7 +271,10 @@ export default function ChatWidget() {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-[140px] md:bottom-24 right-5 w-[calc(100vw-40px)] md:w-80 h-[450px] bg-white rounded-3xl shadow-2xl border border-slate-100 z-50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
+        <div
+          style={{ bottom: `${140 + keyboardHeight}px` }}
+          className="fixed md:bottom-24 right-5 w-[calc(100vw-40px)] md:w-80 h-[450px] bg-white rounded-3xl shadow-2xl border border-slate-100 z-50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5"
+        >
           {/* Header */}
           <div className="bg-indigo-600 p-4 text-white flex gap-3 items-center shrink-0">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
@@ -201,7 +287,7 @@ export default function ChatWidget() {
           </div>
 
           {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
+          <div className="flex-1 overflow-y-auto p-4 space-y-10 bg-slate-50">
             {loading ? (
               <div className="flex justify-center items-center h-full text-slate-400">
                 <Loader2 size={24} className="animate-spin" />
