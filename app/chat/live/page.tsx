@@ -342,7 +342,7 @@ export default function LiveChatPage() {
 
       {/* Input Area — fixed at bottom, respects keyboard via 100dvh */}
       <form onSubmit={sendMessage} className="p-3 bg-white border-t border-slate-100 shrink-0">
-        <div className="flex items-center mb-20 gap-2 bg-slate-50 p-1.5 pl-4 rounded-full border border-slate-200">
+        <div className="flex items-center  gap-2 bg-slate-50 p-2 pl-4 rounded-full border border-slate-200">
           <input
             ref={inputRef}
             type="text"
