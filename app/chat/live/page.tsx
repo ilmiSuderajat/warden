@@ -342,12 +342,12 @@ export default function LiveChatPage() {
 
       {/* Input Area — fixed at bottom, respects keyboard via 100dvh */}
       <form onSubmit={sendMessage} className="p-3 bg-white border-t border-slate-100 shrink-0">
-        <div className="flex items-center  gap-2 bg-slate-50 p-2 pl-4 rounded-full border border-slate-200">
+        <div className="flex items-center gap-2 bg-slate-50 p-2 pl-8 rounded-full border border-slate-200">
           <input
             ref={inputRef}
             type="text"
             placeholder="Ketik pesan..."
-            className="flex-1  bg-transparent border-none outline-none text-slate-700"
+            className="flex-1 bg-transparent border-none outline-none text-slate-700"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onFocus={handleInputFocus}
