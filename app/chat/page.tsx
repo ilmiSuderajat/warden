@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react'
-import { Search, ChevronDown, MessageCircle, Phone, Mail, FileText, HelpCircle, Clock, ArrowRight, ArrowLeft, MessageSquare, ExternalLink } from 'lucide-react'
+import { Search, ChevronDown, MessageCircle, Mail, FileText, HelpCircle, Clock, ArrowRight, ArrowLeft, MessageSquare, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 const faqData = [
@@ -44,7 +44,7 @@ export default function ChatPage() {
     )
 
     const openLiveChat = () => {
-        window.dispatchEvent(new CustomEvent('open-warden-chat'))
+        router.push('/chat/live')
     }
 
     return (
