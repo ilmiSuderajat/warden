@@ -23,15 +23,17 @@ export default function LiveChatPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    // We use a small delay to ensure the DOM has updated and layout has settled
     setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }, 150);
   }, []);
 
   const fetchMessages = useCallback(async (userId: string) => {
@@ -145,55 +147,77 @@ export default function LiveChatPage() {
   }, [messages, scrollToBottom]);
 
   /**
-   * visualViewport listener — untuk webview.
-   * Di Android WebView, 100dvh tidak menyesuaikan saat keyboard muncul.
-   * Kita pakai visualViewport.height untuk set tinggi container secara manual.
-   * Ini memastikan input selalu terlihat di atas keyboard.
+   * Robust Keyboard handling strategy for WebViews
    */
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // 1. Viewport Meta Hint for modern mobile browsers (Chrome 108+)
+    const meta = document.querySelector('meta[name="viewport"]');
+    const originalContent = meta?.getAttribute('content');
+    if (meta && originalContent && !originalContent.includes('interactive-widget')) {
+      meta.setAttribute('content', originalContent + ', interactive-widget=resizes-content');
+    }
+
+    // 2. Lock body scroll to prevent page from jumping behind the chat
+    const originalOverflow = document.body.style.overflow;
+    const originalPosition = document.body.style.position;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.width = "100%";
+    document.body.style.height = "100%";
+
     const vv = window.visualViewport;
 
-    const updateHeight = () => {
-      if (vv) {
-        setViewportHeight(Math.round(vv.height));
-      } else {
-        setViewportHeight(window.innerHeight);
-      }
+    const measure = () => {
+      const h = vv ? Math.round(vv.height) : window.innerHeight;
+      setViewportHeight(h);
+      // Ensure page hasn't scrolled
+      window.scrollTo(0, 0);
     };
 
-    // Set initial height
-    updateHeight();
+    // Measure with multiple delays to catch keyboard animation and slow WebView resize
+    const measureWithRetries = () => {
+      measure();
+      setTimeout(measure, 100);
+      setTimeout(measure, 300);
+      setTimeout(measure, 500);
+    };
+
+    // Initial
+    measure();
 
     if (vv) {
-      vv.addEventListener("resize", updateHeight);
-      vv.addEventListener("scroll", updateHeight);
+      vv.addEventListener("resize", measureWithRetries);
+      vv.addEventListener("scroll", measure);
     }
-    window.addEventListener("resize", updateHeight);
+    window.addEventListener("resize", measureWithRetries);
 
     return () => {
-      if (vv) {
-        vv.removeEventListener("resize", updateHeight);
-        vv.removeEventListener("scroll", updateHeight);
+      // Restore body and meta
+      document.body.style.overflow = originalOverflow;
+      document.body.style.position = originalPosition;
+      document.body.style.width = "";
+      document.body.style.height = "";
+      if (meta && originalContent) {
+        meta.setAttribute('content', originalContent);
       }
-      window.removeEventListener("resize", updateHeight);
+
+      if (vv) {
+        vv.removeEventListener("resize", measureWithRetries);
+        vv.removeEventListener("scroll", measure);
+      }
+      window.removeEventListener("resize", measureWithRetries);
     };
-  }, []);
+  }, [scrollToBottom]);
 
-  // Scroll ke bawah + cegah page scroll saat keyboard muncul
-  useEffect(() => {
-    scrollToBottom();
-    // Cegah halaman di belakang ikut scroll
-    window.scrollTo(0, 0);
-  }, [viewportHeight, scrollToBottom]);
-
-  const handleInputFocus = useCallback(() => {
-    // Delay agar keyboard sempat muncul
+  // Handle focus event to scroll to bottom
+  const handleFocus = useCallback(() => {
+    // Delay slightly to let keyboard appear
     setTimeout(() => {
       scrollToBottom();
       window.scrollTo(0, 0);
-    }, 300);
+    }, 400);
   }, [scrollToBottom]);
 
   const sendMessage = async (e: React.FormEvent) => {
@@ -214,8 +238,11 @@ export default function LiveChatPage() {
     };
     setMessages(prev => [...prev, tempMsg]);
 
-    // Keep keyboard open
-    setTimeout(() => inputRef.current?.focus(), 50);
+    // Keep keyboard open and re-scroll
+    setTimeout(() => {
+      inputRef.current?.focus();
+      scrollToBottom();
+    }, 50);
 
     try {
       const { error } = await supabase
@@ -263,105 +290,109 @@ export default function LiveChatPage() {
     );
   }
 
-  // Tinggi container: pakai visualViewport jika tersedia, fallback 100dvh
-  const containerStyle = viewportHeight
-    ? { height: `${viewportHeight}px` }
-    : {};
-
   return (
     <div
       ref={containerRef}
-      style={containerStyle}
-      className="h-[100dvh] bg-slate-50 max-w-md mx-auto font-sans flex flex-col overflow-hidden"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        height: viewportHeight ? `${viewportHeight}px` : "100%",
+      }}
+      className="bg-slate-50 font-sans flex flex-col overflow-hidden z-50 text-slate-900"
     >
-      {/* Header */}
-      <header className="bg-white border-b border-slate-100 shrink-0">
-        <div className="h-14 flex items-center px-4">
-          <button
-            onClick={() => router.back()}
-            className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform touch-manipulation"
-          >
-            <ArrowLeft size={24} strokeWidth={2.5} />
-          </button>
-          <div className="ml-3 flex items-center gap-3">
-            <div className="w-9 h-9 bg-indigo-600 rounded-full flex items-center justify-center">
-              <MessageCircle size={18} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-sm font-bold text-slate-800 leading-tight">Customer Support</h1>
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Online</span>
+      {/* Inner wrapper for max-width centering */}
+      <div className="flex flex-col h-full max-w-md mx-auto w-full relative">
+        {/* Header */}
+        <header className="bg-white border-b border-slate-100 shrink-0">
+          <div className="h-14 flex items-center px-4">
+            <button
+              onClick={() => router.back()}
+              className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform touch-manipulation"
+            >
+              <ArrowLeft size={24} strokeWidth={2.5} />
+            </button>
+            <div className="ml-3 flex items-center gap-3">
+              <div className="w-9 h-9 bg-indigo-600 rounded-full flex items-center justify-center">
+                <MessageCircle size={18} className="text-white" />
               </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 overscroll-contain">
-        {loading ? (
-          <div className="flex justify-center items-center h-full text-slate-400">
-            <Loader2 size={28} className="animate-spin" />
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-3 opacity-60">
-            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center">
-              <MessageCircle size={28} className="text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-700">Mulai percakapan</p>
-              <p className="text-xs text-slate-500 mt-1 max-w-[220px]">
-                Tanyakan soal produk, pesanan, stok, atau kendala apapun.
-              </p>
-            </div>
-          </div>
-        ) : (
-          messages.map((msg) => {
-            const isAdmin = msg.sender_type === "admin";
-            const isTemp = msg.id.startsWith("temp-");
-            return (
-              <div key={msg.id} className={`flex ${isAdmin ? "justify-start" : "justify-end"}`}>
-                <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${isAdmin
-                    ? "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
-                    : "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
-                    } ${isTemp ? "opacity-70" : ""}`}
-                >
-                  <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
-                  <p className={`text-[9px] mt-1 text-right ${isAdmin ? "text-slate-400" : "text-indigo-200"}`}>
-                    {isTemp ? "Mengirim..." : new Date(msg.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                  </p>
+              <div>
+                <h1 className="text-sm font-bold text-slate-800 leading-tight">Customer Support</h1>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Online</span>
                 </div>
               </div>
-            );
-          })
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+            </div>
+          </div>
+        </header>
 
-      {/* Input Area — fixed at bottom, respects keyboard via 100dvh */}
-      <form onSubmit={sendMessage} className="p-3 bg-white border-t border-slate-100 shrink-0">
-        <div className="flex items-center gap-2 bg-slate-50 p-1.5 pl-4 rounded-full border border-slate-200">
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Ketik pesan..."
-            className="flex-1 bg-transparent border-none outline-none text-slate-700"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onFocus={handleInputFocus}
-            style={{ fontSize: "16px" }}
-          />
-          <button
-            type="submit"
-            disabled={!newMessage.trim() || sending}
-            className="w-10 h-10 flex items-center justify-center bg-indigo-600 text-white rounded-full disabled:bg-slate-300 disabled:text-slate-500 transition-colors active:scale-90"
-          >
-            <Send size={16} className="ml-0.5" />
-          </button>
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 overscroll-contain">
+          {loading ? (
+            <div className="flex justify-center items-center h-full text-slate-400">
+              <Loader2 size={28} className="animate-spin" />
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-3 opacity-60">
+              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center">
+                <MessageCircle size={28} className="text-indigo-600" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-700">Mulai percakapan</p>
+                <p className="text-xs text-slate-500 mt-1 max-w-[220px]">
+                  Tanyakan soal produk, pesanan, stok, atau kendala apapun.
+                </p>
+              </div>
+            </div>
+          ) : (
+            messages.map((msg) => {
+              const isAdmin = msg.sender_type === "admin";
+              const isTemp = msg.id.startsWith("temp-");
+              return (
+                <div key={msg.id} className={`flex ${isAdmin ? "justify-start" : "justify-end"}`}>
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${isAdmin
+                      ? "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
+                      : "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
+                    } ${isTemp ? "opacity-70" : ""}`}
+                  >
+                    <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                    <p className={`text-[9px] mt-1 text-right ${isAdmin ? "text-slate-400" : "text-indigo-200"}`}>
+                      {isTemp ? "Mengirim..." : new Date(msg.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          )}
+          <div ref={messagesEndRef} />
         </div>
-      </form>
+
+        {/* Input Area */}
+        <form onSubmit={sendMessage} className="p-3 bg-white border-t border-slate-100 shrink-0">
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 pl-4 rounded-full border border-slate-200">
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Ketik pesan..."
+              className="flex-1 bg-transparent border-none outline-none text-slate-700"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onFocus={handleFocus}
+              style={{ fontSize: "16px" }}
+            />
+            <button
+              type="submit"
+              disabled={!newMessage.trim() || sending}
+              className="w-10 h-10 flex items-center justify-center bg-indigo-600 text-white rounded-full disabled:bg-slate-300 disabled:text-slate-500 transition-colors active:scale-90"
+            >
+              <Send size={16} className="ml-0.5" />
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
