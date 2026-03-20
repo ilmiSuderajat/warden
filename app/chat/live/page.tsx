@@ -22,8 +22,10 @@ export default function LiveChatPage() {
   const [user, setUser] = useState<{ id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -142,6 +144,58 @@ export default function LiveChatPage() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  /**
+   * visualViewport listener — untuk webview.
+   * Di Android WebView, 100dvh tidak menyesuaikan saat keyboard muncul.
+   * Kita pakai visualViewport.height untuk set tinggi container secara manual.
+   * Ini memastikan input selalu terlihat di atas keyboard.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const vv = window.visualViewport;
+
+    const updateHeight = () => {
+      if (vv) {
+        setViewportHeight(Math.round(vv.height));
+      } else {
+        setViewportHeight(window.innerHeight);
+      }
+    };
+
+    // Set initial height
+    updateHeight();
+
+    if (vv) {
+      vv.addEventListener("resize", updateHeight);
+      vv.addEventListener("scroll", updateHeight);
+    }
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      if (vv) {
+        vv.removeEventListener("resize", updateHeight);
+        vv.removeEventListener("scroll", updateHeight);
+      }
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, []);
+
+  // Scroll ke bawah + cegah page scroll saat keyboard muncul
+  useEffect(() => {
+    scrollToBottom();
+    // Cegah halaman di belakang ikut scroll
+    window.scrollTo(0, 0);
+  }, [viewportHeight, scrollToBottom]);
+
+  const handleInputFocus = useCallback(() => {
+    // Delay agar keyboard sempat muncul
+    setTimeout(() => {
+      scrollToBottom();
+      window.scrollTo(0, 0);
+    }, 300);
+  }, [scrollToBottom]);
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !user || sending) return;
@@ -209,8 +263,17 @@ export default function LiveChatPage() {
     );
   }
 
+  // Tinggi container: pakai visualViewport jika tersedia, fallback 100dvh
+  const containerStyle = viewportHeight
+    ? { height: `${viewportHeight}px` }
+    : {};
+
   return (
-    <div className="h-[100dvh] bg-slate-50 max-w-md mx-auto font-sans flex flex-col">
+    <div
+      ref={containerRef}
+      style={containerStyle}
+      className="h-[100dvh] bg-slate-50 max-w-md mx-auto font-sans flex flex-col overflow-hidden"
+    >
       {/* Header */}
       <header className="bg-white border-b border-slate-100 shrink-0">
         <div className="h-14 flex items-center px-4">
@@ -287,6 +350,7 @@ export default function LiveChatPage() {
             className="flex-1 bg-transparent border-none outline-none text-slate-700"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
+            onFocus={handleInputFocus}
             style={{ fontSize: "16px" }}
           />
           <button
