@@ -33,7 +33,11 @@ export default function AdminChatPage() {
   const [loadingChat, setLoadingChat] = useState(false);
   const [loadingAI, setLoadingAI] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Refs to avoid stale closures in realtime callbacks
   const selectedUserRef = useRef(selectedUser);
@@ -219,6 +223,80 @@ export default function AdminChatPage() {
     }
   };
 
+  /**
+   * Robust Keyboard handling strategy for WebViews
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // 1. Viewport Meta Hint for modern mobile browsers (Chrome 108+)
+    const meta = document.querySelector('meta[name="viewport"]');
+    const originalContent = meta?.getAttribute('content');
+    if (meta && originalContent && !originalContent.includes('interactive-widget')) {
+      meta.setAttribute('content', originalContent + ', interactive-widget=resizes-content');
+    }
+
+    // 2. Lock body scroll to prevent page from jumping behind the chat
+    const originalOverflow = document.body.style.overflow;
+    const originalPosition = document.body.style.position;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.width = "100%";
+    document.body.style.height = "100%";
+
+    const vv = window.visualViewport;
+
+    const measure = () => {
+      const h = vv ? Math.round(vv.height) : window.innerHeight;
+      setViewportHeight(h);
+      // Ensure page hasn't scrolled
+      window.scrollTo(0, 0);
+    };
+
+    // Measure with multiple delays to catch keyboard animation and slow WebView resize
+    const measureWithRetries = () => {
+      measure();
+      setTimeout(measure, 100);
+      setTimeout(measure, 300);
+      setTimeout(measure, 500);
+    };
+
+    // Initial
+    measure();
+
+    if (vv) {
+      vv.addEventListener("resize", measureWithRetries);
+      vv.addEventListener("scroll", measure);
+    }
+    window.addEventListener("resize", measureWithRetries);
+
+    return () => {
+      // Restore body and meta
+      document.body.style.overflow = originalOverflow;
+      document.body.style.position = originalPosition;
+      document.body.style.width = "";
+      document.body.style.height = "";
+      if (meta && originalContent) {
+        meta.setAttribute('content', originalContent);
+      }
+
+      if (vv) {
+        vv.removeEventListener("resize", measureWithRetries);
+        vv.removeEventListener("scroll", measure);
+      }
+      window.removeEventListener("resize", measureWithRetries);
+    };
+  }, []);
+
+  // Handle focus event to scroll to bottom
+  const handleFocus = useCallback(() => {
+    // Delay slightly to let keyboard appear
+    setTimeout(() => {
+      scrollToBottom();
+      window.scrollTo(0, 0);
+    }, 400);
+  }, []);
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedUser) return;
@@ -236,6 +314,12 @@ export default function AdminChatPage() {
       created_at: new Date().toISOString()
     };
     setMessages(prev => [...prev, tempMsg]);
+
+    // Keep keyboard open and re-scroll
+    setTimeout(() => {
+      inputRef.current?.focus();
+      scrollToBottom();
+    }, 50);
 
     try {
       const { error } = await supabase
@@ -285,20 +369,32 @@ export default function AdminChatPage() {
   const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 font-sans max-w-5xl mx-auto border-x border-slate-200 shadow-xl">
-      {/* HEADER */}
-      <div className="h-16 bg-white border-b border-slate-200 flex items-center px-4 shrink-0 shadow-sm z-10 w-full">
-        <button onClick={() => router.push("/admin")} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
-          <ChevronLeft size={20} strokeWidth={2.5} />
-        </button>
-        <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center ml-2 mr-3">
-          <MessageCircle size={20} className="text-indigo-600" />
+    <div 
+      ref={containerRef}
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        height: viewportHeight ? `${viewportHeight}px` : "100%",
+      }}
+      className="bg-slate-50 font-sans flex flex-col overflow-hidden z-50 text-slate-900 border-x border-slate-200 shadow-xl"
+    >
+      {/* Inner wrapper for max-width centering */}
+      <div className="flex flex-col h-full max-w-5xl mx-auto w-full relative">
+        {/* HEADER */}
+        <div className="h-16 bg-white border-b border-slate-200 flex items-center px-4 shrink-0 shadow-sm z-10 w-full">
+          <button onClick={() => router.push("/admin")} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+            <ChevronLeft size={20} strokeWidth={2.5} />
+          </button>
+          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center ml-2 mr-3">
+            <MessageCircle size={20} className="text-indigo-600" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold text-slate-800 tracking-tight">Live Chat</h1>
+            <p className="text-[11px] font-medium text-slate-500">Pusat Bantuan Pelanggan</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-base font-bold text-slate-800 tracking-tight">Live Chat</h1>
-          <p className="text-[11px] font-medium text-slate-500">Pusat Bantuan Pelanggan</p>
-        </div>
-      </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* LIST USER (SIDEBAR) */}
@@ -430,9 +526,12 @@ export default function AdminChatPage() {
                 <div className="flex gap-3">
                   <div className="relative flex-1">
                     <input
+                      ref={inputRef}
                       type="text"
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
+                      onFocus={handleFocus}
+                      style={{ fontSize: "16px" }}
                       placeholder={`Balas ${selectedUser.name}...`}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-inner pr-12"
                     />
@@ -462,6 +561,7 @@ export default function AdminChatPage() {
               </form>
             </div>
           )}
+        </div>
         </div>
       </div>
     </div>
