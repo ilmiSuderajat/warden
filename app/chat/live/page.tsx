@@ -22,7 +22,6 @@ export default function LiveChatPage() {
   const [user, setUser] = useState<{ id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -146,77 +145,12 @@ export default function LiveChatPage() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  /**
-   * Robust Keyboard handling strategy for WebViews
-   */
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    // 1. Viewport Meta Hint for modern mobile browsers (Chrome 108+)
-    const meta = document.querySelector('meta[name="viewport"]');
-    const originalContent = meta?.getAttribute('content');
-    if (meta && originalContent && !originalContent.includes('interactive-widget')) {
-      meta.setAttribute('content', originalContent + ', interactive-widget=resizes-content');
-    }
-
-    // 2. Lock body scroll to prevent page from jumping behind the chat
-    const originalOverflow = document.body.style.overflow;
-    const originalPosition = document.body.style.position;
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.width = "100%";
-    document.body.style.height = "100%";
-
-    const vv = window.visualViewport;
-
-    const measure = () => {
-      const h = vv ? Math.round(vv.height) : window.innerHeight;
-      setViewportHeight(h);
-      // Ensure page hasn't scrolled
-      window.scrollTo(0, 0);
-    };
-
-    // Measure with multiple delays to catch keyboard animation and slow WebView resize
-    const measureWithRetries = () => {
-      measure();
-      setTimeout(measure, 100);
-      setTimeout(measure, 300);
-      setTimeout(measure, 500);
-    };
-
-    // Initial
-    measure();
-
-    if (vv) {
-      vv.addEventListener("resize", measureWithRetries);
-      vv.addEventListener("scroll", measure);
-    }
-    window.addEventListener("resize", measureWithRetries);
-
-    return () => {
-      // Restore body and meta
-      document.body.style.overflow = originalOverflow;
-      document.body.style.position = originalPosition;
-      document.body.style.width = "";
-      document.body.style.height = "";
-      if (meta && originalContent) {
-        meta.setAttribute('content', originalContent);
-      }
-
-      if (vv) {
-        vv.removeEventListener("resize", measureWithRetries);
-        vv.removeEventListener("scroll", measure);
-      }
-      window.removeEventListener("resize", measureWithRetries);
-    };
-  }, [scrollToBottom]);
-
   // Handle focus event to scroll to bottom
-  const handleFocus = useCallback(() => {
+  const handleFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
     // Delay slightly to let keyboard appear
     setTimeout(() => {
+      e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
       scrollToBottom();
-      window.scrollTo(0, 0);
     }, 400);
   }, [scrollToBottom]);
 
@@ -293,14 +227,7 @@ export default function LiveChatPage() {
   return (
     <div
       ref={containerRef}
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        height: viewportHeight ? `${viewportHeight}px` : "100%",
-      }}
-      className="bg-slate-50 font-sans flex flex-col overflow-hidden z-50 text-slate-900"
+      className="bg-slate-50 font-sans flex flex-col h-[100dvh] w-full relative overflow-hidden z-50 text-slate-900"
     >
       {/* Inner wrapper for max-width centering */}
       <div className="flex flex-col h-full max-w-md mx-auto w-full relative">
