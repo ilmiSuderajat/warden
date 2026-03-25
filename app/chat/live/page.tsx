@@ -27,6 +27,8 @@ export default function LiveChatPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     // We use a small delay to ensure the DOM has updated and layout has settled
@@ -169,21 +171,20 @@ export default function LiveChatPage() {
     if (typeof window === "undefined" || !window.visualViewport) return;
 
     const handleResize = () => {
-      if (containerRef.current && window.visualViewport) {
-        // Set height explicitly to visual viewport height
-        containerRef.current.style.height = `${window.visualViewport.height}px`;
-        // Scroll to bottom after height adjustment
-        setTimeout(() => scrollToBottom("auto"), 50);
+      // Just trigger a scroll to bottom on resize (like keyboard toggle)
+      // and ensure the active element is visible
+      if (document.activeElement?.tagName === "INPUT") {
+        document.activeElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }
+      setTimeout(() => scrollToBottom("smooth"), 100);
     };
 
     window.visualViewport.addEventListener("resize", handleResize);
-    window.visualViewport.addEventListener("scroll", handleResize);
+    // REMOVED 'scroll' listener to avoid infinite loops
 
     return () => {
       if (window.visualViewport) {
         window.visualViewport.removeEventListener("resize", handleResize);
-        window.visualViewport.removeEventListener("scroll", handleResize);
       }
     };
   }, [scrollToBottom]);
@@ -231,21 +232,8 @@ export default function LiveChatPage() {
     }
   };
 
-  const isNearBottom = () => {
-    const container = containerRef.current;
-    if (!container) return false;
 
-    return container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-  };
 
-  useEffect(() => {
-    if (isNearBottom()) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages]);
-
-  const [isTyping, setIsTyping] = useState(false);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleTyping = () => {
     if (!channelRef.current || !user) return;
@@ -265,6 +253,17 @@ export default function LiveChatPage() {
       });
     }, 2000);
   };
+
+  // Combined scroll logic for messages and typing state
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container) {
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+      if (isAtBottom || (messages.length > 0 && messages[messages.length - 1].sender_type === "user")) {
+        scrollToBottom("smooth");
+      }
+    }
+  }, [messages, isTyping, scrollToBottom]);
 
   // Not logged in state
   if (!loading && !user) {
@@ -296,10 +295,10 @@ export default function LiveChatPage() {
   return (
     <div
       ref={containerRef}
-      className="bg-slate-50 font-sans flex flex-col h-[100dvh] max-w-md mx-auto relative overflow-hidden text-slate-900"
+      className="bg-slate-50 font-sans flex flex-col h-[100dvh] w-full relative overflow-hidden text-slate-900"
     >
       {/* Inner wrapper for max-width centering */}
-      <div className="flex flex-col h-full max-w-md mx-auto w-full relative">
+      <div className="flex flex-col h-full max-w-md mx-auto w-full relative overflow-hidden">
         {/* Header */}
         <header className="bg-white border-b border-slate-100 shrink-0">
           <div className="h-14 flex items-center px-4">

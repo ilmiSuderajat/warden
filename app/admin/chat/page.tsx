@@ -41,6 +41,8 @@ export default function AdminChatPage() {
   // Refs to avoid stale closures in realtime callbacks
   const selectedUserRef = useRef(selectedUser);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => { selectedUserRef.current = selectedUser; }, [selectedUser]);
 
@@ -187,9 +189,35 @@ export default function AdminChatPage() {
     };
   }, [fetchUsers]); // Only mount once — uses refs for selectedUser
 
+
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const container = containerRef.current;
+    if (container) {
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+      if (isAtBottom || (messages.length > 0 && messages[messages.length - 1].sender_type === "admin")) {
+        scrollToBottom();
+      }
+    }
+  }, [messages, isTyping]);
+
+  const handleTyping = () => {
+    if (!channelRef.current || !selectedUser) return;
+    
+    channelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: selectedUser.user_id, is_typing: true, sender_type: "admin" },
+    });
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "typing",
+        payload: { user_id: selectedUser.user_id, is_typing: false, sender_type: "admin" },
+      });
+    }, 2000);
+  };
 
   const markAsRead = async (userId: string) => {
     try {
@@ -248,21 +276,17 @@ export default function AdminChatPage() {
     if (typeof window === "undefined" || !window.visualViewport) return;
 
     const handleResize = () => {
-      if (containerRef.current && window.visualViewport) {
-        // Set height explicitly to visual viewport height
-        containerRef.current.style.height = `${window.visualViewport.height}px`;
-        // Scroll to bottom after height adjustment
-        setTimeout(() => scrollToBottom(), 50);
+      if (document.activeElement?.tagName === "INPUT") {
+        document.activeElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }
+      setTimeout(() => scrollToBottom(), 100);
     };
 
     window.visualViewport.addEventListener("resize", handleResize);
-    window.visualViewport.addEventListener("scroll", handleResize);
 
     return () => {
       if (window.visualViewport) {
         window.visualViewport.removeEventListener("resize", handleResize);
-        window.visualViewport.removeEventListener("scroll", handleResize);
       }
     };
   }, []);
@@ -334,28 +358,6 @@ export default function AdminChatPage() {
     } finally {
       setLoadingAI(false);
     }
-  };
-
-  const [isTyping, setIsTyping] = useState(false);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const handleTyping = () => {
-    if (!channelRef.current || !selectedUser) return;
-    
-    channelRef.current.send({
-      type: "broadcast",
-      event: "typing",
-      payload: { user_id: selectedUser.user_id, is_typing: true, sender_type: "admin" },
-    });
-
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      channelRef.current?.send({
-        type: "broadcast",
-        event: "typing",
-        payload: { user_id: selectedUser.user_id, is_typing: false, sender_type: "admin" },
-      });
-    }, 2000);
   };
 
   const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()));
