@@ -363,7 +363,8 @@ export default function LiveChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] max-w-md mx-auto w-full bg-slate-50 font-sans text-slate-900 relative">
+    <div className="flex flex-col h-[100dvh] w-full bg-slate-50 font-sans text-slate-900 overflow-hidden">
+      <div className="flex flex-col h-full max-w-md mx-auto w-full">
       {/* ── FIXED HEADER ── */}
       <header className="flex-none bg-white border-b border-slate-100 shadow-sm z-20">
         <div className="h-14 flex items-center px-4">
@@ -435,21 +436,21 @@ export default function LiveChatPage() {
                 key={msg.id}
                 className={`flex ${isAdmin ? "justify-start" : "justify-end"} ${isNew ? (isAdmin ? "msg-slide-left" : "msg-slide-right") : ""}`}
               >
-                <div
-                  className={`max-w-[82%] px-4 py-2.5 rounded-2xl ${
-                    isAdmin
-                      ? "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
-                      : "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
-                  } ${isTemp ? "opacity-60" : "opacity-100 transition-opacity duration-300"}`}
-                >
-                  <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
-                  <div className={`flex items-center gap-1 mt-0.5 ${isAdmin ? "justify-start" : "justify-end"}`}>
-                    {isTemp && <Clock size={9} className="text-indigo-200" />}
-                    <p className={`text-[9px] ${isAdmin ? "text-slate-400" : "text-indigo-200"}`}>
-                      {isTemp
-                        ? "Mengirim..."
-                        : new Date(msg.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                    </p>
+                <div className={`max-w-[80%] flex flex-col ${isAdmin ? "items-start" : "items-end"}`}>
+                  <div
+                    className={`px-4 py-2.5 rounded-2xl ${
+                      isAdmin
+                        ? "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
+                        : "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
+                    } ${isTemp ? "opacity-60" : "opacity-100 transition-opacity duration-300"}`}
+                  >
+                    <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                  </div>
+                  <div className={`flex items-center gap-1 mt-1 px-1 ${isAdmin ? "" : "flex-row-reverse"}`}>
+                    <span className={`text-[10px] font-medium ${isAdmin ? "text-slate-400" : "text-slate-400"}`}>
+                      {isTemp ? "Mengirim..." : new Date(msg.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    {isTemp && <Clock size={10} className="text-slate-300" />}
                   </div>
                 </div>
               </div>
@@ -476,28 +477,31 @@ export default function LiveChatPage() {
       {/* ── INPUT ── */}
       <form
         onSubmit={sendMessage}
-        className="flex-none p-3 bg-white border-t border-slate-100 safe-area-bottom"
+        className="flex-none p-4 bg-white border-t border-slate-200"
       >
-        <div className="flex items-center gap-2 bg-slate-50 p-1.5 pl-4 rounded-full border border-slate-200 focus-within:border-indigo-400 transition-colors">
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Ketik pesan..."
-            className="flex-1 bg-transparent border-none outline-none text-slate-700 placeholder:text-slate-400"
-            value={newMessage}
-            onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }}
-            onFocus={handleFocus}
-            style={{ fontSize: "16px" }}
-          />
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Ketik pesan..."
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-inner"
+              value={newMessage}
+              onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }}
+              onFocus={handleFocus}
+              style={{ fontSize: "16px" }}
+            />
+          </div>
           <button
             type="submit"
             disabled={!newMessage.trim() || sending}
-            className="w-10 h-10 flex items-center justify-center bg-indigo-600 text-white rounded-full disabled:bg-slate-200 disabled:text-slate-400 transition-all active:scale-90"
+            className="h-auto px-5 bg-indigo-600 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-indigo-700 active:scale-95 disabled:bg-slate-300 transition-all shadow-md shadow-indigo-200"
           >
-            {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="ml-0.5" />}
+            {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>
         </div>
       </form>
+      </div>
     </div>
   );
 }
