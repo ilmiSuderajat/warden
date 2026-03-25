@@ -295,8 +295,7 @@ export default function LiveChatPage() {
   return (
     <div
       ref={containerRef}
-      className="bg-slate-50 font-sans flex flex-col w-full relative text-slate-900"
-      style={{ height: '100vh' }}
+      className="bg-slate-50 min-h-screen font-sans flex flex-col w-full relative text-slate-900"
     >
       {/* Inner wrapper for max-width centering */}
       <div className="flex flex-col h-full max-w-md mx-auto w-full relative overflow-hidden">
