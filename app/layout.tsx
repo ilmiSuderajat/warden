@@ -1,7 +1,5 @@
-import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Navbar from "./components/Navbar";
 import ConditionalSearchBar from "./components/ConditionalSearchBar";
 import ConditionalNavbar from "./components/ConditionalNavbar";
 // merge viewport settings into metadata below
@@ -23,7 +21,8 @@ export const metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1, // Bagus buat WebView biar user gak bisa zoom-zoom iseng
+  maximumScale: 1,
+  interactiveWidget: 'resizes-content', // Penting buat WebView biar layout geser pas keyboard muncul
 }
 
 

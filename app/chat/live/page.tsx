@@ -156,11 +156,36 @@ export default function LiveChatPage() {
 
   // Handle focus event to scroll to bottom
   const handleFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
-    // Delay slightly to let keyboard appear
+    // Delay slightly to let keyboard appear or layout to shift
     setTimeout(() => {
-      e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      scrollToBottom();
-    }, 400);
+      // Use 'end' block to ensure the input is pushed above the keyboard
+      e.target.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      scrollToBottom("smooth");
+    }, 300);
+  }, [scrollToBottom]);
+
+  // Visual Viewport API for WebView keyboard handling
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+
+    const handleResize = () => {
+      if (containerRef.current && window.visualViewport) {
+        // Set height explicitly to visual viewport height
+        containerRef.current.style.height = `${window.visualViewport.height}px`;
+        // Scroll to bottom after height adjustment
+        setTimeout(() => scrollToBottom("auto"), 50);
+      }
+    };
+
+    window.visualViewport.addEventListener("resize", handleResize);
+    window.visualViewport.addEventListener("scroll", handleResize);
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", handleResize);
+        window.visualViewport.removeEventListener("scroll", handleResize);
+      }
+    };
   }, [scrollToBottom]);
 
   const sendMessage = async (e: React.FormEvent) => {
@@ -271,7 +296,7 @@ export default function LiveChatPage() {
   return (
     <div
       ref={containerRef}
-      className="bg-slate-50 font-sans flex flex-col h-[100dvh] w-full relative overflow-hidden text-slate-900"
+      className="bg-slate-50 font-sans flex flex-col h-[100dvh] max-w-md mx-auto relative overflow-hidden text-slate-900"
     >
       {/* Inner wrapper for max-width centering */}
       <div className="flex flex-col h-full max-w-md mx-auto w-full relative">
