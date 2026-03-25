@@ -363,144 +363,143 @@ export default function LiveChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full bg-slate-50 font-sans text-slate-900 overflow-hidden">
+    <div className="flex flex-col min-h-screen w-full bg-slate-50 font-sans text-slate-900 overflow-hidden">
       <div className="flex flex-col h-full max-w-md mx-auto w-full">
-      {/* ── FIXED HEADER ── */}
-      <header className="flex-none bg-white border-b border-slate-100 shadow-sm z-20">
-        <div className="h-14 flex items-center px-4">
-          <button
-            onClick={() => router.back()}
-            className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform touch-manipulation"
-          >
-            <ArrowLeft size={24} strokeWidth={2.5} />
-          </button>
-          <div className="ml-3 flex items-center gap-3">
-            <div className="w-9 h-9 bg-indigo-600 rounded-full flex items-center justify-center shadow-sm">
-              <MessageCircle size={18} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-sm font-bold text-slate-800 leading-tight">Customer Support</h1>
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Online</span>
+        {/* ── FIXED HEADER ── */}
+        <header className="flex-none bg-white border-b border-slate-100 shadow-sm z-20">
+          <div className="h-14 flex items-center px-4">
+            <button
+              onClick={() => router.back()}
+              className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform touch-manipulation"
+            >
+              <ArrowLeft size={24} strokeWidth={2.5} />
+            </button>
+            <div className="ml-3 flex items-center gap-3">
+              <div className="w-9 h-9 bg-indigo-600 rounded-full flex items-center justify-center shadow-sm">
+                <MessageCircle size={18} className="text-white" />
               </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* ── SCROLL AREA ── */}
-      <div
-        ref={scrollAreaRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3 bg-slate-50"
-      >
-        {/* Top sentinel — IntersectionObserver watches this to load older msgs */}
-        <div ref={topSentinelRef} className="w-full flex justify-center h-6 items-center">
-          {isFetchingOlder ? (
-            <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
-              <Loader2 size={13} className="animate-spin text-indigo-400" />
-              Memuat pesan lama...
-            </div>
-          ) : hasOlderOnServer ? (
-            <div className="w-2 h-2 rounded-full bg-slate-200" />
-          ) : (
-            <span className="text-[10px] text-slate-300 font-medium tracking-wide">Awal percakapan</span>
-          )}
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center items-center py-20 text-slate-400">
-            <Loader2 size={28} className="animate-spin" />
-          </div>
-        ) : visibleMessages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center space-y-3 opacity-60 py-20">
-            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center">
-              <MessageCircle size={28} className="text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-700">Mulai percakapan</p>
-              <p className="text-xs text-slate-500 mt-1 max-w-[220px]">
-                Tanyakan soal produk, pesanan, stok, atau kendala apapun.
-              </p>
-            </div>
-          </div>
-        ) : (
-          visibleMessages.map((msg) => {
-            const isAdmin = msg.sender_type === "admin";
-            const isTemp = msg.id.startsWith("temp-");
-            const isNew = newMessageIds.has(msg.id);
-
-            return (
-              <div
-                key={msg.id}
-                className={`flex ${isAdmin ? "justify-start" : "justify-end"} ${isNew ? (isAdmin ? "msg-slide-left" : "msg-slide-right") : ""}`}
-              >
-                <div className={`max-w-[80%] flex flex-col ${isAdmin ? "items-start" : "items-end"}`}>
-                  <div
-                    className={`px-4 py-2.5 rounded-2xl ${
-                      isAdmin
-                        ? "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
-                        : "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
-                    } ${isTemp ? "opacity-60" : "opacity-100 transition-opacity duration-300"}`}
-                  >
-                    <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
-                  </div>
-                  <div className={`flex items-center gap-1 mt-1 px-1 ${isAdmin ? "" : "flex-row-reverse"}`}>
-                    <span className={`text-[10px] font-medium ${isAdmin ? "text-slate-400" : "text-slate-400"}`}>
-                      {isTemp ? "Mengirim..." : new Date(msg.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                    {isTemp && <Clock size={10} className="text-slate-300" />}
-                  </div>
+              <div>
+                <h1 className="text-sm font-bold text-slate-800 leading-tight">Customer Support</h1>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Online</span>
                 </div>
               </div>
-            );
-          })
-        )}
-
-        {/* Typing indicator */}
-        {isTyping && (
-          <div className="flex justify-start msg-slide-left">
-            <div className="bg-white border px-4 py-2.5 rounded-2xl rounded-tl-sm shadow-sm">
-              <div className="flex gap-1 items-center">
-                <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-              </div>
             </div>
           </div>
-        )}
+        </header>
 
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* ── INPUT ── */}
-      <form
-        onSubmit={sendMessage}
-        className="flex-none p-4 bg-white border-t border-slate-200"
-      >
-        <div className="flex gap-3">
-          <div className="relative flex-1">
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Ketik pesan..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-inner"
-              value={newMessage}
-              onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }}
-              onFocus={handleFocus}
-              style={{ fontSize: "16px" }}
-            />
+        {/* ── SCROLL AREA ── */}
+        <div
+          ref={scrollAreaRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3 bg-slate-50"
+        >
+          {/* Top sentinel — IntersectionObserver watches this to load older msgs */}
+          <div ref={topSentinelRef} className="w-full flex justify-center h-6 items-center">
+            {isFetchingOlder ? (
+              <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+                <Loader2 size={13} className="animate-spin text-indigo-400" />
+                Memuat pesan lama...
+              </div>
+            ) : hasOlderOnServer ? (
+              <div className="w-2 h-2 rounded-full bg-slate-200" />
+            ) : (
+              <span className="text-[10px] text-slate-300 font-medium tracking-wide">Awal percakapan</span>
+            )}
           </div>
-          <button
-            type="submit"
-            disabled={!newMessage.trim() || sending}
-            className="h-auto px-5 bg-indigo-600 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-indigo-700 active:scale-95 disabled:bg-slate-300 transition-all shadow-md shadow-indigo-200"
-          >
-            {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          </button>
+
+          {loading ? (
+            <div className="flex justify-center items-center py-20 text-slate-400">
+              <Loader2 size={28} className="animate-spin" />
+            </div>
+          ) : visibleMessages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center space-y-3 opacity-60 py-20">
+              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center">
+                <MessageCircle size={28} className="text-indigo-600" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-700">Mulai percakapan</p>
+                <p className="text-xs text-slate-500 mt-1 max-w-[220px]">
+                  Tanyakan soal produk, pesanan, stok, atau kendala apapun.
+                </p>
+              </div>
+            </div>
+          ) : (
+            visibleMessages.map((msg) => {
+              const isAdmin = msg.sender_type === "admin";
+              const isTemp = msg.id.startsWith("temp-");
+              const isNew = newMessageIds.has(msg.id);
+
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex ${isAdmin ? "justify-start" : "justify-end"} ${isNew ? (isAdmin ? "msg-slide-left" : "msg-slide-right") : ""}`}
+                >
+                  <div className={`max-w-[80%] flex flex-col ${isAdmin ? "items-start" : "items-end"}`}>
+                    <div
+                      className={`px-4 py-2.5 rounded-2xl ${isAdmin
+                          ? "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
+                          : "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
+                        } ${isTemp ? "opacity-60" : "opacity-100 transition-opacity duration-300"}`}
+                    >
+                      <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                    </div>
+                    <div className={`flex items-center gap-1 mt-1 px-1 ${isAdmin ? "" : "flex-row-reverse"}`}>
+                      <span className={`text-[10px] font-medium ${isAdmin ? "text-slate-400" : "text-slate-400"}`}>
+                        {isTemp ? "Mengirim..." : new Date(msg.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      {isTemp && <Clock size={10} className="text-slate-300" />}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+
+          {/* Typing indicator */}
+          {isTyping && (
+            <div className="flex justify-start msg-slide-left">
+              <div className="bg-white border px-4 py-2.5 rounded-2xl rounded-tl-sm shadow-sm">
+                <div className="flex gap-1 items-center">
+                  <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
         </div>
-      </form>
+
+        {/* ── INPUT ── */}
+        <form
+          onSubmit={sendMessage}
+          className="flex-none p-4 bg-white border-t border-slate-200"
+        >
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Ketik pesan..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-inner"
+                value={newMessage}
+                onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }}
+                onFocus={handleFocus}
+                style={{ fontSize: "16px" }}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!newMessage.trim() || sending}
+              className="h-auto px-5 bg-indigo-600 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-indigo-700 active:scale-95 disabled:bg-slate-300 transition-all shadow-md shadow-indigo-200"
+            >
+              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
