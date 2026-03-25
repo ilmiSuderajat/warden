@@ -363,7 +363,7 @@ export default function LiveChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-full bg-slate-50 font-sans text-slate-900">
+    <div className="fixed inset-0 flex flex-col bg-slate-50">
       <div className="flex flex-col flex-1 max-w-md mx-auto w-full overflow-hidden">
         {/* ── FIXED HEADER ── */}
         <header className="flex-none bg-white border-b border-slate-100 shadow-sm z-20">
