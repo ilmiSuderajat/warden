@@ -271,10 +271,10 @@ export default function LiveChatPage() {
   return (
     <div
       ref={containerRef}
-      className="bg-slate-50 font-sans flex flex-col h-[100dvh] w-full relative text-slate-900"
+      className="bg-slate-50 font-sans flex flex-col h-[100dvh] w-full relative overflow-hidden text-slate-900"
     >
       {/* Inner wrapper for max-width centering */}
-      <div className="flex flex-col flex-1 max-w-md mx-auto w-full relative">
+      <div className="flex flex-col h-full max-w-md mx-auto w-full relative">
         {/* Header */}
         <header className="bg-white border-b border-slate-100 shrink-0">
           <div className="h-14 flex items-center px-4">
