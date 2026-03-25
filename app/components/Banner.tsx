@@ -8,6 +8,7 @@ export default function Banner() {
   const [flashProducts, setFlashProducts] = useState<any[]>([])
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
   const [endDate, setEndDate] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function Banner() {
         .limit(1)
         .maybeSingle()
       if (banner?.end_date) setEndDate(banner.end_date)
+      setIsLoading(false)
     }
     fetchData()
   }, [])
@@ -66,6 +68,25 @@ export default function Banner() {
     }, 4000) // Sedikit diperlambat agar tidak pusing
     return () => clearInterval(interval)
   }, [flashProducts])
+
+  if (isLoading) {
+    return (
+      <div className="mx-4 mb-6 max-w-md rounded-xl overflow-hidden border border-gray-100 bg-white">
+        {/* Header skeleton */}
+        <div className="skeleton-shimmer h-16 rounded-none" />
+        {/* Cards skeleton row */}
+        <div className="flex gap-3 p-4">
+          {Array(4).fill(0).map((_, i) => (
+            <div key={i} className="flex-shrink-0 w-[140px] flex flex-col gap-2">
+              <div className="skeleton-shimmer aspect-square w-full rounded-xl" />
+              <div className="skeleton-shimmer h-3 w-3/4 rounded" />
+              <div className="skeleton-shimmer h-2 w-1/2 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   if (flashProducts.length === 0) return null
 

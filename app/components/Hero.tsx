@@ -6,18 +6,33 @@ import Link from "next/link"
 
 export default function Hero() {
   const [categories, setCategories] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const fetchCategories = async () => {
       const { data } = await supabase.from("categories").select("*")
       if (data) setCategories(data)
+      setIsLoading(false)
     }
     fetchCategories()
   }, [])
 
-  // Tampilkan max 9 kategori, sisanya "Lihat Lainnya"
   const visibleCategories = categories.slice(0, 9)
-  const hasMore = categories.length > 9
+
+  if (isLoading) {
+    return (
+      <div className="max-w-md bg-gray-50 h-20 mx-auto mb-36 py-4 px-2">
+        <div className="grid grid-cols-5 gap-y-4 text-center">
+          {Array(10).fill(0).map((_, i) => (
+            <div key={i} className="flex flex-col items-center gap-2">
+              <div className="skeleton-shimmer w-12 h-12 rounded-full" />
+              <div className="skeleton-shimmer h-2 w-8 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-md bg-gray-50 h-20 mx-auto mb-36 py-4 px-2">

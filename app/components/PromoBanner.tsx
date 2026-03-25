@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 
 export default function PromoBanner() {
     const [banners, setBanners] = useState<any[]>([])
     const [current, setCurrent] = useState(0)
+    const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
         const fetchBanners = async () => {
@@ -17,6 +18,7 @@ export default function PromoBanner() {
                 .order("order", { ascending: true })
 
             if (data && data.length > 0) setBanners(data)
+            setIsLoading(false)
         }
         fetchBanners()
     }, [])
@@ -29,6 +31,14 @@ export default function PromoBanner() {
         }, 4000)
         return () => clearInterval(timer)
     }, [banners.length])
+
+    if (isLoading) {
+        return (
+            <div className="px-4 mt-16">
+                <div className="skeleton-shimmer rounded-2xl aspect-[21/9] w-full" />
+            </div>
+        )
+    }
 
     if (banners.length === 0) return null
 
