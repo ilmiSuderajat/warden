@@ -363,8 +363,8 @@ export default function LiveChatPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen w-full bg-slate-50 font-sans text-slate-900 overflow-hidden">
-      <div className="flex flex-col h-full max-w-md mx-auto w-full">
+    <div className="flex flex-col min-h-screen w-full bg-slate-50 font-sans text-slate-900">
+      <div className="flex flex-col flex-1 max-w-md mx-auto w-full">
         {/* ── FIXED HEADER ── */}
         <header className="flex-none bg-white border-b border-slate-100 shadow-sm z-20">
           <div className="h-14 flex items-center px-4">
@@ -439,8 +439,8 @@ export default function LiveChatPage() {
                   <div className={`max-w-[80%] flex flex-col ${isAdmin ? "items-start" : "items-end"}`}>
                     <div
                       className={`px-4 py-2.5 rounded-2xl ${isAdmin
-                          ? "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
-                          : "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
+                        ? "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
+                        : "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
                         } ${isTemp ? "opacity-60" : "opacity-100 transition-opacity duration-300"}`}
                     >
                       <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
