@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ArrowLeft, MessageCircle, Send, Loader2 } from "lucide-react";
+import { ArrowLeft, MessageCircle, Send, Loader2, Clock } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -15,49 +15,155 @@ interface ChatMessage {
   created_at: string;
 }
 
+const DOM_WINDOW = 60;     // Max messages rendered in DOM at once
+const FETCH_SIZE = 30;     // Messages per page from server
+
 export default function LiveChatPage() {
   const router = useRouter();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // allMessages holds everything fetched, newest at the end
+  const allMessagesRef = useRef<ChatMessage[]>([]);
+  // visibleMessages is the DOM-windowed slice
+  const [visibleMessages, setVisibleMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [user, setUser] = useState<{ id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const [hasOlderOnServer, setHasOlderOnServer] = useState(false);
+  const [isFetchingOlder, setIsFetchingOlder] = useState(false);
+  const [newMessageIds, setNewMessageIds] = useState<Set<string>>(new Set());
   const [isTyping, setIsTyping] = useState(false);
+
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const oldestCursorRef = useRef<string | null>(null); // created_at of oldest fetched msg
+  const isAtBottomRef = useRef(true);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    // We use a small delay to ensure the DOM has updated and layout has settled
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior });
-    }, 150);
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior }), 80);
   }, []);
 
-  const fetchMessages = useCallback(async (userId: string) => {
+  // Sync visible window from allMessages (tail = latest)
+  const syncVisible = useCallback((focusNewest = false) => {
+    const all = allMessagesRef.current;
+    const sliced = all.slice(-DOM_WINDOW);
+    setVisibleMessages([...sliced]);
+    if (focusNewest) scrollToBottom("auto");
+  }, [scrollToBottom]);
+
+  // Load initial messages (latest PAGE)
+  const fetchInitial = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from("chats")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("user_id", userId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .limit(FETCH_SIZE);
 
       if (error) throw error;
-      setMessages(data || []);
+
+      const msgs = (data || []).reverse() as ChatMessage[];
+      allMessagesRef.current = msgs;
+      oldestCursorRef.current = msgs[0]?.created_at ?? null;
+      setHasOlderOnServer((count ?? 0) > FETCH_SIZE);
+      syncVisible(true);
     } catch (err) {
       console.error("Error fetching chats:", err);
     } finally {
       setLoading(false);
     }
+  }, [syncVisible]);
+
+  // Load older messages (scroll to top triggers this)
+  const fetchOlder = useCallback(async (userId: string) => {
+    if (isFetchingOlder || !hasOlderOnServer || !oldestCursorRef.current) return;
+    setIsFetchingOlder(true);
+
+    const scrollArea = scrollAreaRef.current;
+    const prevScrollHeight = scrollArea?.scrollHeight ?? 0;
+
+    try {
+      const { data, error } = await supabase
+        .from("chats")
+        .select("*")
+        .eq("user_id", userId)
+        .lt("created_at", oldestCursorRef.current)
+        .order("created_at", { ascending: false })
+        .limit(FETCH_SIZE);
+
+      if (error) throw error;
+
+      const older = (data || []).reverse() as ChatMessage[];
+      if (older.length === 0) {
+        setHasOlderOnServer(false);
+        return;
+      }
+
+      allMessagesRef.current = [...older, ...allMessagesRef.current];
+      oldestCursorRef.current = older[0].created_at;
+
+      // Check if there's still older data
+      setHasOlderOnServer(older.length === FETCH_SIZE);
+
+      // Re-window: show more from the top
+      const all = allMessagesRef.current;
+      const sliced = all.slice(0, Math.min(DOM_WINDOW, all.length));
+      setVisibleMessages([...sliced]);
+
+      // Restore scroll position so user doesn't jump
+      requestAnimationFrame(() => {
+        if (scrollArea) {
+          scrollArea.scrollTop = scrollArea.scrollHeight - prevScrollHeight;
+        }
+      });
+    } catch {
+      toast.error("Gagal memuat pesan lama");
+    } finally {
+      setIsFetchingOlder(false);
+    }
+  }, [isFetchingOlder, hasOlderOnServer]);
+
+  // Setup IntersectionObserver on top sentinel
+  const userIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const sentinel = topSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && userIdRef.current) {
+          fetchOlder(userIdRef.current);
+        }
+      },
+      { root: scrollAreaRef.current, rootMargin: "120px 0px 0px 0px", threshold: 0 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [fetchOlder]);
+
+  // Track scroll position to decide auto-scroll behavior
+  const handleScroll = useCallback(() => {
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isAtBottomRef.current = distanceFromBottom < 100;
+
+    // When user scrolls back to bottom, re-window to show newest
+    if (isAtBottomRef.current && allMessagesRef.current.length > DOM_WINDOW) {
+      const all = allMessagesRef.current;
+      const sliced = all.slice(-DOM_WINDOW);
+      setVisibleMessages([...sliced]);
+    }
   }, []);
 
+  // Realtime setup
   const setupRealtime = useCallback((userId: string) => {
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-    }
+    if (channelRef.current) supabase.removeChannel(channelRef.current);
 
     const channel = supabase
       .channel(`live-chat:${userId}`)
@@ -66,39 +172,36 @@ export default function LiveChatPage() {
         { event: "INSERT", schema: "public", table: "chats", filter: `user_id=eq.${userId}` },
         (payload) => {
           const newMsg = payload.new as ChatMessage;
+          const all = allMessagesRef.current;
 
-          setMessages(prev => {
-            // Deduplicate: replace temp message if matching
-            const tempIdx = prev.findIndex(
-              m => m.id.startsWith("temp-") &&
-                m.message === newMsg.message &&
-                m.sender_type === newMsg.sender_type
-            );
-            if (tempIdx > -1) {
-              const updated = [...prev];
-              updated[tempIdx] = newMsg;
-              return updated;
-            }
-            if (prev.some(m => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
+          // Dedup / replace temp
+          const tempIdx = all.findIndex(
+            m => m.id.startsWith("temp-") &&
+              m.message === newMsg.message &&
+              m.sender_type === newMsg.sender_type
+          );
+
+          if (tempIdx > -1) {
+            allMessagesRef.current = [...all.slice(0, tempIdx), newMsg, ...all.slice(tempIdx + 1)];
+          } else if (!all.some(m => m.id === newMsg.id)) {
+            allMessagesRef.current = [...all, newMsg];
+            setNewMessageIds(ids => new Set([...ids, newMsg.id]));
+          }
+
+          syncVisible(isAtBottomRef.current);
         }
       )
       .on("broadcast", { event: "typing" }, (payload) => {
         if (payload.sender_type === "admin") {
           setIsTyping(payload.is_typing);
-          // Auto hide after 3 seconds
-          if (payload.is_typing) {
-            setTimeout(() => setIsTyping(false), 3000);
-          }
+          if (payload.is_typing) setTimeout(() => setIsTyping(false), 3000);
         }
       })
       .subscribe();
 
     channelRef.current = channel;
-  }, []);
+  }, [syncVisible]);
 
-  // Mark admin messages as read
   const markAsRead = useCallback(async (userId: string) => {
     try {
       await supabase
@@ -112,14 +215,15 @@ export default function LiveChatPage() {
     }
   }, []);
 
-  // Auth + data init
+  // Auth init
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const u = { id: session.user.id };
         setUser(u);
-        fetchMessages(u.id);
+        userIdRef.current = u.id;
+        fetchInitial(u.id);
         setupRealtime(u.id);
         markAsRead(u.id);
       } else {
@@ -133,60 +237,42 @@ export default function LiveChatPage() {
       if (session?.user) {
         const u = { id: session.user.id };
         setUser(u);
-        fetchMessages(u.id);
+        userIdRef.current = u.id;
+        fetchInitial(u.id);
         setupRealtime(u.id);
         markAsRead(u.id);
       } else {
         setUser(null);
-        setMessages([]);
+        allMessagesRef.current = [];
+        setVisibleMessages([]);
+        userIdRef.current = null;
         setLoading(false);
       }
     });
 
     return () => {
       authListener.subscription.unsubscribe();
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-      }
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
     };
-  }, [fetchMessages, setupRealtime, markAsRead]);
+  }, [fetchInitial, setupRealtime, markAsRead]);
 
-  // Scroll to bottom on new messages
+  // Auto-scroll on new messages only if user is near bottom
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    if (visibleMessages.length === 0) return;
+    if (isAtBottomRef.current) scrollToBottom("smooth");
+  }, [visibleMessages, isTyping, scrollToBottom]);
 
-  // Handle focus event to scroll to bottom
-  const handleFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
-    // Delay slightly to let keyboard appear or layout to shift
-    setTimeout(() => {
-      // Use 'end' block to ensure the input is pushed above the keyboard
-      e.target.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      scrollToBottom("smooth");
-    }, 300);
-  }, [scrollToBottom]);
-
-  // Visual Viewport API for WebView keyboard handling
+  // WebView keyboard
   useEffect(() => {
     if (typeof window === "undefined" || !window.visualViewport) return;
-
     const handleResize = () => {
-      // Just trigger a scroll to bottom on resize (like keyboard toggle)
-      // and ensure the active element is visible
       if (document.activeElement?.tagName === "INPUT") {
-        document.activeElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        document.activeElement.scrollIntoView({ behavior: "smooth", block: "end" });
       }
-      setTimeout(() => scrollToBottom("smooth"), 100);
+      if (isAtBottomRef.current) setTimeout(() => scrollToBottom("smooth"), 100);
     };
-
     window.visualViewport.addEventListener("resize", handleResize);
-    // REMOVED 'scroll' listener to avoid infinite loops
-
-    return () => {
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener("resize", handleResize);
-      }
-    };
+    return () => window.visualViewport?.removeEventListener("resize", handleResize);
   }, [scrollToBottom]);
 
   const sendMessage = async (e: React.FormEvent) => {
@@ -205,45 +291,33 @@ export default function LiveChatPage() {
       sender_type: "user",
       created_at: new Date().toISOString(),
     };
-    setMessages(prev => [...prev, tempMsg]);
 
-    // Keep keyboard open and re-scroll
-    setTimeout(() => {
-      inputRef.current?.focus();
-      scrollToBottom();
-    }, 50);
+    allMessagesRef.current = [...allMessagesRef.current, tempMsg];
+    syncVisible(true);
+
+    setTimeout(() => { inputRef.current?.focus(); }, 50);
 
     try {
       const { error } = await supabase
         .from("chats")
-        .insert([{
-          user_id: user.id,
-          message: msg,
-          sender_type: "user",
-        }]);
-
+        .insert([{ user_id: user.id, message: msg, sender_type: "user" }]);
       if (error) throw error;
-    } catch (error) {
-      console.error("Error sending message:", error);
+    } catch {
       toast.error("Gagal mengirim pesan");
-      setMessages(prev => prev.filter(m => m.id !== tempId));
+      allMessagesRef.current = allMessagesRef.current.filter(m => m.id !== tempId);
+      syncVisible();
     } finally {
       setSending(false);
     }
   };
 
-
-
-
   const handleTyping = () => {
     if (!channelRef.current || !user) return;
-
     channelRef.current.send({
       type: "broadcast",
       event: "typing",
       payload: { user_id: user.id, is_typing: true, sender_type: "user" },
     });
-
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
       channelRef.current?.send({
@@ -254,18 +328,14 @@ export default function LiveChatPage() {
     }, 2000);
   };
 
-  // Combined scroll logic for messages and typing state
-  useEffect(() => {
-    const container = containerRef.current;
-    if (container) {
-      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
-      if (isAtBottom || (messages.length > 0 && messages[messages.length - 1].sender_type === "user")) {
-        scrollToBottom("smooth");
-      }
-    }
-  }, [messages, isTyping, scrollToBottom]);
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    setTimeout(() => {
+      e.target.scrollIntoView({ behavior: "smooth", block: "end" });
+      if (isAtBottomRef.current) scrollToBottom("smooth");
+    }, 300);
+  };
 
-  // Not logged in state
+  // Not logged in
   if (!loading && !user) {
     return (
       <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans flex flex-col">
@@ -293,116 +363,141 @@ export default function LiveChatPage() {
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="bg-slate-50 min-h-screen font-sans flex flex-col w-full relative text-slate-900"
-    >
-      {/* Inner wrapper for max-width centering */}
-      <div className="flex flex-col h-full max-w-md mx-auto w-full relative overflow-hidden">
-        {/* Header */}
-        <header className="bg-white border-b border-slate-100 shrink-0">
-          <div className="h-14 flex items-center px-4">
-            <button
-              onClick={() => router.back()}
-              className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform touch-manipulation"
-            >
-              <ArrowLeft size={24} strokeWidth={2.5} />
-            </button>
-            <div className="ml-3 flex items-center gap-3">
-              <div className="w-9 h-9 bg-indigo-600 rounded-full flex items-center justify-center">
-                <MessageCircle size={18} className="text-white" />
-              </div>
-              <div>
-                <h1 className="text-sm font-bold text-slate-800 leading-tight">Customer Support</h1>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Online</span>
-                </div>
+    <div className="flex flex-col h-[100dvh] max-w-md mx-auto w-full bg-slate-50 font-sans text-slate-900 relative">
+      {/* ── FIXED HEADER ── */}
+      <header className="flex-none bg-white border-b border-slate-100 shadow-sm z-20">
+        <div className="h-14 flex items-center px-4">
+          <button
+            onClick={() => router.back()}
+            className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform touch-manipulation"
+          >
+            <ArrowLeft size={24} strokeWidth={2.5} />
+          </button>
+          <div className="ml-3 flex items-center gap-3">
+            <div className="w-9 h-9 bg-indigo-600 rounded-full flex items-center justify-center shadow-sm">
+              <MessageCircle size={18} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-slate-800 leading-tight">Customer Support</h1>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Online</span>
               </div>
             </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 overscroll-contain">
-          {loading ? (
-            <div className="flex justify-center items-center h-full text-slate-400">
-              <Loader2 size={28} className="animate-spin" />
+      {/* ── SCROLL AREA ── */}
+      <div
+        ref={scrollAreaRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3 bg-slate-50"
+      >
+        {/* Top sentinel — IntersectionObserver watches this to load older msgs */}
+        <div ref={topSentinelRef} className="w-full flex justify-center h-6 items-center">
+          {isFetchingOlder ? (
+            <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+              <Loader2 size={13} className="animate-spin text-indigo-400" />
+              Memuat pesan lama...
             </div>
-          ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-3 opacity-60">
-              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center">
-                <MessageCircle size={28} className="text-indigo-600" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-700">Mulai percakapan</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-[220px]">
-                  Tanyakan soal produk, pesanan, stok, atau kendala apapun.
-                </p>
-              </div>
-            </div>
+          ) : hasOlderOnServer ? (
+            <div className="w-2 h-2 rounded-full bg-slate-200" />
           ) : (
-            messages.map((msg) => {
-              const isAdmin = msg.sender_type === "admin";
-              const isTemp = msg.id.startsWith("temp-");
-              return (
-                <div key={msg.id} className={`flex ${isAdmin ? "justify-start" : "justify-end"}`}>
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${isAdmin
+            <span className="text-[10px] text-slate-300 font-medium tracking-wide">Awal percakapan</span>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center items-center py-20 text-slate-400">
+            <Loader2 size={28} className="animate-spin" />
+          </div>
+        ) : visibleMessages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-center space-y-3 opacity-60 py-20">
+            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center">
+              <MessageCircle size={28} className="text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-700">Mulai percakapan</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-[220px]">
+                Tanyakan soal produk, pesanan, stok, atau kendala apapun.
+              </p>
+            </div>
+          </div>
+        ) : (
+          visibleMessages.map((msg) => {
+            const isAdmin = msg.sender_type === "admin";
+            const isTemp = msg.id.startsWith("temp-");
+            const isNew = newMessageIds.has(msg.id);
+
+            return (
+              <div
+                key={msg.id}
+                className={`flex ${isAdmin ? "justify-start" : "justify-end"} ${isNew ? (isAdmin ? "msg-slide-left" : "msg-slide-right") : ""}`}
+              >
+                <div
+                  className={`max-w-[82%] px-4 py-2.5 rounded-2xl ${
+                    isAdmin
                       ? "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
                       : "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
-                      } ${isTemp ? "opacity-70" : ""}`}
-                  >
-                    <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
-                    <p className={`text-[9px] mt-1 text-right ${isAdmin ? "text-slate-400" : "text-indigo-200"}`}>
-                      {isTemp ? "Mengirim..." : new Date(msg.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                  } ${isTemp ? "opacity-60" : "opacity-100 transition-opacity duration-300"}`}
+                >
+                  <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                  <div className={`flex items-center gap-1 mt-0.5 ${isAdmin ? "justify-start" : "justify-end"}`}>
+                    {isTemp && <Clock size={9} className="text-indigo-200" />}
+                    <p className={`text-[9px] ${isAdmin ? "text-slate-400" : "text-indigo-200"}`}>
+                      {isTemp
+                        ? "Mengirim..."
+                        : new Date(msg.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
                 </div>
-              );
-            })
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+              </div>
+            );
+          })
+        )}
+
+        {/* Typing indicator */}
         {isTyping && (
-          <div className="flex justify-start">
-            <div className="bg-white border px-4 py-2 rounded-2xl shadow-sm">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-150" />
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-300" />
+          <div className="flex justify-start msg-slide-left">
+            <div className="bg-white border px-4 py-2.5 rounded-2xl rounded-tl-sm shadow-sm">
+              <div className="flex gap-1 items-center">
+                <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
               </div>
             </div>
           </div>
         )}
 
-
-        {/* Input Area */}
-        <form onSubmit={sendMessage} className="p-3 bg-white border-t border-slate-100 shrink-0">
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 pl-4 rounded-full border border-slate-200">
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Ketik pesan..."
-              className="flex-1 bg-transparent border-none outline-none text-slate-700"
-              value={newMessage}
-              onChange={(e) => {
-                setNewMessage(e.target.value);
-                handleTyping();
-              }}
-              onFocus={handleFocus}
-              style={{ fontSize: "16px" }}
-            />
-            <button
-              type="submit"
-              disabled={!newMessage.trim() || sending}
-              className="w-10 h-10 flex items-center justify-center bg-indigo-600 text-white rounded-full disabled:bg-slate-300 disabled:text-slate-500 transition-colors active:scale-90"
-            >
-              <Send size={16} className="ml-0.5" />
-            </button>
-          </div>
-        </form>
+        <div ref={messagesEndRef} />
       </div>
+
+      {/* ── INPUT ── */}
+      <form
+        onSubmit={sendMessage}
+        className="flex-none p-3 bg-white border-t border-slate-100 safe-area-bottom"
+      >
+        <div className="flex items-center gap-2 bg-slate-50 p-1.5 pl-4 rounded-full border border-slate-200 focus-within:border-indigo-400 transition-colors">
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Ketik pesan..."
+            className="flex-1 bg-transparent border-none outline-none text-slate-700 placeholder:text-slate-400"
+            value={newMessage}
+            onChange={(e) => { setNewMessage(e.target.value); handleTyping(); }}
+            onFocus={handleFocus}
+            style={{ fontSize: "16px" }}
+          />
+          <button
+            type="submit"
+            disabled={!newMessage.trim() || sending}
+            className="w-10 h-10 flex items-center justify-center bg-indigo-600 text-white rounded-full disabled:bg-slate-200 disabled:text-slate-400 transition-all active:scale-90"
+          >
+            {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="ml-0.5" />}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

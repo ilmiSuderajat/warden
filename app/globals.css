@@ -52,3 +52,48 @@ body {
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out;
 }
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-12px) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(12px) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+  }
+}
+
+@keyframes readReceiptPulse {
+  0% { color: #cbd5e1; }
+  60% { color: #6ee7b7; }
+  100% { color: #10b981; }
+}
+
+.msg-slide-left {
+  animation: slideInLeft 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.msg-slide-right {
+  animation: slideInRight 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.read-receipt-read {
+  animation: readReceiptPulse 0.5s ease-out both;
+  color: #10b981;
+}
+
+.read-receipt-unread {
+  color: #cbd5e1;
+}
