@@ -22,7 +22,7 @@ export default function LiveChatPage() {
   const [user, setUser] = useState<{ id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -82,6 +82,15 @@ export default function LiveChatPage() {
           });
         }
       )
+      .on("broadcast", { event: "typing" }, (payload) => {
+        if (payload.sender_type === "admin") {
+          setIsTyping(payload.is_typing);
+          // Auto hide after 3 seconds
+          if (payload.is_typing) {
+            setTimeout(() => setIsTyping(false), 3000);
+          }
+        }
+      })
       .subscribe();
 
     channelRef.current = channel;
@@ -197,6 +206,41 @@ export default function LiveChatPage() {
     }
   };
 
+  const isNearBottom = () => {
+    const container = containerRef.current;
+    if (!container) return false;
+
+    return container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+  };
+
+  useEffect(() => {
+    if (isNearBottom()) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
+
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleTyping = () => {
+    if (!channelRef.current || !user) return;
+
+    channelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: user.id, is_typing: true, sender_type: "user" },
+    });
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "typing",
+        payload: { user_id: user.id, is_typing: false, sender_type: "user" },
+      });
+    }, 2000);
+  };
+
   // Not logged in state
   if (!loading && !user) {
     return (
@@ -227,10 +271,10 @@ export default function LiveChatPage() {
   return (
     <div
       ref={containerRef}
-      className="bg-slate-50 font-sans flex flex-col h-[100dvh] w-full relative overflow-hidden z-50 text-slate-900"
+      className="bg-slate-50 font-sans flex flex-col h-[100dvh] w-full relative text-slate-900"
     >
       {/* Inner wrapper for max-width centering */}
-      <div className="flex flex-col h-full max-w-md mx-auto w-full relative">
+      <div className="flex flex-col flex-1 max-w-md mx-auto w-full relative">
         {/* Header */}
         <header className="bg-white border-b border-slate-100 shrink-0">
           <div className="h-14 flex items-center px-4">
@@ -283,7 +327,7 @@ export default function LiveChatPage() {
                     className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${isAdmin
                       ? "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
                       : "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
-                    } ${isTemp ? "opacity-70" : ""}`}
+                      } ${isTemp ? "opacity-70" : ""}`}
                   >
                     <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
                     <p className={`text-[9px] mt-1 text-right ${isAdmin ? "text-slate-400" : "text-indigo-200"}`}>
@@ -296,6 +340,18 @@ export default function LiveChatPage() {
           )}
           <div ref={messagesEndRef} />
         </div>
+        {isTyping && (
+          <div className="flex justify-start">
+            <div className="bg-white border px-4 py-2 rounded-2xl shadow-sm">
+              <div className="flex gap-1">
+                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
+                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-150" />
+                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-300" />
+              </div>
+            </div>
+          </div>
+        )}
+
 
         {/* Input Area */}
         <form onSubmit={sendMessage} className="p-3 bg-white border-t border-slate-100 shrink-0">
@@ -306,7 +362,10 @@ export default function LiveChatPage() {
               placeholder="Ketik pesan..."
               className="flex-1 bg-transparent border-none outline-none text-slate-700"
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={(e) => {
+                setNewMessage(e.target.value);
+                handleTyping();
+              }}
               onFocus={handleFocus}
               style={{ fontSize: "16px" }}
             />

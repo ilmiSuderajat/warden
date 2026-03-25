@@ -162,12 +162,23 @@ export default function AdminChatPage() {
             return [...prev, msg];
           });
 
-          if (msg.sender_type === "user") {
-            markAsRead(msg.user_id);
+            if (msg.sender_type === "user") {
+              markAsRead(msg.user_id);
+            }
           }
-        }
-      })
-      .subscribe();
+        })
+        .on("broadcast", { event: "typing" }, (payload) => {
+          if (payload.sender_type === "user") {
+            const current = selectedUserRef.current;
+            if (current && payload.user_id === current.user_id) {
+              setIsTyping(payload.is_typing);
+              if (payload.is_typing) {
+                setTimeout(() => setIsTyping(false), 3000);
+              }
+            }
+          }
+        })
+        .subscribe();
 
     channelRef.current = channel;
 
@@ -300,12 +311,34 @@ export default function AdminChatPage() {
     }
   };
 
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleTyping = () => {
+    if (!channelRef.current || !selectedUser) return;
+    
+    channelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: selectedUser.user_id, is_typing: true, sender_type: "admin" },
+    });
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "typing",
+        payload: { user_id: selectedUser.user_id, is_typing: false, sender_type: "admin" },
+      });
+    }, 2000);
+  };
+
   const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div 
       ref={containerRef}
-      className="bg-slate-50 font-sans flex flex-col h-[100dvh] w-full relative overflow-hidden z-50 text-slate-900 border-x border-slate-200 shadow-xl"
+      className="bg-slate-50 font-sans flex flex-col h-[100dvh] w-full relative overflow-hidden text-slate-900 border-x border-slate-200 shadow-xl"
     >
       {/* Inner wrapper for max-width centering */}
       <div className="flex flex-col h-full max-w-5xl mx-auto w-full relative">
@@ -445,6 +478,17 @@ export default function AdminChatPage() {
                     )
                   })
                 )}
+                {isTyping && (
+                  <div className="flex justify-start">
+                    <div className="bg-white border px-4 py-2 rounded-2xl shadow-sm">
+                      <div className="flex gap-1">
+                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" />
+                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-150" />
+                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-300" />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
               </div>
 
@@ -455,8 +499,11 @@ export default function AdminChatPage() {
                     <input
                       ref={inputRef}
                       type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
+                       value={newMessage}
+                      onChange={(e) => {
+                        setNewMessage(e.target.value);
+                        handleTyping();
+                      }}
                       onFocus={handleFocus}
                       style={{ fontSize: "16px" }}
                       placeholder={`Balas ${selectedUser.name}...`}
