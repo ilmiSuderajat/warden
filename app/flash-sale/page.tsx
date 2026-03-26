@@ -34,6 +34,7 @@ export default function FlashSalePage() {
                 .from("products")
                 .select("*")
                 .eq("is_flash_sale", true)
+                .eq("is_ready", true)
 
             if (productData) setProducts(productData)
 

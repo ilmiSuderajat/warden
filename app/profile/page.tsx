@@ -11,11 +11,22 @@ export default function ProfilePage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [hasShop, setHasShop] = useState(false)
 
   useEffect(() => {
     const getProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
+      
+      if (user) {
+        const { data: shop } = await supabase
+          .from("shops")
+          .select("id")
+          .eq("owner_id", user.id)
+          .maybeSingle()
+        if (shop) setHasShop(true)
+      }
+      
       setLoading(false)
     }
     getProfile()
@@ -31,6 +42,14 @@ export default function ProfilePage() {
     { href: "/orders", icon: "ShoppingBag", label: "Pesanan Saya", color: "text-blue-600", bg: "bg-blue-50" },
     { href: "/wishlist", icon: "Heart", label: "Wishlist", color: "text-red-500", bg: "bg-red-50" },
     { href: "/address", icon: "MapPin", label: "Alamat Saya", color: "text-orange-500", bg: "bg-orange-50" },
+    { 
+      href: hasShop ? "/shop/dashboard" : "/shop/create", 
+      icon: "Store", 
+      label: hasShop ? "Warung Saya" : "Buka Warung", 
+      color: "text-indigo-600", 
+      bg: "bg-indigo-50",
+      badge: !hasShop ? "BARU" : null
+    },
     { href: "/settings", icon: "Settings", label: "Pengaturan Akun", color: "text-slate-600", bg: "bg-slate-100" },
     { href: "/chat", icon: "ShieldCheck", label: "Pusat Bantuan", color: "text-green-600", bg: "bg-green-50" },
   ]
@@ -135,7 +154,14 @@ export default function ProfilePage() {
                       <div className={`p-2 rounded-lg ${item.bg}`}>
                         <Icon size={18} className={item.color} />
                       </div>
-                      <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">{item.label}</span>
+                      <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900 flex items-center gap-2">
+                        {item.label}
+                        {item.badge && (
+                          <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm tracking-wider">
+                            {item.badge}
+                          </span>
+                        )}
+                      </span>
                     </div>
                     <Icons.ChevronRight size={18} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
                   </Link>

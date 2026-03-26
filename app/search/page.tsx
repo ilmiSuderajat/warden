@@ -26,6 +26,7 @@ function SearchContent() {
         const { data } = await supabase
           .from("products")
           .select("*")
+          .eq("is_ready", true)
           .ilike("name", `%${q}%`)
           .order('created_at', { ascending: false })
 

@@ -51,6 +51,7 @@ export default function MyOrdersPage() {
     switch (status) {
       case 'Menunggu Pembayaran': return 'bg-amber-50 text-amber-600 border-amber-100'
       case 'Perlu Dikemas': return 'bg-indigo-50 text-indigo-600 border-indigo-100'
+      case 'Diproses': return 'bg-orange-50 text-orange-600 border-orange-100'
       case 'Dikirim': return 'bg-blue-50 text-blue-600 border-blue-100'
       case 'Selesai': return 'bg-emerald-50 text-emerald-600 border-emerald-100'
       case 'Dibatalkan': return 'bg-rose-50 text-rose-600 border-rose-100'
@@ -181,7 +182,7 @@ export default function MyOrdersPage() {
                     </div>
                     <div className="flex-1 min-w-0 py-0.5">
                       <h3 className="text-sm font-semibold text-slate-800 line-clamp-1">
-                        {order.order_items?.[0]?.product_name}
+                        {order.order_items?.[0]?.product_name?.split(" | ")[0]}
                       </h3>
                       <p className="text-xs text-slate-400 mt-1">
                         {order.order_items?.length > 1 ? `${order.order_items.length} Produk` : '1 Produk'}
@@ -252,7 +253,7 @@ export default function MyOrdersPage() {
                               <img src={item.image_url || "/placeholder.png"} className="w-full h-full object-cover" alt={item.product_name} />
                             </div>
                             <div className="flex-1">
-                              <p className="text-sm font-medium text-slate-700 line-clamp-1">{item.product_name}</p>
+                              <p className="text-sm font-medium text-slate-700 line-clamp-1">{item.product_name?.split(" | ")[0]}</p>
                               <p className="text-xs text-slate-400">{item.quantity}x @ Rp {item.price?.toLocaleString('id-ID')}</p>
                             </div>
                           </div>

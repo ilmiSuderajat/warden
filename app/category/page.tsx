@@ -48,6 +48,7 @@ export default function CategorySplitPage() {
         .from("products")
         .select("*")
         .eq("category_id", catId)
+        .eq("is_ready", true)
         .order('created_at', { ascending: false })
         .range(from, to)
 

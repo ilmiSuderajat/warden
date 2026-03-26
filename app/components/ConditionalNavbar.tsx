@@ -13,7 +13,8 @@ export default function ConditionalNavbar() {
   const isAdressPage = pathname.startsWith('/address');
   const isAdminPage = pathname.startsWith('/admin');
   const isChatPage = pathname.startsWith('/chat');
-  if (isProductPage || isCartPage || isCheckoutPage || isCategoryPage || isProductDetailPage || isAdressPage || isChatPage || isAdminPage) return null;
+  const isShopPage = pathname.startsWith('/shop');
+  if (isProductPage || isCartPage || isCheckoutPage || isCategoryPage || isProductDetailPage || isAdressPage || isChatPage || isAdminPage || isShopPage) return null;
 
   return (
     <>

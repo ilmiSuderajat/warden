@@ -70,7 +70,8 @@ export default function CheckoutPage() {
           image_url: Array.isArray(item.products.image_url) ? item.products.image_url[0] : item.products.image_url,
           quantity: item.quantity,
           lat: item.products.latitude,
-          lng: item.products.longitude
+          lng: item.products.longitude,
+          shop_id: item.products.shop_id
         }));
         setCartItems(formattedCart);
         if (addrData) updateShipping(formattedCart, addrData);
@@ -240,7 +241,7 @@ export default function CheckoutPage() {
 
       const itemsToInsert = cartItems.map((item: any) => ({
         order_id: orderData.id,
-        product_name: item.name,
+        product_name: `${item.name} | ${item.shop_id}`,
         quantity: item.quantity,
         price: item.price,
         image_url: item.image_url

@@ -96,6 +96,7 @@ export default function ProductList() {
       const { data, error } = await supabase
         .from("products")
         .select("*")
+        .eq("is_ready", true)
         .order("created_at", { ascending: false })
         .range(from, to)
 

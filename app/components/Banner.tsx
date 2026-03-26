@@ -17,6 +17,7 @@ export default function Banner() {
         .from("products")
         .select("*")
         .eq("is_flash_sale", true)
+        .eq("is_ready", true)
         .limit(10)
       if (products) setFlashProducts(products)
 

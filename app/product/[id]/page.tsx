@@ -18,6 +18,7 @@ export default function ProductDetail() {
   const { id } = useParams()
   const router = useRouter()
   const [product, setProduct] = useState<any>(null)
+  const [shop, setShop] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
@@ -28,7 +29,14 @@ export default function ProductDetail() {
   useEffect(() => {
     const fetchDetail = async () => {
       const { data } = await supabase.from("products").select("*").eq("id", id).maybeSingle()
-      if (data) setProduct(data)
+      if (data) {
+        setProduct(data)
+        // Fetch associated shop
+        if (data.shop_id) {
+          const { data: shopData } = await supabase.from("shops").select("id, name, slug, image_url").eq("id", data.shop_id).maybeSingle()
+          if (shopData) setShop(shopData)
+        }
+      }
       setLoading(false)
     }
     fetchDetail()
@@ -205,30 +213,53 @@ export default function ProductDetail() {
                 <span className="text-xs text-slate-400">• {product.sold_count || "0"} Terjual</span>
               </div>
             </div>
-            <button
-              onClick={handleToggleWishlist}
-              disabled={wishlistLoading}
-              className={`p-2 border rounded-xl transition-all shrink-0 active:scale-90 ${isWishlisted
-                ? 'border-red-200 bg-red-50'
-                : 'border-slate-100 hover:bg-slate-50'
-                }`}
-            >
-              {wishlistLoading ? (
-                <Loader2 size={20} className="animate-spin text-slate-400" />
-              ) : (
-                <Heart size={20} className={isWishlisted ? 'text-red-500 fill-red-500' : 'text-slate-400'} />
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push(`/chat/live?product=${id}`)}
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-100 rounded-xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all active:scale-90 shrink-0"
+              >
+                <MessageCircle size={16} />
+                <span className="text-[11px] font-bold">Chat Penjual</span>
+              </button>
+              <button
+                onClick={handleToggleWishlist}
+                disabled={wishlistLoading}
+                className={`p-2 border rounded-xl transition-all shrink-0 active:scale-90 ${isWishlisted
+                  ? 'border-red-200 bg-red-50'
+                  : 'border-slate-100 hover:bg-slate-50'
+                  }`}
+              >
+                {wishlistLoading ? (
+                  <Loader2 size={20} className="animate-spin text-slate-400" />
+                ) : (
+                  <Heart size={20} className={isWishlisted ? 'text-red-500 fill-red-500' : 'text-slate-400'} />
+                )}
+              </button>
+            </div>
           </div>
 
-          <div className="mt-5 pt-4 border-t border-slate-100/80">
-            <p className="text-2xl font-bold text-red-600 tracking-tight">
-              Rp {product.price?.toLocaleString('id-ID')}
-            </p>
-            {product.original_price && (
-              <p className="text-sm text-slate-400 line-through mt-1">
-                Rp {product.original_price?.toLocaleString('id-ID')}
+          <div className="mt-5 pt-4 border-t border-slate-100/80 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-2xl font-bold text-red-600 tracking-tight">
+                Rp {product.price?.toLocaleString('id-ID')}
               </p>
+              {product.original_price && (
+                <p className="text-sm text-slate-400 line-through mt-1">
+                  Rp {product.original_price?.toLocaleString('id-ID')}
+                </p>
+              )}
+            </div>
+            {shop && (
+              <a href={`/shop/${shop.slug}`} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 transition-colors active:scale-95 shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-white border border-slate-100 overflow-hidden flex items-center justify-center">
+                  {shop.image_url ? (
+                    <img src={shop.image_url} className="w-full h-full object-cover" alt={shop.name} />
+                  ) : (
+                    <Store size={14} className="text-slate-400" />
+                  )}
+                </div>
+                <span className="text-xs font-bold text-slate-700 max-w-[100px] truncate">{shop.name}</span>
+              </a>
             )}
           </div>
         </div>

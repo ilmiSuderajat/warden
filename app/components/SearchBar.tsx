@@ -18,6 +18,7 @@ export default function SearchBar() {
       const { data } = await supabase
         .from("products")
         .select("name")
+        .eq("is_ready", true)
         .limit(5) // Ambil 5 produk terbaru buat saran awal
       
       if (data) {
