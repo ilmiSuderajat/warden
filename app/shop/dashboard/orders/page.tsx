@@ -65,10 +65,10 @@ export default function ShopOrdersPage() {
                         product_name: item.product_name?.split(" | ")[0]
                     })) || []
             }))
-            if (activeTab === "baru") filteredOrders = filteredOrders.filter((o: any) => o.status === "Perlu Dikemas" || o.status === "Menunggu Konfirmasi")
-            if (activeTab === "proses") filteredOrders = filteredOrders.filter((o: any) => o.status === "Diproses")
-            if (activeTab === "dikirim") filteredOrders = filteredOrders.filter((o: any) => o.status === "Dikirim")
-            if (activeTab === "selesai") filteredOrders = filteredOrders.filter((o: any) => o.status === "Selesai")
+            if (activeTab === "baru") filteredOrders = filteredOrders.filter((o: any) => ["Menunggu Konfirmasi", "Perlu Dikemas", "Mencari Kurir", "Kurir Menuju Lokasi"].includes(o.status))
+            if (activeTab === "proses") filteredOrders = filteredOrders.filter((o: any) => ["Diproses", "Kurir di Toko"].includes(o.status))
+            if (activeTab === "dikirim") filteredOrders = filteredOrders.filter((o: any) => ["Dikirim", "Kurir di Lokasi", "Kurir Tidak Tersedia"].includes(o.status))
+            if (activeTab === "selesai") filteredOrders = filteredOrders.filter((o: any) => ["Selesai", "Dibatalkan"].includes(o.status))
 
             setOrders(filteredOrders.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()))
         } catch (err) {
@@ -97,8 +97,14 @@ export default function ShopOrdersPage() {
         switch (status) {
             case 'Perlu Dikemas': return 'bg-orange-50 text-orange-600 border-orange-100'
             case 'Diproses': return 'bg-blue-50 text-blue-600 border-blue-100'
-            case 'Dikirim': return 'bg-indigo-50 text-indigo-600 border-indigo-100'
+            case 'Mencari Kurir': return 'bg-yellow-50 text-yellow-600 border-yellow-100 animate-pulse'
+            case 'Kurir Menuju Lokasi':
+            case 'Kurir di Toko':
+            case 'Dikirim': 
+            case 'Kurir di Lokasi': return 'bg-indigo-50 text-indigo-600 border-indigo-100'
+            case 'Kurir Tidak Tersedia': return 'bg-rose-50 text-rose-600 border-rose-100'
             case 'Selesai': return 'bg-emerald-50 text-emerald-600 border-emerald-100'
+            case 'Dibatalkan': return 'bg-slate-100 text-slate-500 border-slate-200'
             default: return 'bg-slate-50 text-slate-600 border-slate-100'
         }
     }
@@ -212,26 +218,44 @@ export default function ShopOrdersPage() {
                             <div className="px-5 pb-5 pt-0 flex gap-2">
                                 {order.status === "Perlu Dikemas" && (
                                     <button 
-                                        onClick={() => updateStatus(order.id, "Diproses")}
+                                        onClick={async () => {
+                                            const { error } = await supabase.from("orders").update({ status: "Mencari Kurir" }).eq("id", order.id)
+                                            if (!error) {
+                                                toast.success("Mencari Kurir Berlangsung...")
+                                                await fetch("/api/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }) })
+                                                fetchShopAndOrders()
+                                            }
+                                        }}
                                         className="flex-1 bg-[#ee4d2d] hover:bg-[#d73211] text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-[#ee4d2d]/20 active:scale-[0.98]"
                                     >
-                                        Mulai Masak
+                                        Auto Cari Kurir (Manual)
                                     </button>
                                 )}
                                 {order.status === "Diproses" && (
                                     <button 
-                                        onClick={() => updateStatus(order.id, "Dikirim")}
+                                        onClick={async () => {
+                                            const { error } = await supabase.from("orders").update({ status: "Mencari Kurir" }).eq("id", order.id)
+                                            if (!error) {
+                                                toast.success("Mencari Kurir Berlangsung...")
+                                                await fetch("/api/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }) })
+                                                fetchShopAndOrders()
+                                            }
+                                        }}
                                         className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98]"
                                     >
-                                        Siap Diantar
+                                        Lanjutkan Cari Kurir (Manual)
                                     </button>
                                 )}
-                                {order.status === "Dikirim" && (
+                                {["Mencari Kurir", "Kurir Tidak Tersedia"].includes(order.status) && (
                                     <button 
-                                        onClick={() => updateStatus(order.id, "Selesai")}
-                                        className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
+                                        onClick={async () => {
+                                            toast.success("Mencari Kurir Diulang...")
+                                            await fetch("/api/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }) })
+                                            fetchShopAndOrders()
+                                        }}
+                                        className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20 active:scale-[0.98]"
                                     >
-                                        Selesaikan
+                                        Cari Kurir Lagi
                                     </button>
                                 )}
                                 <button 

@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import {
   MapPin, Power, ShieldCheck, Clock, Loader2, Navigation,
-  CheckCircle2, Package, Camera, X, Wallet
+  CheckCircle2, Package, Camera, X, Wallet, ChevronLeft
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -156,6 +156,9 @@ export default function DriverDashboard() {
   }
 
   useEffect(() => {
+    // Persist driver mode so refresh keeps user on driver page
+    localStorage.setItem("warden_mode", "driver")
+
     let mounted = true
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -172,6 +175,11 @@ export default function DriverDashboard() {
     init()
     return () => { mounted = false }
   }, [router])
+
+  const exitDriverMode = () => {
+    localStorage.removeItem("warden_mode")
+    router.push("/")
+  }
 
   useEffect(() => {
     if (loading || !user?.id) return
@@ -360,6 +368,12 @@ export default function DriverDashboard() {
       {/* HEADER */}
       <div className="relative z-10 px-6 pt-12 pb-6 flex justify-between items-start">
         <div>
+          <button
+            onClick={exitDriverMode}
+            className="flex items-center gap-1.5 text-white/70 text-xs font-bold mb-3 hover:text-white transition-colors"
+          >
+            <ChevronLeft size={16} /> Kembali ke Warung Kita
+          </button>
           <h1 className="text-2xl font-bold text-white tracking-tight">Halo, {user?.full_name?.split(' ')[0] || 'Driver'}</h1>
           <p className="text-white/80 text-sm mt-1 flex items-center gap-1.5">
             {location ? <MapPin size={12} /> : <Loader2 size={12} className="animate-spin" />}
@@ -464,12 +478,15 @@ export default function DriverDashboard() {
               </div>
 
               {/* Show store focus if not picked up yet */}
-              {!['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) && activeOrder.shop_address && (
+              {!['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) && (
                 <div className="flex items-start gap-2 bg-orange-50 p-3 rounded-xl border border-orange-100 mb-4">
                   <Package size={14} className="text-orange-400 shrink-0 mt-0.5" />
                   <div>
                     <p className="text-[10px] font-bold text-orange-600 mb-0.5">AMBIL DI (TOKO)</p>
-                    <p className="text-xs text-orange-800 font-medium leading-snug">{activeOrder.shop_address}</p>
+                    <p className="text-xs text-orange-800 font-bold mb-0.5">
+                      {activeDriverOrder.order_items?.[0]?.product_name?.split(" | ")[1] || "Toko Utama"}
+                    </p>
+                    <p className="text-[10px] text-orange-700 font-medium leading-snug">{activeOrder.shop_address || "Hubungi admin untuk detail"}</p>
                   </div>
                 </div>
               )}
@@ -487,7 +504,16 @@ export default function DriverDashboard() {
               )}
 
               <button
-                onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${activeOrder.latitude},${activeOrder.longitude}`)}
+                onClick={() => {
+                  const destLat = ['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) ? activeOrder.latitude : activeOrder.shop_latitude;
+                  const destLng = ['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) ? activeOrder.longitude : activeOrder.shop_longitude;
+                  
+                  if (destLat && destLng) {
+                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`)
+                  } else {
+                    toast.error("Titik koordinat tujuan belum tersedia")
+                  }
+                }}
                 className="w-full bg-slate-900 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors mb-3"
               >
                 <MapPin size={16} /> Buka Navigasi Maps

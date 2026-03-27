@@ -20,7 +20,6 @@ export async function addDriverCommission(driverId: string, orderId: string) {
     const commission = Math.floor(order.shipping_amount * COMMISSION_RATE)
     if (commission <= 0) return
 
-    // Increment the driver's saldo atomically using rpc, or update with increment
     const { data: userRow } = await supabaseAdmin
         .from("users")
         .select("saldo")
@@ -56,12 +55,12 @@ export async function dispatchOrder(orderId: string) {
 
     if (!order) return { success: false, error: "Order not found" }
 
-    // If order already has an active driver (status check as ground truth)
-    if (["Kurir Menuju Lokasi", "Dikirim", "Selesai"].includes(order.status)) {
+    // If order already has an active driver
+    if (["Kurir Menuju Lokasi", "Kurir di Toko", "Dikirim", "Kurir di Lokasi", "Selesai"].includes(order.status)) {
         return { success: false, error: "Order already has a driver" }
     }
 
-    // Check if already has an accepted driver_order
+    // Check if already accepted
     const { data: existing } = await supabaseAdmin
         .from("driver_orders")
         .select("id, status")
@@ -71,17 +70,9 @@ export async function dispatchOrder(orderId: string) {
 
     if (existing) return { success: false, error: "Already assigned" }
 
-    // Count previous attempts for this order
-    const { count: attemptCount } = await supabaseAdmin
-        .from("driver_orders")
-        .select("*", { count: "exact", head: true })
-        .eq("order_id", orderId)
-
-    const attemptIndex = attemptCount || 0
-
     // 2. Determine store location
-    let storeLat = order.latitude || 0
-    let storeLng = order.longitude || 0
+    const storeLat = order.latitude || 0
+    const storeLng = order.longitude || 0
 
     // 3. Fetch online drivers
     const { data: drivers } = await supabaseAdmin
@@ -94,7 +85,7 @@ export async function dispatchOrder(orderId: string) {
         return { success: false, error: "No drivers available" }
     }
 
-    // 4. Filter out drivers who already rejected or were offered this order
+    // 4. Filter out drivers already tried in the current round
     const { data: triedDrivers } = await supabaseAdmin
         .from("driver_orders")
         .select("driver_id")
@@ -102,16 +93,30 @@ export async function dispatchOrder(orderId: string) {
         .in("status", ["rejected", "expired", "offered"]) as { data: any[] }
 
     const triedIds = new Set((triedDrivers || []).map((d: any) => d.driver_id))
+    let eligibleDrivers = drivers.filter(d => !triedIds.has(d.id))
 
-    const eligibleDrivers = drivers.filter(d => !triedIds.has(d.id))
-
+    // 5. ♻️ All drivers exhausted → reset round and try again (infinite retry)
     if (eligibleDrivers.length === 0) {
-        // All drivers tried — update order status to failed
-        await supabaseAdmin.from("orders").update({ status: "Kurir Tidak Tersedia" } as any).eq("id", orderId)
-        return { success: false, error: "All drivers exhausted" }
+        console.log(`[Dispatch] ♻️ All drivers tried for order ${orderId} — resetting round...`)
+
+        // Mark expired/rejected as "expired_reset" so they're skippable next filter
+        await supabaseAdmin
+            .from("driver_orders")
+            .update({ status: "expired_reset" } as any)
+            .eq("order_id", orderId)
+            .in("status", ["rejected", "expired"])
+
+        // Keep order in "Mencari Kurir" state
+        await supabaseAdmin
+            .from("orders")
+            .update({ status: "Mencari Kurir" } as any)
+            .eq("id", orderId)
+
+        // Start fresh with all online drivers
+        eligibleDrivers = drivers
     }
 
-    // 5. Sort: auto-accept first, then distance
+    // 6. Sort: auto-accept first, then closest
     const withDistance = eligibleDrivers.map(d => ({
         ...d,
         distance: (storeLat && d.last_lat)
@@ -127,8 +132,15 @@ export async function dispatchOrder(orderId: string) {
 
     const selected = withDistance[0]
 
+    // Count total attempts for logging
+    const { count: attemptCount } = await supabaseAdmin
+        .from("driver_orders")
+        .select("*", { count: "exact", head: true })
+        .eq("order_id", orderId)
+
+    const attemptIndex = attemptCount || 0
+
     if (selected.is_auto_accept) {
-        // Immediate assign — no countdown
         await supabaseAdmin.from("driver_orders").insert({
             order_id: orderId,
             driver_id: selected.id,
@@ -139,13 +151,12 @@ export async function dispatchOrder(orderId: string) {
             dispatch_attempt: attemptIndex + 1
         } as any)
 
-        // Auto-update order status
         await supabaseAdmin.from("orders").update({ status: "Kurir Menuju Lokasi" } as any).eq("id", orderId)
 
         return { success: true, message: "Auto-accepted", assigned: true }
     }
 
-    // Offer with 20s timeout
+    // Offer with countdown
     const expiresAt = new Date(Date.now() + OFFER_DURATION_SECONDS * 1000).toISOString()
 
     await supabaseAdmin.from("driver_orders").insert({

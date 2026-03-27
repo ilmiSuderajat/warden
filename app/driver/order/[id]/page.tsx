@@ -16,8 +16,20 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
   const [timeLeft, setTimeLeft] = useState(20)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [shop, setShop] = useState<any>(null)
+  const [distanceToShop, setDistanceToShop] = useState<number | null>(null)
 
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
 
   const handleReject = useCallback(async (isTimeout = false) => {
     if (timerRef.current) clearInterval(timerRef.current)
@@ -69,6 +81,22 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
 
       setDriverOrder(driverOrderData)
       setOrder(driverOrderData.orders)
+
+      // Fetch shop for exact coordinates and compute distance
+      const shopId = driverOrderData.order_items?.[0]?.product_name?.split(" | ")?.[1]
+      if (shopId && mounted) {
+        const { data: shopD } = await supabase.from("shops").select("name, latitude, longitude, address").eq("id", shopId).maybeSingle()
+        if (shopD) {
+          setShop(shopD)
+          if (navigator.geolocation && mounted) {
+            navigator.geolocation.getCurrentPosition((pos) => {
+              if (shopD.latitude && shopD.longitude) {
+                setDistanceToShop(calculateDistance(pos.coords.latitude, pos.coords.longitude, shopD.latitude, shopD.longitude))
+              }
+            })
+          }
+        }
+      }
 
       const expiresAt = new Date(driverOrderData.offer_expires_at).getTime()
       const diff = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
@@ -194,9 +222,12 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
               <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
                 <MapPin size={18} className="text-orange-400" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Titik Jemput</p>
-                <p className="text-sm font-semibold text-white">{order?.shop_address || 'Toko Utama'}</p>
+                <p className="text-sm font-semibold text-white">{shop?.name || order?.shop_address || 'Toko Utama'}</p>
+                {distanceToShop !== null && (
+                  <p className="text-[11px] text-orange-400 font-medium mt-1">Jarak ke warung: {distanceToShop.toFixed(1)} KM</p>
+                )}
               </div>
             </div>
             <div className="ml-5 border-l-2 border-dashed border-white/20 h-6"></div>
@@ -204,9 +235,12 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
               <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
                 <Navigation size={18} className="text-emerald-400" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Tujuan Antar</p>
-                <p className="text-sm font-semibold text-slate-200 leading-snug">{order?.address}</p>
+                <p className="text-sm font-semibold text-slate-200 leading-snug line-clamp-2">{order?.address}</p>
+                {order?.distance_km !== undefined && (
+                  <p className="text-[11px] text-emerald-400 font-medium mt-1">Jarak ke pembeli: {order.distance_km.toFixed(1)} KM</p>
+                )}
               </div>
             </div>
           </div>

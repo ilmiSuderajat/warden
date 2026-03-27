@@ -46,8 +46,8 @@ function OrdersContent() {
       .eq("user_id", user.id)
 
     if (activeTab === "pending") query = query.eq("payment_status", "pending")
-    if (activeTab === "dikemas") query = query.eq("status", "Perlu Dikemas")
-    if (activeTab === "dikirim") query = query.eq("status", "Dikirim")
+    if (activeTab === "dikemas") query = query.in("status", ["Perlu Dikemas", "Diproses"])
+    if (activeTab === "dikirim") query = query.in("status", ["Mencari Kurir", "Kurir Menuju Lokasi", "Kurir di Toko", "Dikirim", "Kurir di Lokasi", "Kurir Tidak Tersedia"])
     if (activeTab === "selesai") query = query.eq("status", "Selesai")
 
     const { data } = await query.order("created_at", { ascending: false })
@@ -59,8 +59,13 @@ function OrdersContent() {
     switch (status) {
       case 'Menunggu Pembayaran': return 'bg-amber-50 text-amber-600 border-amber-100'
       case 'Perlu Dikemas': return 'bg-indigo-50 text-indigo-600 border-indigo-100'
-      case 'Diproses': return 'bg-orange-50 text-orange-600 border-orange-100'
-      case 'Dikirim': return 'bg-blue-50 text-blue-600 border-blue-100'
+      case 'Diproses': return 'bg-blue-50 text-blue-600 border-blue-100'
+      case 'Mencari Kurir': return 'bg-yellow-50 text-yellow-600 border-yellow-100 animate-pulse'
+      case 'Kurir Menuju Lokasi':
+      case 'Kurir di Toko':
+      case 'Dikirim':
+      case 'Kurir di Lokasi': return 'bg-indigo-50 text-indigo-600 border-indigo-100'
+      case 'Kurir Tidak Tersedia': return 'bg-rose-50 text-rose-600 border-rose-100'
       case 'Selesai': return 'bg-emerald-50 text-emerald-600 border-emerald-100'
       case 'Dibatalkan': return 'bg-rose-50 text-rose-600 border-rose-100'
       default: return 'bg-slate-50 text-slate-600 border-slate-100'

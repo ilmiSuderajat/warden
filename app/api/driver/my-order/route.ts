@@ -58,9 +58,23 @@ export async function GET() {
             .select("product_name, quantity, price, image_url")
             .eq("order_id", activeDriverOrder.order_id) as { data: any[] }
 
+        // Fetch shop coordinates
+        let shop_lat = null;
+        let shop_lng = null;
+        if (items && items.length > 0) {
+            const shopId = items[0].product_name?.split(" | ")?.[1]
+            if (shopId) {
+                const { data: shopResult } = await supabaseAdmin.from("shops").select("latitude, longitude").eq("id", shopId).maybeSingle()
+                if (shopResult) {
+                    shop_lat = shopResult.latitude
+                    shop_lng = shopResult.longitude
+                }
+            }
+        }
+
         return NextResponse.json({
             type: "active",
-            driverOrder: { ...activeDriverOrder, orders: order, order_items: items || [] }
+            driverOrder: { ...activeDriverOrder, orders: { ...order, shop_latitude: shop_lat, shop_longitude: shop_lng }, order_items: items || [] }
         })
     } catch (e: any) {
         console.error("my-order error:", e)
