@@ -13,6 +13,9 @@ export async function POST(req: Request) {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+        // Bypass RLS for users table
+        const { supabaseAdmin } = await import('@/lib/driverOrders')
+
         const body = await req.json()
         const updates: any = {}
         
@@ -23,7 +26,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })
         }
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from("users")
             .update(updates)
             .eq("id", session.user.id)

@@ -13,6 +13,8 @@ export async function POST(req: Request) {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+        const { supabaseAdmin } = await import('@/lib/driverOrders')
+
         const body = await req.json()
         const { lat, lng } = body
 
@@ -20,9 +22,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Invalid coordinates" }, { status: 400 })
         }
 
-        // We use service role to update if RLS on users prevents user from updating themselves,
-        // but typically users can update their own row if RLS allows. Assuming RLS allows:
-        const { error } = await supabase
+        // Bypass RLS 
+        const { error } = await supabaseAdmin
             .from("users")
             .update({ last_lat: lat, last_lng: lng })
             .eq("id", session.user.id)

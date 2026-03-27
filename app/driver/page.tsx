@@ -3,9 +3,123 @@
 import { useEffect, useState, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
-import { MapPin, Power, ShieldCheck, Clock, Loader2, Navigation, CheckCircle2, Package } from "lucide-react"
+import {
+  MapPin, Power, ShieldCheck, Clock, Loader2, Navigation,
+  CheckCircle2, Package, Camera, X, Wallet
+} from "lucide-react"
 import { toast } from "sonner"
 
+// ─── Proof Upload Modal ────────────────────────────────────────
+function ProofModal({
+  title, description, onConfirm, onCancel, requireGps = false, loading
+}: {
+  title: string, description: string,
+  onConfirm: (url: string, lat?: number, lng?: number) => void,
+  onCancel: () => void, requireGps?: boolean, loading: boolean
+}) {
+  const [file, setFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [gps, setGps] = useState<{ lat: number, lng: number } | null>(null)
+  const [gpsLoading, setGpsLoading] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const pickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setFile(f)
+    setPreview(URL.createObjectURL(f))
+  }
+
+  const captureGps = () => {
+    setGpsLoading(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setGpsLoading(false)
+        toast.success("Lokasi berhasil dikunci")
+      },
+      () => { setGpsLoading(false); toast.error("Gagal mendapatkan GPS") },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }
+
+  const handleSubmit = async () => {
+    if (!file) return toast.error("Pilih foto terlebih dahulu")
+    if (requireGps && !gps) return toast.error("Kunci lokasi GPS terlebih dahulu")
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("type", requireGps ? "delivery" : "pickup")
+      const res = await fetch("/api/driver/upload-proof", { method: "POST", body: formData })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      onConfirm(data.url, gps?.lat, gps?.lng)
+    } catch (e: any) {
+      toast.error(e.message || "Gagal upload foto")
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative w-full max-w-md bg-white rounded-t-3xl p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-base font-bold text-slate-900">{title}</h2>
+          <button onClick={onCancel} className="p-1.5 text-slate-400 hover:text-slate-600"><X size={18} /></button>
+        </div>
+        <p className="text-xs text-slate-500 mb-5">{description}</p>
+
+        {/* Photo */}
+        <div
+          onClick={() => inputRef.current?.click()}
+          className="w-full h-44 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 overflow-hidden flex items-center justify-center mb-4 cursor-pointer hover:bg-slate-50 transition-colors"
+        >
+          {preview
+            ? <img src={preview} className="w-full h-full object-cover" alt="proof" />
+            : <div className="flex flex-col items-center gap-2 text-slate-400">
+              <Camera size={32} />
+              <p className="text-xs font-medium">Ketuk untuk Ambil Foto</p>
+            </div>
+          }
+        </div>
+        <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={pickFile} />
+
+        {requireGps && (
+          <button
+            onClick={captureGps}
+            disabled={gpsLoading}
+            className={`w-full mb-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors ${gps
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'bg-slate-100 text-slate-700 border border-slate-200'}`}
+          >
+            {gpsLoading
+              ? <Loader2 size={14} className="animate-spin" />
+              : <MapPin size={14} />}
+            {gps ? `✅ GPS terkunci: ${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)}` : "Kunci Lokasi GPS Sekarang"}
+          </button>
+        )}
+
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm">Batal</button>
+          <button
+            onClick={handleSubmit}
+            disabled={!file || (requireGps && !gps) || uploading || loading}
+            className="flex-[2] py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {(uploading || loading) ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+            Konfirmasi
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Dashboard ────────────────────────────────────────────
 export default function DriverDashboard() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
@@ -15,165 +129,141 @@ export default function DriverDashboard() {
   const [activeDriverOrder, setActiveDriverOrder] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [statusLoading, setStatusLoading] = useState(false)
+  const [pickupModal, setPickupModal] = useState(false)
+  const [deliveryModal, setDeliveryModal] = useState(false)
 
   const watchId = useRef<number | null>(null)
+
+  const pollActiveOrder = async () => {
+    try {
+      const res = await fetch("/api/driver/my-order")
+      const data = await res.json()
+      if (data.type === "active") setActiveDriverOrder(data.driverOrder)
+      else if (data.type === "offer") router.push(`/driver/order/${data.driverOrder.id}`)
+      else setActiveDriverOrder(null)
+    } catch { /* ignore */ }
+  }
+
+  // Refresh saldo after delivery
+  const refreshUser = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const { data } = await supabase.from("users").select("saldo").eq("id", session.user.id).single()
+    if (data) setUser((prev: any) => ({ ...prev, saldo: data.saldo }))
+  }
 
   useEffect(() => {
     let mounted = true
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return router.replace("/login")
-
-      const { data: userData } = await supabase
-        .from("users").select("*").eq("id", session.user.id).single()
-
+      const { data: userData } = await supabase.from("users").select("*").eq("id", session.user.id).single()
       if (mounted && userData) {
         setUser(userData)
         setIsOnline(userData.is_online || false)
         setIsAutoAccept(userData.is_auto_accept || false)
       }
-
-      // Check for any active driver_order (accepted + not delivered)
-      const { data: activeOrder } = await supabase
-        .from("driver_orders")
-        .select("*, orders(*)")
-        .eq("driver_id", session.user.id)
-        .in("status", ["accepted", "picked_up"])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle() as { data: any }
-
-      if (mounted && activeOrder) setActiveDriverOrder(activeOrder)
-
-      // Check for pending offer
-      const now = new Date().toISOString()
-      const { data: offer } = await supabase
-        .from("driver_orders")
-        .select("id")
-        .eq("driver_id", session.user.id)
-        .eq("status", "offered")
-        .gte("offer_expires_at", now)
-        .maybeSingle() as { data: any }
-
-      if (mounted && offer) router.push(`/driver/order/${offer.id}`)
-
+      if (mounted) await pollActiveOrder()
       if (mounted) setLoading(false)
     }
     init()
     return () => { mounted = false }
   }, [router])
 
-  // GPS tracking
   useEffect(() => {
-    if (!isOnline) {
-      if (watchId.current) navigator.geolocation.clearWatch(watchId.current)
-      return
-    }
-    if (!("geolocation" in navigator)) return
+    if (loading || !user?.id) return
+    const interval = setInterval(pollActiveOrder, 8000)
+    return () => clearInterval(interval)
+  }, [loading, user?.id])
 
+  useEffect(() => {
+    if (!isOnline) { if (watchId.current) navigator.geolocation.clearWatch(watchId.current); return }
+    if (!("geolocation" in navigator)) return
     watchId.current = navigator.geolocation.watchPosition(
       ({ coords }) => {
         setLocation({ lat: coords.latitude, lng: coords.longitude })
-        fetch("/api/driver/location", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lat: coords.latitude, lng: coords.longitude })
-        })
+        fetch("/api/driver/location", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lat: coords.latitude, lng: coords.longitude }) })
       },
-      (err) => {
-        console.error(err)
-        toast.error("Gagal mendapatkan GPS. Pastikan izin lokasi aktif.")
-        setIsOnline(false)
-      },
+      () => { toast.error("Gagal mendapatkan GPS. Pastikan izin lokasi aktif."); setIsOnline(false) },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     )
     return () => { if (watchId.current) navigator.geolocation.clearWatch(watchId.current) }
   }, [isOnline])
 
-  // Cron ping
   useEffect(() => {
     if (!isOnline) return
-    const interval = setInterval(() => {
-      fetch("/api/dispatch/cron", { method: "POST" }).catch(() => {})
-    }, 10000)
+    const interval = setInterval(() => fetch("/api/dispatch/cron", { method: "POST" }).catch(() => {}), 10000)
     return () => clearInterval(interval)
   }, [isOnline])
 
-  // Realtime: listen for new offers on driver_orders
+  // Realtime
   useEffect(() => {
     if (!user?.id) return
     const channel = supabase.channel(`driver_${user.id}`)
-      .on("postgres_changes", {
-        event: "INSERT", schema: "public", table: "driver_orders",
-        filter: `driver_id=eq.${user.id}`
-      }, (payload: any) => {
-        if (payload.new.status === "offered") {
-          router.push(`/driver/order/${payload.new.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "driver_orders", filter: `driver_id=eq.${user.id}` }, async (payload: any) => {
+        if (payload.new.status === "offered") router.push(`/driver/order/${payload.new.id}`)
+        else if (payload.new.status === "accepted") {
+          const { data: fullOrder } = await supabase.from("driver_orders").select("*, orders(*)").eq("id", payload.new.id).single()
+          if (fullOrder) { setActiveDriverOrder(fullOrder); toast.success("Order prioritas diterima!") }
         }
       })
-      .on("postgres_changes", {
-        event: "UPDATE", schema: "public", table: "driver_orders",
-        filter: `driver_id=eq.${user.id}`
-      }, (payload: any) => {
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "driver_orders", filter: `driver_id=eq.${user.id}` }, async (payload: any) => {
         if (payload.new.status === "accepted") {
-          // auto-accept scenario
-          setActiveDriverOrder({ ...payload.new })
-          toast.success("Order baru otomatis diterima!")
+          const { data: fullOrder } = await supabase.from("driver_orders").select("*, orders(*)").eq("id", payload.new.id).single()
+          if (fullOrder) { setActiveDriverOrder(fullOrder); toast.success("Order diterima!") }
         }
-        if (payload.new.status === "delivered") {
-          setActiveDriverOrder(null)
-        }
+        if (["delivered", "rejected", "expired"].includes(payload.new.status)) setActiveDriverOrder(null)
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [user?.id, router])
 
   const toggleOnline = async () => {
-    const newState = !isOnline
-    setIsOnline(newState)
-    await fetch("/api/driver/settings", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_online: newState })
-    })
-    if (newState) toast.success("Anda sekarang Online")
-    else toast.info("Anda Offline")
+    const val = !isOnline; setIsOnline(val)
+    await fetch("/api/driver/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ is_online: val }) })
+    if (val) toast.success("Anda sekarang Online"); else toast.info("Anda Offline")
   }
 
   const toggleAutoAccept = async () => {
-    const newState = !isAutoAccept
-    setIsAutoAccept(newState)
-    await fetch("/api/driver/settings", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_auto_accept: newState })
-    })
-    if (newState) toast.success("Auto-Accept Aktif")
-    else toast.info("Auto-Accept Nonaktif")
+    const val = !isAutoAccept; setIsAutoAccept(val)
+    await fetch("/api/driver/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ is_auto_accept: val }) })
+    if (val) toast.success("Auto-Accept Aktif"); else toast.info("Auto-Accept Nonaktif")
   }
 
-  const handleUpdateStatus = async (status: "picked_up" | "delivered") => {
-    if (!activeDriverOrder) return
+  const handlePickupConfirm = async (pickupPhotoUrl: string) => {
     setStatusLoading(true)
+    const orderId = activeDriverOrder?.order_id || activeDriverOrder?.orders?.id
     try {
       const res = await fetch("/api/driver/update-status", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: activeDriverOrder.order_id || activeDriverOrder.orders?.id, status })
+        body: JSON.stringify({ orderId, status: "picked_up", pickupPhotoUrl })
       })
       const data = await res.json()
       if (data.success) {
-        if (status === "picked_up") {
-          setActiveDriverOrder((prev: any) => ({ ...prev, status: "picked_up" }))
-          toast.success("Status diperbarui: Sedang Dikirim!")
-        } else {
-          setActiveDriverOrder(null)
-          toast.success("Order Selesai! Terima kasih 🎉")
-        }
-      } else {
-        toast.error(data.error || "Gagal update status")
-      }
-    } catch {
-      toast.error("Terjadi error")
-    } finally {
-      setStatusLoading(false)
-    }
+        setPickupModal(false)
+        setActiveDriverOrder((prev: any) => ({ ...prev, status: "picked_up" }))
+        toast.success("Status: Sedang Dikirim!")
+      } else { toast.error(data.error || "Gagal update status") }
+    } catch { toast.error("Terjadi error") } finally { setStatusLoading(false) }
+  }
+
+  const handleDeliveryConfirm = async (deliveryPhotoUrl: string, lat?: number, lng?: number) => {
+    setStatusLoading(true)
+    const orderId = activeDriverOrder?.order_id || activeDriverOrder?.orders?.id
+    try {
+      const res = await fetch("/api/driver/update-status", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, status: "delivered", deliveryPhotoUrl, deliveryLat: lat, deliveryLng: lng })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setDeliveryModal(false)
+        setActiveDriverOrder(null)
+        await refreshUser()
+        const commissionFmt = data.commission ? `+Rp ${data.commission.toLocaleString('id-ID')} komisi` : ""
+        toast.success(`Order Selesai! ${commissionFmt} 🎉`)
+      } else { toast.error(data.error || "Gagal update status") }
+    } catch { toast.error("Terjadi error") } finally { setStatusLoading(false) }
   }
 
   if (loading) {
@@ -189,9 +279,10 @@ export default function DriverDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-24 relative overflow-hidden">
+      {/* BACKGROUND */}
       <div className={`absolute top-0 left-0 right-0 h-64 transition-colors duration-700 ${isOnline ? 'bg-emerald-600' : 'bg-slate-800'} rounded-b-[40px] z-0`}></div>
 
-      {/* Header */}
+      {/* HEADER */}
       <div className="relative z-10 px-6 pt-12 pb-6 flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Halo, {user?.full_name?.split(' ')[0] || 'Driver'}</h1>
@@ -200,20 +291,19 @@ export default function DriverDashboard() {
             {location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : 'Mencari lokasi...'}
           </p>
         </div>
-        <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full border border-white/30 flex items-center justify-center shrink-0 overflow-hidden">
-          {user?.avatar_url
-            ? <img src={user.avatar_url} className="w-full h-full object-cover" alt="avatar" />
-            : <span className="text-white font-bold">{user?.full_name?.charAt(0) || 'D'}</span>}
+        {/* Saldo Badge */}
+        <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl px-4 py-2 text-right">
+          <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Saldo</p>
+          <p className="text-base font-extrabold text-white">Rp {(user?.saldo || 0).toLocaleString('id-ID')}</p>
         </div>
       </div>
 
-      {/* Toggles Card */}
+      {/* TOGGLES CARD */}
       <div className="relative z-10 px-5">
-        <div className="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col gap-6">
-          {/* Online */}
+        <div className="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col gap-5">
           <div className="flex justify-between items-center">
             <div className="flex gap-4 items-center">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isOnline ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isOnline ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
                 <Power size={24} strokeWidth={2.5} />
               </div>
               <div>
@@ -222,17 +312,14 @@ export default function DriverDashboard() {
               </div>
             </div>
             <button onClick={toggleOnline}
-              className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-              <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${isOnline ? 'translate-x-6' : 'translate-x-0'}`} />
+              className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-sm transition ${isOnline ? 'translate-x-6' : 'translate-x-0'}`} />
             </button>
           </div>
-
-          <div className="h-px w-full bg-slate-100" />
-
-          {/* Auto Accept */}
+          <div className="h-px bg-slate-100" />
           <div className="flex justify-between items-center">
             <div className="flex gap-4 items-center">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isAutoAccept ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isAutoAccept ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
                 <ShieldCheck size={24} strokeWidth={2.5} />
               </div>
               <div>
@@ -241,15 +328,15 @@ export default function DriverDashboard() {
               </div>
             </div>
             <button onClick={toggleAutoAccept}
-              className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${isAutoAccept ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-              <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${isAutoAccept ? 'translate-x-6' : 'translate-x-0'}`} />
+              className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ${isAutoAccept ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+              <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-sm transition ${isAutoAccept ? 'translate-x-6' : 'translate-x-0'}`} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Active Order */}
-      <div className="px-5 mt-8">
+      {/* ACTIVE ORDER */}
+      <div className="px-5 mt-6">
         <h3 className="text-sm font-bold text-slate-800 mb-4 px-1">Order Aktif</h3>
 
         {activeDriverOrder && activeOrder ? (
@@ -266,9 +353,23 @@ export default function DriverDashboard() {
               </div>
               <h4 className="text-base font-bold text-slate-900 mb-3">{activeOrder.customer_name}</h4>
 
+              {/* Store address */}
+              {activeOrder.shop_address && (
+                <div className="flex items-start gap-2 bg-orange-50 p-3 rounded-xl border border-orange-100 mb-2">
+                  <Package size={14} className="text-orange-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] font-bold text-orange-600 mb-0.5">AMBIL DARI</p>
+                    <p className="text-xs text-orange-800 font-medium leading-snug">{activeOrder.shop_address}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4">
                 <Navigation size={14} className="text-slate-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">{activeOrder.address}</p>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 mb-0.5">ANTAR KE</p>
+                  <p className="text-xs text-slate-600 font-medium leading-relaxed">{activeOrder.address}</p>
+                </div>
               </div>
 
               <button
@@ -279,42 +380,53 @@ export default function DriverDashboard() {
               </button>
 
               {activeDriverOrder.status === "accepted" && (
-                <button
-                  onClick={() => handleUpdateStatus("picked_up")}
-                  disabled={statusLoading}
-                  className="w-full bg-blue-500 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-600 transition-colors"
-                >
-                  {statusLoading ? <Loader2 size={16} className="animate-spin" /> : <Package size={16} />}
-                  Sudah Ambil dari Toko
+                <button onClick={() => setPickupModal(true)} disabled={statusLoading}
+                  className="w-full bg-blue-500 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-600 transition-colors">
+                  <Camera size={16} /> Sudah Ambil dari Toko (Upload Bukti)
                 </button>
               )}
-
               {activeDriverOrder.status === "picked_up" && (
-                <button
-                  onClick={() => handleUpdateStatus("delivered")}
-                  disabled={statusLoading}
-                  className="w-full bg-emerald-500 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors"
-                >
-                  {statusLoading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                  Selesai Antar ke Pelanggan
+                <button onClick={() => setDeliveryModal(true)} disabled={statusLoading}
+                  className="w-full bg-emerald-500 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors">
+                  <CheckCircle2 size={16} /> Selesai Antar (Upload Bukti + GPS)
                 </button>
               )}
             </div>
           </div>
         ) : (
-          <div className="bg-slate-100/50 border-2 border-dashed border-slate-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center">
+          <div className="bg-slate-100/50 border-2 border-dashed border-slate-200 rounded-3xl p-8 flex flex-col items-center text-center">
             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 mb-4">
               <Clock size={28} className="text-slate-400 animate-pulse" />
             </div>
-            <h4 className="text-base font-bold text-slate-800 mb-1">
-              {isOnline ? 'Menunggu Order...' : 'Anda Sedang Offline'}
-            </h4>
+            <h4 className="text-base font-bold text-slate-800 mb-1">{isOnline ? 'Menunggu Order...' : 'Anda Sedang Offline'}</h4>
             <p className="text-xs text-slate-500 font-medium max-w-[200px]">
-              {isOnline ? 'Pastikan aplikasi tetap terbuka agar GPS selalu terhubung.' : 'Aktifkan status untuk mulai bekerja.'}
+              {isOnline ? 'Pastikan aplikasi tetap terbuka.' : 'Aktifkan status untuk mulai bekerja.'}
             </p>
           </div>
         )}
       </div>
+
+      {/* PROOF MODALS */}
+      {pickupModal && (
+        <ProofModal
+          title="Bukti Pengambilan Barang"
+          description="Foto barang yang sudah Anda terima dari toko harus terlihat jelas."
+          onConfirm={(url) => handlePickupConfirm(url)}
+          onCancel={() => setPickupModal(false)}
+          requireGps={false}
+          loading={statusLoading}
+        />
+      )}
+      {deliveryModal && (
+        <ProofModal
+          title="Bukti Serah Terima Pelanggan"
+          description="Pastikan penerima dan barang terlihat jelas di foto. Lokasi GPS dikunci secara otomatis."
+          onConfirm={(url, lat, lng) => handleDeliveryConfirm(url, lat, lng)}
+          onCancel={() => setDeliveryModal(false)}
+          requireGps={true}
+          loading={statusLoading}
+        />
+      )}
     </div>
   )
 }

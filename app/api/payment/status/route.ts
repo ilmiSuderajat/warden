@@ -77,6 +77,7 @@ export async function POST(req: Request) {
 
         if (transactionStatus === 'settlement' || transactionStatus === 'capture') {
             paymentStatus = 'paid'
+            // Kembali ke Perlu Dikemas agar admin bisa memproses pesanan dulu sebelum cari kurir
             orderStatus = 'Perlu Dikemas'
         } else if (['cancel', 'deny', 'expire'].includes(transactionStatus)) {
             paymentStatus = 'cancelled'

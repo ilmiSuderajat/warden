@@ -6,6 +6,35 @@ export const supabaseAdmin = createClient(
 )
 
 const OFFER_DURATION_SECONDS = 20
+const COMMISSION_RATE = 0.20 // 20% of shipping_amount
+
+export async function addDriverCommission(driverId: string, orderId: string) {
+    const { data: order } = await supabaseAdmin
+        .from("orders")
+        .select("shipping_amount")
+        .eq("id", orderId)
+        .maybeSingle() as { data: any }
+
+    if (!order?.shipping_amount) return
+
+    const commission = Math.floor(order.shipping_amount * COMMISSION_RATE)
+    if (commission <= 0) return
+
+    // Increment the driver's saldo atomically using rpc, or update with increment
+    const { data: userRow } = await supabaseAdmin
+        .from("users")
+        .select("saldo")
+        .eq("id", driverId)
+        .maybeSingle() as { data: any }
+
+    const currentSaldo = userRow?.saldo || 0
+    await supabaseAdmin
+        .from("users")
+        .update({ saldo: currentSaldo + commission } as any)
+        .eq("id", driverId)
+
+    return commission
+}
 
 // Haversine distance in km
 export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -26,6 +55,11 @@ export async function dispatchOrder(orderId: string) {
         .maybeSingle() as { data: any }
 
     if (!order) return { success: false, error: "Order not found" }
+
+    // If order already has an active driver (status check as ground truth)
+    if (["Kurir Menuju Lokasi", "Dikirim", "Selesai"].includes(order.status)) {
+        return { success: false, error: "Order already has a driver" }
+    }
 
     // Check if already has an accepted driver_order
     const { data: existing } = await supabaseAdmin

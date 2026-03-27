@@ -43,13 +43,22 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return router.replace("/login")
 
-      // Fetch driver_order row
-      const { data: driverOrderData } = await supabase
-        .from("driver_orders")
-        .select("*, orders(*)")
-        .eq("id", driverOrderId)
-        .eq("driver_id", session.user.id)
-        .maybeSingle() as { data: any }
+      // Use server API to bypass RLS on driver_orders
+      const res = await fetch("/api/driver/my-order")
+      const apiData = await res.json()
+
+      if (!mounted) return
+
+      // Redirect to offer page if different offer ID came through
+      if (apiData.type === "offer" && apiData.driverOrder?.id !== driverOrderId) {
+        return router.replace(`/driver/order/${apiData.driverOrder.id}`)
+      }
+
+      // Fetch this specific driver_order by calling the cron check + reading via admin
+      // Fallback: call action endpoint to validate, using a GET-style check
+      const checkRes = await fetch(`/api/driver/check-offer?driverOrderId=${driverOrderId}`)
+      const checkData = await checkRes.json()
+      const driverOrderData = checkData.driverOrder
 
       if (!mounted) return
 
@@ -173,9 +182,9 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
               <h2 className="text-xl font-bold text-white">{order?.customer_name}</h2>
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-400 font-medium mb-1 tracking-wide">PENGHASILAN</p>
+              <p className="text-xs text-slate-400 font-medium mb-1 tracking-wide">KOMISI KAMU</p>
               <p className="text-xl font-extrabold text-emerald-400">
-                Rp {(order?.shipping_amount || 10000).toLocaleString('id-ID')}
+                Rp {Math.floor((order?.shipping_amount || 0) * 0.20).toLocaleString('id-ID')}
               </p>
             </div>
           </div>
@@ -183,11 +192,11 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
           <div className="space-y-4">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                <MapPin size={18} className="text-indigo-400" />
+                <MapPin size={18} className="text-orange-400" />
               </div>
               <div>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Titik Jemput</p>
-                <p className="text-sm font-semibold text-white">Toko Utama</p>
+                <p className="text-sm font-semibold text-white">{order?.shop_address || 'Toko Utama'}</p>
               </div>
             </div>
             <div className="ml-5 border-l-2 border-dashed border-white/20 h-6"></div>

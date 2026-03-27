@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
-import { supabaseAdmin } from "@/lib/driverOrders"
+import { supabaseAdmin, addDriverCommission } from "@/lib/driverOrders"
 
-// Maps driver_orders status to orders status displayed to users
 const STATUS_MAP: Record<string, string> = {
     picked_up: "Dikirim",
     delivered: "Selesai"
@@ -20,20 +19,31 @@ export async function POST(req: Request) {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-        const { orderId, status } = await req.json()
+        const body = await req.json()
+        const { orderId, status, pickupPhotoUrl, deliveryPhotoUrl, deliveryLat, deliveryLng } = body
+
         if (!orderId || !["picked_up", "delivered"].includes(status)) {
             return NextResponse.json({ error: "Invalid payload" }, { status: 400 })
         }
 
+        // Enforce proof requirements
+        if (status === "picked_up" && !pickupPhotoUrl) {
+            return NextResponse.json({ error: "Foto bukti pengambilan barang diperlukan" }, { status: 400 })
+        }
+        if (status === "delivered") {
+            if (!deliveryPhotoUrl) return NextResponse.json({ error: "Foto bukti serah terima diperlukan" }, { status: 400 })
+            if (!deliveryLat || !deliveryLng) return NextResponse.json({ error: "Lokasi GPS diperlukan" }, { status: 400 })
+        }
+
         const driverId = session.user.id
 
-        // Verify this driver owns the accepted driver_order
+        // Verify this driver owns the active driver_order (accepted OR already picked_up)
         const { data: driverOrder } = await supabaseAdmin
             .from("driver_orders")
-            .select("id, order_id")
+            .select("id, order_id, status")
             .eq("order_id", orderId)
             .eq("driver_id", driverId)
-            .eq("status", "accepted")
+            .in("status", ["accepted", "picked_up"])
             .maybeSingle() as { data: any }
 
         if (!driverOrder) {
@@ -42,22 +52,31 @@ export async function POST(req: Request) {
 
         const now = new Date().toISOString()
         const updateDriverOrder: any = { status }
-        if (status === "picked_up") updateDriverOrder.picked_up_at = now
-        if (status === "delivered") updateDriverOrder.delivered_at = now
+
+        if (status === "picked_up") {
+            updateDriverOrder.picked_up_at = now
+            updateDriverOrder.pickup_photo_url = pickupPhotoUrl
+        }
+        if (status === "delivered") {
+            updateDriverOrder.delivered_at = now
+            updateDriverOrder.delivery_photo_url = deliveryPhotoUrl
+            updateDriverOrder.delivery_lat = deliveryLat
+            updateDriverOrder.delivery_lng = deliveryLng
+        }
 
         // Update driver_orders
-        await supabaseAdmin
-            .from("driver_orders")
-            .update(updateDriverOrder)
-            .eq("id", driverOrder.id)
+        await supabaseAdmin.from("driver_orders").update(updateDriverOrder).eq("id", driverOrder.id)
 
-        // Mirror the status to the orders table
-        await supabaseAdmin
-            .from("orders")
-            .update({ status: STATUS_MAP[status] } as any)
-            .eq("id", orderId)
+        // Mirror to orders table
+        await supabaseAdmin.from("orders").update({ status: STATUS_MAP[status] } as any).eq("id", orderId)
 
-        return NextResponse.json({ success: true, orderStatus: STATUS_MAP[status] })
+        // Commission: credit driver saldo on delivery
+        let commission = 0
+        if (status === "delivered") {
+            commission = (await addDriverCommission(driverId, orderId)) || 0
+        }
+
+        return NextResponse.json({ success: true, orderStatus: STATUS_MAP[status], commission })
     } catch (e: any) {
         console.error("Update status error:", e)
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
