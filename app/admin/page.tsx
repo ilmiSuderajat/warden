@@ -294,6 +294,20 @@ export default function AdminDashboard() {
                         <ChevronRight size={16} className="text-slate-300" />
                       </div>
                     </Link>
+                    <Link href="/admin/drivers">
+                      <div className="col-span-2 p-5 rounded-xl border border-emerald-100 bg-emerald-50/50 text-slate-900 flex items-center justify-between transition-all hover:bg-emerald-50 active:scale-[0.98] shadow-sm">
+                        <div className="flex items-center gap-4">
+                          <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
+                            <Truck size={20} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900 leading-tight">Manajemen Driver</p>
+                            <p className="text-[10px] text-slate-500 font-medium">Kelola kurir & status dispatch</p>
+                          </div>
+                        </div>
+                        <ChevronRight size={16} className="text-emerald-400" />
+                      </div>
+                    </Link>
                     <Link href="/admin/chat">
                       <div className="col-span-2 p-5 rounded-xl border border-indigo-100 bg-indigo-600 text-white flex items-center justify-between transition-all hover:bg-indigo-700 active:scale-[0.98] shadow-lg shadow-indigo-200">
                         <div className="flex items-center gap-4">

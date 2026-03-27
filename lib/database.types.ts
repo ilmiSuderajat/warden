@@ -19,6 +19,10 @@ export interface Database {
           is_blocked: boolean | null
           gender: string | null
           created_at: string
+          is_auto_accept: boolean | null
+          is_online: boolean | null
+          last_lat: number | null
+          last_lng: number | null
         }
         Insert: {
           id: string
@@ -29,6 +33,10 @@ export interface Database {
           is_blocked?: boolean | null
           gender?: string | null
           created_at?: string
+          is_auto_accept?: boolean | null
+          is_online?: boolean | null
+          last_lat?: number | null
+          last_lng?: number | null
         }
         Update: {
           id?: string
@@ -39,6 +47,10 @@ export interface Database {
           is_blocked?: boolean | null
           gender?: string | null
           created_at?: string
+          is_auto_accept?: boolean | null
+          is_online?: boolean | null
+          last_lat?: number | null
+          last_lng?: number | null
         }
       }
       admins: {
@@ -83,6 +95,11 @@ export interface Database {
           payment_status: string | null
           voucher_code: string | null
           discount_amount: number | null
+          driver_id: string | null
+          accepted_at: string | null
+          offered_to_driver_id: string | null
+          offer_expires_at: string | null
+          dispatch_attempt: number | null
         }
         Insert: {
           id?: string
@@ -105,6 +122,11 @@ export interface Database {
           payment_status?: string | null
           voucher_code?: string | null
           discount_amount?: number | null
+          driver_id?: string | null
+          accepted_at?: string | null
+          offered_to_driver_id?: string | null
+          offer_expires_at?: string | null
+          dispatch_attempt?: number | null
         }
         Update: {
           id?: string
@@ -127,6 +149,11 @@ export interface Database {
           payment_status?: string | null
           voucher_code?: string | null
           discount_amount?: number | null
+          driver_id?: string | null
+          accepted_at?: string | null
+          offered_to_driver_id?: string | null
+          offer_expires_at?: string | null
+          dispatch_attempt?: number | null
         }
       }
       order_items: {

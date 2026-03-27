@@ -137,6 +137,48 @@ export default function PaidOrdersPage() {
         }
     }
 
+    const handleDispatchOrder = async (orderId: string) => {
+        setUpdatingId(orderId)
+        try {
+            // 1. Update DB status first — this always happens regardless of driver availability
+            const { error: dbError } = await supabase
+                .from("orders")
+                .update({ status: "Mencari Kurir" })
+                .eq("id", orderId)
+
+            if (dbError) throw dbError
+
+            // Update local state immediately after DB success
+            setOrders(prev => prev.map(order =>
+                order.id === orderId ? { ...order, status: "Mencari Kurir" } : order
+            ))
+
+            // 2. Trigger the Dispatch Engine — failure here is non-fatal
+            const res = await fetch("/api/dispatch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ orderId })
+            })
+            const data = await res.json()
+            
+            if (!res.ok) {
+                // "No drivers available" is expected — system will retry via cron
+                if (data.error === "No drivers available") {
+                    toast.warning("Tidak ada kurir online saat ini. Sistem akan otomatis mencari lagi.")
+                } else {
+                    toast.warning(`Status diubah, namun dispatch gagal: ${data.error}`)
+                }
+            } else {
+                toast.success("Order sedang ditawarkan ke kurir terdekat!")
+            }
+        } catch (err: any) {
+            console.error("Error dispatching:", err)
+            toast.error(err.message || "Gagal memproses dispatch")
+        } finally {
+            setUpdatingId(null)
+        }
+    }
+
     const filteredOrders = orders.filter(order =>
         (order.customer_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (order.id || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -346,6 +388,17 @@ export default function PaidOrdersPage() {
                                     </div>
 
                                     <div className="flex flex-col gap-2">
+                                        {order.status === "Perlu Dikemas" && (
+                                            <button
+                                                onClick={() => handleDispatchOrder(order.id)}
+                                                disabled={updatingId === order.id}
+                                                className="w-full py-3 bg-emerald-500 text-slate-900 rounded-xl text-xs font-bold hover:bg-emerald-400 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
+                                            >
+                                                {updatingId === order.id ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                                                Cari Kurir Otomatis
+                                            </button>
+                                        )}
+
                                         {order.status !== "Dikirim" && (
                                             <button
                                                 onClick={() => handleUpdateToShipping(order.id)}

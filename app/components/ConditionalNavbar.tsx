@@ -14,7 +14,8 @@ export default function ConditionalNavbar() {
   const isAdminPage = pathname.startsWith('/admin');
   const isChatPage = pathname.startsWith('/chat');
   const isShopPage = pathname.startsWith('/shop');
-  if (isProductPage || isCartPage || isCheckoutPage || isCategoryPage || isProductDetailPage || isAdressPage || isChatPage || isAdminPage || isShopPage) return null;
+  const isDriverPage = pathname.startsWith('/driver');
+  if (isProductPage || isCartPage || isCheckoutPage || isCategoryPage || isProductDetailPage || isAdressPage || isChatPage || isAdminPage || isShopPage || isDriverPage) return null;
 
   return (
     <>

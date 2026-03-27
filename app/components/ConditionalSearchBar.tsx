@@ -21,7 +21,8 @@ export default function ConditionalSearchBar() {
   const isPromo = pathname.startsWith('/promo');
   const isChat = pathname.startsWith('/chat');
   const isShopPage = pathname.startsWith('/shop');
-  if (isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isProductDetailPage || isAdressPage || isFlashSale || isReady || isWishlist || isPromo || isChat || isShopPage) return null;
+  const isDriverPage = pathname.startsWith('/driver');
+  if (isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isProductDetailPage || isAdressPage || isFlashSale || isReady || isWishlist || isPromo || isChat || isShopPage || isDriverPage) return null;
 
   return (
     <Suspense fallback={<div className="h-16 bg-white animate-pulse" />}>

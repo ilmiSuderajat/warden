@@ -12,6 +12,7 @@ export default function ProfilePage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [hasShop, setHasShop] = useState(false)
+  const [isDriver, setIsDriver] = useState(false)
 
   useEffect(() => {
     const getProfile = async () => {
@@ -25,6 +26,14 @@ export default function ProfilePage() {
           .eq("owner_id", user.id)
           .maybeSingle()
         if (shop) setHasShop(true)
+
+        // Check driver role
+        const { data: userRecord } = await supabase
+          .from("users")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle()
+        if (userRecord?.role === "driver" || userRecord?.role === "admin") setIsDriver(true)
       }
       
       setLoading(false)
@@ -169,10 +178,21 @@ export default function ProfilePage() {
               })}
             </div>
 
+            {/* DRIVER MODE BUTTON — only shown for drivers */}
+            {isDriver && (
+              <Link
+                href="/driver"
+                className="w-full mt-4 bg-emerald-500 p-4 rounded-2xl flex items-center justify-center gap-2 text-white active:bg-emerald-600 transition-all shadow-lg shadow-emerald-200 font-bold"
+              >
+                <Icons.Bike size={18} />
+                <span className="text-sm">Beralih ke Mode Driver</span>
+              </Link>
+            )}
+
             {/* LOGOUT BUTTON */}
             <button
               onClick={handleLogout}
-              className="w-full mt-6 bg-white p-4 rounded-2xl flex items-center justify-center gap-2 text-red-500 active:bg-red-50 transition-all border border-slate-200 shadow-sm font-semibold"
+              className="w-full mt-4 bg-white p-4 rounded-2xl flex items-center justify-center gap-2 text-red-500 active:bg-red-50 transition-all border border-slate-200 shadow-sm font-semibold"
             >
               <Icons.LogOut size={18} />
               <span className="text-sm">Keluar Akun</span>

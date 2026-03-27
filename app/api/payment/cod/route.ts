@@ -63,7 +63,8 @@ export async function POST(req: Request) {
             .from("orders")
             .update({
                 payment_status: "processing",
-                payment_method: "cod"
+                payment_method: "cod",
+                status: "Perlu Dikemas"
             })
             .eq("id", orderId)
             .eq("user_id", session.user.id)
