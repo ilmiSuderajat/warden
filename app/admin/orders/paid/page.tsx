@@ -388,26 +388,34 @@ export default function PaidOrdersPage() {
                                     </div>
 
                                     <div className="flex flex-col gap-2">
-                                        {order.status === "Perlu Dikemas" && (
+                                        {/* Only show dispatch button when order is ready to be picked up */}
+                                        {(order.status === "Perlu Dikemas") && (
                                             <button
                                                 onClick={() => handleDispatchOrder(order.id)}
                                                 disabled={updatingId === order.id}
                                                 className="w-full py-3 bg-emerald-500 text-slate-900 rounded-xl text-xs font-bold hover:bg-emerald-400 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
                                             >
                                                 {updatingId === order.id ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                                                Cari Kurir Otomatis
+                                                Siap Dikirim — Cari Kurir
                                             </button>
                                         )}
 
-                                        {order.status !== "Dikirim" && (
-                                            <button
-                                                onClick={() => handleUpdateToShipping(order.id)}
-                                                disabled={updatingId === order.id}
-                                                className="w-full py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-indigo-100"
-                                            >
-                                                {updatingId === order.id ? <Loader2 size={16} className="animate-spin" /> : <Truck size={16} />}
-                                                Update ke Dikirim
-                                            </button>
+                                        {order.status === "Mencari Kurir" && (
+                                            <div className="w-full py-3 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
+                                                <Loader2 size={14} className="animate-spin" /> Sedang Mencari Kurir...
+                                            </div>
+                                        )}
+
+                                        {order.status === "Kurir Menuju Lokasi" && (
+                                            <div className="w-full py-3 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
+                                                <Truck size={14} /> Kurir Menuju Toko
+                                            </div>
+                                        )}
+
+                                        {order.status === "Dikirim" && (
+                                            <div className="w-full py-3 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
+                                                <Truck size={14} /> Sedang Dalam Pengiriman
+                                            </div>
                                         )}
 
                                         <button

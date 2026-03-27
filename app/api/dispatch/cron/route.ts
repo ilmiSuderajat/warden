@@ -1,41 +1,36 @@
 import { NextResponse } from "next/server"
-import { supabaseAdmin, dispatchOrder } from "@/lib/dispatch"
+import { supabaseAdmin, dispatchOrder } from "@/lib/driverOrders"
 
 export async function POST(req: Request) {
     try {
         const now = new Date().toISOString()
-        
-        const { data: expiredOrders, error } = await supabaseAdmin
-            .from("orders")
-            .select("id, dispatch_attempt")
-            .is("driver_id", null)
-            .lt("offer_expires_at", now)
-            .not("offer_expires_at", "is", null) as { data: any[], error: any }
-            
-        if (error) throw error
-        
+
+        // Find offered driver_orders rows that have expired
+        const { data: expiredOffers } = await supabaseAdmin
+            .from("driver_orders")
+            .select("id, order_id, driver_id")
+            .eq("status", "offered")
+            .lt("offer_expires_at", now) as { data: any[] }
+
         const results = []
 
-        for (const order of expiredOrders || []) {
+        for (const offer of expiredOffers || []) {
+            // Mark this offer as expired
             await supabaseAdmin
-                .from("orders")
-                // @ts-ignore
-                .update({ 
-                    dispatch_attempt: (order.dispatch_attempt || 0) + 1,
-                    offered_to_driver_id: null,
-                    offer_expires_at: null
-                })
-                .eq("id", order.id)
+                .from("driver_orders")
+                .update({ status: "expired" } as any)
+                .eq("id", offer.id)
 
-            const dispatchRes = await dispatchOrder(order.id)
-            results.push({ id: order.id, result: dispatchRes })
+            // Try dispatching to next driver
+            const result = await dispatchOrder(offer.order_id)
+            results.push({ order_id: offer.order_id, result })
         }
 
-        return NextResponse.json({ success: true, processed: expiredOrders?.length || 0, results })
+        return NextResponse.json({ success: true, processed: expiredOffers?.length || 0, results })
     } catch (error: any) {
-        console.error("Cron Worker Error:", error)
+        console.error("Cron Error:", error)
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }
 
-export const GET = POST;
+export const GET = POST

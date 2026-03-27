@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
-import { supabaseAdmin, dispatchOrder } from "@/lib/dispatch"
+import { supabaseAdmin, dispatchOrder } from "@/lib/driverOrders"
 
 export async function POST(req: Request) {
     try {
@@ -14,77 +14,59 @@ export async function POST(req: Request) {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-        const body = await req.json()
-        const { orderId, action } = body
-
-        if (!orderId || !["accept", "reject"].includes(action)) {
+        const { driverOrderId, action } = await req.json()
+        if (!driverOrderId || !["accept", "reject"].includes(action)) {
             return NextResponse.json({ error: "Invalid payload" }, { status: 400 })
         }
 
         const driverId = session.user.id
 
+        // Fetch the driver_order row
+        const { data: driverOrder } = await supabaseAdmin
+            .from("driver_orders")
+            .select("*")
+            .eq("id", driverOrderId)
+            .eq("driver_id", driverId)
+            .eq("status", "offered")
+            .maybeSingle() as { data: any }
+
+        if (!driverOrder) {
+            return NextResponse.json({ error: "Offer not found or already handled" }, { status: 404 })
+        }
+
+        // Check expiry
+        if (driverOrder.offer_expires_at && new Date(driverOrder.offer_expires_at) < new Date()) {
+            await supabaseAdmin.from("driver_orders").update({ status: "expired" } as any).eq("id", driverOrderId)
+            return NextResponse.json({ error: "Offer expired" }, { status: 410 })
+        }
+
         if (action === "accept") {
-            const now = new Date()
-            
-            const { data: order } = await supabaseAdmin
+            // Mark as accepted
+            await supabaseAdmin
+                .from("driver_orders")
+                .update({ status: "accepted", accepted_at: new Date().toISOString() } as any)
+                .eq("id", driverOrderId)
+
+            // Auto-update order status
+            await supabaseAdmin
                 .from("orders")
-                .select("driver_id, offered_to_driver_id, offer_expires_at")
-                .eq("id", orderId)
-                .maybeSingle() as { data: any }
+                .update({ status: "Kurir Menuju Lokasi" } as any)
+                .eq("id", driverOrder.order_id)
 
-            if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 })
+            return NextResponse.json({ success: true, message: "Accepted", orderId: driverOrder.order_id })
+        }
 
-            if (order.driver_id !== null) {
-                return NextResponse.json({ error: "Order already taken" }, { status: 409 })
-            }
-
-            if (order.offered_to_driver_id !== driverId) {
-                return NextResponse.json({ error: "Not offered to you" }, { status: 403 })
-            }
-
-            if (order.offer_expires_at && new Date(order.offer_expires_at) < now) {
-                return NextResponse.json({ error: "Offer expired" }, { status: 410 })
-            }
-
-            const { error: updateError } = await supabaseAdmin
-                .from("orders")
-                // @ts-ignore
-                .update({
-                    driver_id: driverId,
-                    accepted_at: now.toISOString(),
-                    status: "Kurir Menuju Lokasi"
-                })
-                .eq("id", orderId)
-                .is("driver_id", null)
-
-            if (updateError) throw updateError
-
-            return NextResponse.json({ success: true, message: "Accepted" })
-        } 
-        
         if (action === "reject") {
-            const { data: order } = await supabaseAdmin
-                .from("orders")
-                .select("dispatch_attempt, offered_to_driver_id")
-                .eq("id", orderId)
-                .maybeSingle() as { data: any }
-                
-            if (order?.offered_to_driver_id === driverId) {
-                await supabaseAdmin
-                    .from("orders")
-                    // @ts-ignore
-                    .update({
-                        offered_to_driver_id: null,
-                        offer_expires_at: null,
-                        dispatch_attempt: (order.dispatch_attempt || 0) + 1
-                    })
-                    .eq("id", orderId)
-                
-                await dispatchOrder(orderId)
-                return NextResponse.json({ success: true, message: "Rejected successfully" })
-            } else {
-                return NextResponse.json({ success: true, message: "Already reassigned or taken" })
-            }
+            // Mark as rejected
+            await supabaseAdmin
+                .from("driver_orders")
+                .update({ status: "rejected" } as any)
+                .eq("id", driverOrderId)
+
+            // Immediately try next driver
+            await dispatchOrder(driverOrder.order_id)
+
+            return NextResponse.json({ success: true, message: "Rejected, dispatching next driver" })
         }
 
     } catch (e: any) {
