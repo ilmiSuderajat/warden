@@ -221,6 +221,7 @@ export default function CheckoutPage() {
           shipping_amount: shippingFee,
           distance_km: distance,
           total_amount: Math.max(0, totalPrice + shippingFee - discountAmount),
+          status: "Menunggu Pembayaran",
           payment_status: "pending",
           user_id: user.id,
           voucher_code: appliedVoucher ? appliedVoucher.code : null,
@@ -247,6 +248,9 @@ export default function CheckoutPage() {
         image_url: item.image_url
       }));
       await supabase.from("order_items").insert(itemsToInsert);
+      
+      // Clear cart
+      await supabase.from("cart").delete().eq("user_id", user.id);
 
       router.push(`/checkout/payment?order_id=${orderData.id}`);
 

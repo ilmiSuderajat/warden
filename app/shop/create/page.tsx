@@ -294,7 +294,7 @@ export default function CreateShopPage() {
                                     <LinkIcon size={12} className="text-indigo-500" /> Link Warung
                                 </label>
                                 <div className={`flex border rounded-xl overflow-hidden focus-within:ring-2 transition-all bg-slate-50 ${isSlugAvailable === false ? 'border-red-300 focus-within:ring-red-100 focus-within:border-red-500' : 'border-slate-200 focus-within:ring-indigo-100 focus-within:border-indigo-500'}`}>
-                                    <span className="bg-slate-100 px-4 py-3.5 text-sm text-slate-500 border-r border-slate-200 select-none whitespace-nowrap font-medium flex items-center">warden.id/</span>
+                                    <span className="bg-slate-100 px-4 py-3.5 text-sm text-slate-500 border-r border-slate-200 select-none whitespace-nowrap font-medium flex items-center">warungkita.id/</span>
                                     <input
                                         type="text"
                                         value={slug}

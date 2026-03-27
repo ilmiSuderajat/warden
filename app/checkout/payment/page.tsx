@@ -107,7 +107,7 @@ function PaymentContent() {
         if (!response.ok) throw new Error(data.error || "Gagal konfirmasi COD")
 
         setLoading(false)
-        router.push("/checkout/success?method=cod")
+        router.push(`/checkout/success?method=cod&order_id=${orderInfo.id}`)
         return
       }
 
@@ -138,21 +138,22 @@ function PaymentContent() {
           onSuccess: () => {
             console.log("[Payment] Success")
             setLoading(false);
-            router.push("/checkout/success")
+            router.push(`/checkout/success?order_id=${orderInfo.id}`)
           },
           onPending: () => {
             console.log("[Payment] Pending")
             setLoading(false);
-            router.push("/orders?status=unpaid")
+            router.push(`/orders?active=${orderInfo.id}`)
           },
           onError: (result: any) => {
             console.error("[Payment] Error:", result)
             toast.error("Terjadi kesalahan saat pembayaran.")
+            router.push(`/orders?active=${orderInfo.id}`)
           },
           onClose: () => {
             console.log("[Payment] Closed")
             toast.info("Pembayaran dibatalkan. Pesanan tersimpan di menu Pesanan.")
-            router.push("/orders")
+            router.push(`/orders?active=${orderInfo.id}`)
           },
         })
     } catch (error: any) {

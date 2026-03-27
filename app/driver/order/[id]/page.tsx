@@ -184,7 +184,7 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
             <div className="text-right">
               <p className="text-xs text-slate-400 font-medium mb-1 tracking-wide">KOMISI KAMU</p>
               <p className="text-xl font-extrabold text-emerald-400">
-                Rp {Math.floor((order?.shipping_amount || 0) * 0.20).toLocaleString('id-ID')}
+                Rp {Math.floor((order?.shipping_amount || 0) * 0.80).toLocaleString('id-ID')}
               </p>
             </div>
           </div>

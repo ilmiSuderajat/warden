@@ -83,7 +83,7 @@ export default function PublicShopPage() {
             phone = "62" + phone.substring(1)
         }
         
-        const text = encodeURIComponent(`Halo ${shop.name}, saya Ingin bertanya dari Warden App.`)
+        const text = encodeURIComponent(`Halo ${shop.name}, saya Ingin bertanya dari Warung Kita App.`)
         window.open(`https://wa.me/${phone}?text=${text}`, "_blank")
     }
 

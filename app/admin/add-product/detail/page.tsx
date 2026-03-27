@@ -254,7 +254,7 @@ export default function AddProductPage() {
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Nama Produk</label>
             <input
               type="text"
-              placeholder="Contoh: Donsu Warden"
+              placeholder="Contoh: Donsu Warung Kita"
               className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 transition-all placeholder:text-slate-300"
               onChange={e => setFormData({ ...formData, name: e.target.value })}
               required

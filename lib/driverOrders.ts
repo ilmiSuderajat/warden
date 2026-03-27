@@ -6,7 +6,7 @@ export const supabaseAdmin = createClient(
 )
 
 const OFFER_DURATION_SECONDS = 20
-const COMMISSION_RATE = 0.20 // 20% of shipping_amount
+const COMMISSION_RATE = 0.80 // 80% of shipping_amount
 
 export async function addDriverCommission(driverId: string, orderId: string) {
     const { data: order } = await supabaseAdmin

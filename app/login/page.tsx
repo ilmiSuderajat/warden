@@ -57,12 +57,12 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      const isApp = navigator.userAgent.includes("WardenApp")
-      console.log("[Login Page] Is App (WardenApp):", isApp)
+      const isApp = navigator.userAgent.includes("WarungKitaApp")
+      console.log("[Login Page] Is App (WarungKitaApp):", isApp)
 
       // URL redirect untuk Webview (Custom Scheme) atau Browser (Web URL)
       const redirectUrl = isApp
-        ? 'warden-app://auth-callback'
+        ? 'warung-kita-app://auth-callback'
         : `${window.location.origin}/auth/callback`
 
       await supabase.auth.signInWithOAuth({
@@ -90,12 +90,16 @@ export default function LoginPage() {
         <div className="relative mb-5">
           <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 rounded-full scale-150" />
           <div className="relative bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center shadow-lg border border-indigo-500">
-            <Icons.Fingerprint className="text-white" size={36} strokeWidth={1.5} />
+            <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center mb-6">
+          <Icons.Store className="text-indigo-600" size={32} />
+        </div>
+        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">WARUNG KITA</h1>
+        <p className="text-slate-500 mt-2 font-medium">Masuk untuk mengelola tokomu</p>
           </div>
         </div>
 
         {/* Brand Name */}
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">WARDEN</h1>
+        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">WARUNG KITA</h1>
         <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.2em] mt-1.5">
           Single Sign On
         </p>

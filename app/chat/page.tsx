@@ -70,7 +70,7 @@ export default function ChatPage() {
                         <MessageSquare className="w-10 h-10 text-white" />
                     </div>
                     <h2 className="text-xl font-bold text-slate-900 mb-2">Halo, ada yang bisa kami bantu?</h2>
-                    <p className="text-sm text-slate-500 max-w-[280px] mx-auto">Cari jawaban dari FAQ kami atau hubungi tim support Warden.</p>
+                    <p className="text-sm text-slate-500 max-w-[280px] mx-auto">Cari jawaban dari FAQ kami atau hubungi tim support Warung Kita.</p>
                 </div>
 
                 {/* Search Bar */}
@@ -157,7 +157,7 @@ export default function ChatPage() {
                             </button>
 
                             <a
-                                href="mailto:support@warden.id"
+                                href="mailto:support@warungkita.id"
                                 className="w-full flex items-center justify-between p-4 bg-indigo-500/30 rounded-2xl text-white font-bold text-sm border border-indigo-400/30 active:scale-[0.98] transition-all"
                             >
                                 <div className="flex items-center gap-3">

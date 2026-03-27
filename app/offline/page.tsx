@@ -7,9 +7,9 @@ export default function OfflinePage() {
       <div className="bg-red-50 p-6 rounded-[2.5rem] mb-6">
         <WifiOff size={48} className="text-red-500" />
       </div>
-      <h1 className="text-xl font-black text-gray-800 uppercase tracking-tighter">Sinyal Ilang, Lur!</h1>
-      <p className="text-xs text-gray-400 mt-2 leading-relaxed">
-        Coba cek kuota atau Wi-Fi kamu dulu, Warden butuh internet buat narik data Donsu.
+      <h1 className="text-2xl font-bold text-slate-800 mb-2">Kamu Sedang Offline</h1>
+      <p className="text-slate-500 text-sm mb-6">
+        Coba cek kuota atau Wi-Fi kamu dulu, Warung Kita butuh internet buat narik data Donsu.
       </p>
       <button 
         onClick={() => window.location.reload()}

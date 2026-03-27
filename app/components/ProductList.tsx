@@ -176,7 +176,7 @@ export default function ProductList() {
                   <div className={`relative shrink-0 overflow-hidden ${view === "grid" ? "aspect-square w-full" : "w-28 h-28"
                     }`}>
                     <div className="absolute top-0 left-0 z-10 flex flex-col items-start gap-0.5 p-1">
-                      <span className="bg-indigo-600 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm">WardenMall</span>
+                      <span className="bg-indigo-600 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm">WarungKita Mall</span>
                       {p.is_flash_sale && <span className="bg-orange-500 text-white text-[7px] font-bold px-1.5 py-0.5 italic rounded-sm shadow-sm">FLASH</span>}
                       {p.is_ready && <span className="bg-emerald-500 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm">READY</span>}
                     </div>

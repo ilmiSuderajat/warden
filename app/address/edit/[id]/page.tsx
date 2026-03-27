@@ -103,7 +103,7 @@ export default function EditAddressPage({ params }: { params: Promise<{ id: stri
             try {
                 const res = await fetch(
                     `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
-                    { headers: { 'User-Agent': 'WardenApp/1.0' } }
+                    { headers: { 'User-Agent': 'WarungKitaApp/1.0' } }
                 )
                 const data = await res.json()
 
@@ -146,7 +146,7 @@ export default function EditAddressPage({ params }: { params: Promise<{ id: stri
         setDetecting(true)
         try {
             const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formData.detail)}&limit=1`, {
-                headers: { 'User-Agent': 'WardenApp/1.0' }
+                headers: { 'User-Agent': 'WarungKitaApp/1.0' }
             })
             const data = await res.json()
             if (data && data.length > 0) {

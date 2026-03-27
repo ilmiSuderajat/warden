@@ -13,6 +13,7 @@ function SuccessContent() {
   
   const method = searchParams.get('method')
   const transactionStatus = searchParams.get('transaction_status') 
+  const orderId = searchParams.get('order_id')
 
   useEffect(() => {
     setMounted(true)
@@ -21,17 +22,18 @@ function SuccessContent() {
       return
     }
     
-    // Clear cart after successful order
-    const clearCart = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            await supabase.from("cart").delete().eq("user_id", user.id);
-        }
-    };
-    
-    clearCart();
+    // Auto redirect after 3 seconds
+    const timer = setTimeout(() => {
+      if (orderId) {
+        router.push(`/orders?active=${orderId}`)
+      } else {
+        router.push('/orders')
+      }
+    }, 3000)
+
     localStorage.removeItem('pendingOrder')
-  }, [transactionStatus, router])
+    return () => clearTimeout(timer)
+  }, [transactionStatus, router, orderId])
 
   // Loading State yang Clean
   if (!mounted || transactionStatus === 'pending') {
@@ -67,7 +69,7 @@ function SuccessContent() {
         </div>
 
         {/* TEXT CONTENT */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-slate-900 mb-2">
             {method === 'cod' ? 'Pesanan Dibuat!' : 'Pembayaran Berhasil!'}
           </h1>
@@ -76,6 +78,12 @@ function SuccessContent() {
               ? 'Pesanan COD kamu sudah dikonfirmasi. Siapkan uang pas saat kurir tiba.'
               : 'Terima kasih! Pembayaran diterima, pesanan sedang diproses.'}
           </p>
+        </div>
+
+        {/* LOADING REDIRECT */}
+        <div className="flex items-center justify-center gap-2 mb-8 text-indigo-600 font-medium text-xs">
+          <Loader2 size={14} className="animate-spin" />
+          Mengarahkan ke pesanan...
         </div>
 
         {/* KARTU DETAIL - Clean Card Style */}

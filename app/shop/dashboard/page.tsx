@@ -10,7 +10,10 @@ export default function ShopDashboardPage() {
     const router = useRouter()
     const [shop, setShop] = useState<any>(null)
     const [loading, setLoading] = useState(true)
-    const [isOpen, setIsOpen] = useState(true) // Simulating shop status
+    const [isOpen, setIsOpen] = useState(true)
+    const [newOrderCount, setNewOrderCount] = useState(0)
+    const [todayEarnings, setTodayEarnings] = useState(0)
+    const [todayCompleted, setTodayCompleted] = useState(0)
 
     useEffect(() => {
         const fetchShop = async () => {
@@ -37,7 +40,53 @@ export default function ShopDashboardPage() {
 
             setShop(data)
             setIsOpen(!data.whatsapp?.startsWith("CLOSED|"))
+            await fetchOrderStats(data.id)
             setLoading(false)
+        }
+
+        const fetchOrderStats = async (shopId: string) => {
+            try {
+                // Fetch all orders with items for this shop
+                const { data: allOrders } = await supabase
+                    .from("orders")
+                    .select("*, order_items(*)")
+
+                if (!allOrders) return
+
+                // Filter orders belonging to this shop
+                const shopOrders = allOrders.filter(order =>
+                    order.order_items?.some((item: any) =>
+                        item.product_name?.includes(`| ${shopId}`)
+                    )
+                )
+
+                // Count new orders (Perlu Dikemas / Menunggu Konfirmasi)
+                const newOrders = shopOrders.filter((o: any) =>
+                    o.status === "Perlu Dikemas" || o.status === "Menunggu Konfirmasi"
+                )
+                setNewOrderCount(newOrders.length)
+
+                // Today's stats
+                const todayStart = new Date()
+                todayStart.setHours(0, 0, 0, 0)
+
+                const todayOrders = shopOrders.filter((o: any) =>
+                    o.status === "Selesai" && new Date(o.created_at) >= todayStart
+                )
+                setTodayCompleted(todayOrders.length)
+
+                const earnings = todayOrders.reduce((sum: number, o: any) => {
+                    const shopItems = o.order_items?.filter((item: any) =>
+                        item.product_name?.includes(`| ${shopId}`)
+                    ) || []
+                    return sum + shopItems.reduce((s: number, item: any) =>
+                        s + (item.price * item.quantity), 0
+                    )
+                }, 0)
+                setTodayEarnings(earnings)
+            } catch (err) {
+                console.error("Error fetching order stats:", err)
+            }
         }
 
         fetchShop()
@@ -85,7 +134,7 @@ export default function ShopDashboardPage() {
     if (!shop) return null
 
     const actionButtons = [
-        { id: "orders", label: "Pesanan", sub: "Kelola orderan", icon: "ClipboardList", color: "text-blue-500", bg: "bg-blue-50", href: "/shop/dashboard/orders" },
+        { id: "orders", label: "Pesanan", sub: "Kelola orderan", icon: "ClipboardList", color: "text-blue-500", bg: "bg-blue-50", href: "/shop/dashboard/orders", badge: newOrderCount },
         { id: "menu", label: "Menu", sub: "Kelola produk", icon: "UtensilsCrossed", color: "text-orange-500", bg: "bg-orange-50", href: "/shop/dashboard/menu" },
         { id: "promo", label: "Promo", sub: "Diskon & diskon", icon: "TicketPercent", color: "text-red-500", bg: "bg-red-50", href: "#" },
         { id: "wallet", label: "Dompet", sub: "Penghasilan", icon: "Wallet", color: "text-emerald-500", bg: "bg-emerald-50", href: "#" },
@@ -133,11 +182,11 @@ export default function ShopDashboardPage() {
                     <div className="grid grid-cols-2 divide-x divide-slate-100">
                         <div className="pr-4">
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-1">Penghasilan</p>
-                            <p className="text-lg font-black text-slate-800">Rp 0</p>
+                            <p className="text-lg font-black text-slate-800">Rp {todayEarnings.toLocaleString('id-ID')}</p>
                         </div>
                         <div className="pl-4">
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-1">Pesanan Selesai</p>
-                            <p className="text-lg font-black text-slate-800">0</p>
+                            <p className="text-lg font-black text-slate-800">{todayCompleted}</p>
                         </div>
                     </div>
                 </div>
@@ -169,8 +218,13 @@ export default function ShopDashboardPage() {
                             <Link
                                 key={btn.id}
                                 href={btn.href}
-                                className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all active:scale-[0.98] group"
+                                className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all active:scale-[0.98] group relative"
                             >
+                                {(btn as any).badge > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1.5 shadow-lg shadow-red-500/30 animate-pulse">
+                                        {(btn as any).badge}
+                                    </span>
+                                )}
                                 <div className={`w-10 h-10 ${btn.bg} ${btn.color} rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
                                     <Icon size={20} />
                                 </div>
@@ -185,7 +239,7 @@ export default function ShopDashboardPage() {
                 <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-3xl p-5 text-white shadow-lg shadow-indigo-100 relative overflow-hidden">
                     <div className="relative z-10">
                         <h3 className="text-sm font-bold mb-1">Tingkatkan Penjualan</h3>
-                        <p className="text-[11px] text-indigo-100 opacity-80 leading-relaxed mb-4 max-w-[180px]">Daftarkan warungmu di program Flash Sale Warden untuk menjangkau lebih banyak pelanggan.</p>
+                        <p className="text-[11px] text-indigo-100 opacity-80 leading-relaxed mb-4 max-w-[180px]">Daftarkan warungmu di program Flash Sale Warung Kita untuk menjangkau lebih banyak pelanggan.</p>
                         <button className="bg-white text-indigo-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all">Daftar Sekarang</button>
                     </div>
                     <Icons.TrendingUp size={80} className="absolute -right-4 -bottom-4 text-white/10" />

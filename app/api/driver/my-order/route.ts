@@ -22,7 +22,7 @@ export async function GET() {
             .from("driver_orders")
             .select("*")
             .eq("driver_id", driverId)
-            .in("status", ["accepted", "picked_up"])
+            .in("status", ["accepted", "arrived_at_store", "picked_up", "arrived_at_customer"])
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle() as { data: any }

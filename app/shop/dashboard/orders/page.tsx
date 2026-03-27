@@ -17,6 +17,7 @@ export default function ShopOrdersPage() {
     const tabs = [
         { id: "baru", label: "Baru", icon: "Clock" },
         { id: "proses", label: "Diproses", icon: "ChefHat" },
+        { id: "dikirim", label: "Dikirim", icon: "Truck" },
         { id: "selesai", label: "Selesai", icon: "CheckCircle2" },
     ]
 
@@ -65,7 +66,8 @@ export default function ShopOrdersPage() {
                     })) || []
             }))
             if (activeTab === "baru") filteredOrders = filteredOrders.filter((o: any) => o.status === "Perlu Dikemas" || o.status === "Menunggu Konfirmasi")
-            if (activeTab === "proses") filteredOrders = filteredOrders.filter((o: any) => o.status === "Diproses" || o.status === "Dikirim")
+            if (activeTab === "proses") filteredOrders = filteredOrders.filter((o: any) => o.status === "Diproses")
+            if (activeTab === "dikirim") filteredOrders = filteredOrders.filter((o: any) => o.status === "Dikirim")
             if (activeTab === "selesai") filteredOrders = filteredOrders.filter((o: any) => o.status === "Selesai")
 
             setOrders(filteredOrders.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()))

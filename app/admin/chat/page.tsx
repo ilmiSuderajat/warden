@@ -518,7 +518,7 @@ export default function AdminChatPage() {
             {!selectedUser ? (
               <div className="text-center opacity-40">
                 <MessageCircle size={64} className="mx-auto mb-4" />
-                <p className="font-semibold text-lg">Warden Chat Center</p>
+                <p className="font-semibold text-lg">Warung Kita Chat Center</p>
                 <p className="text-sm mt-1">Pilih chat pada sidebar untuk mulai merespon</p>
               </div>
             ) : (
@@ -657,7 +657,7 @@ export default function AdminChatPage() {
                   </div>
                   <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
                     <Sparkles size={10} className="text-indigo-400" />
-                    Klik ikon bintang untuk saran balasan dari AI Warden
+                    Klik ikon bintang untuk saran balasan dari AI Warung Kita
                   </p>
                 </form>
               </>

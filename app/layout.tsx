@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: 'Warden',
+  title: 'Warung Kita',
 }
 
 // ✅ Tambahkan export terpisah untuk viewport

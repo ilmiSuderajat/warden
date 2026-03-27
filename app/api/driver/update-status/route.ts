@@ -4,7 +4,9 @@ import { cookies } from "next/headers"
 import { supabaseAdmin, addDriverCommission } from "@/lib/driverOrders"
 
 const STATUS_MAP: Record<string, string> = {
+    arrived_at_store: "Kurir di Toko",
     picked_up: "Dikirim",
+    arrived_at_customer: "Kurir di Lokasi",
     delivered: "Selesai"
 }
 
@@ -22,7 +24,7 @@ export async function POST(req: Request) {
         const body = await req.json()
         const { orderId, status, pickupPhotoUrl, deliveryPhotoUrl, deliveryLat, deliveryLng } = body
 
-        if (!orderId || !["picked_up", "delivered"].includes(status)) {
+        if (!orderId || !["arrived_at_store", "picked_up", "arrived_at_customer", "delivered"].includes(status)) {
             return NextResponse.json({ error: "Invalid payload" }, { status: 400 })
         }
 
@@ -43,7 +45,7 @@ export async function POST(req: Request) {
             .select("id, order_id, status")
             .eq("order_id", orderId)
             .eq("driver_id", driverId)
-            .in("status", ["accepted", "picked_up"])
+            .in("status", ["accepted", "arrived_at_store", "picked_up", "arrived_at_customer"])
             .maybeSingle() as { data: any }
 
         if (!driverOrder) {
@@ -68,7 +70,8 @@ export async function POST(req: Request) {
         await supabaseAdmin.from("driver_orders").update(updateDriverOrder).eq("id", driverOrder.id)
 
         // Mirror to orders table
-        await supabaseAdmin.from("orders").update({ status: STATUS_MAP[status] } as any).eq("id", orderId)
+        const orderUpdatePayload: any = { status: STATUS_MAP[status] }
+        await supabaseAdmin.from("orders").update(orderUpdatePayload).eq("id", orderId)
 
         // Commission: credit driver saldo on delivery
         let commission = 0

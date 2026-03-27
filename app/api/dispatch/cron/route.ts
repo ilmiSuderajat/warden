@@ -26,7 +26,42 @@ export async function POST(req: Request) {
             results.push({ order_id: offer.order_id, result })
         }
 
-        return NextResponse.json({ success: true, processed: expiredOffers?.length || 0, results })
+        // ==========================================
+        // Auto-complete orders after 3 hours of delivery
+        // ==========================================
+        const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
+        
+        const { data: deliveredDriverOrders } = await supabaseAdmin
+            .from("driver_orders")
+            .select("order_id, delivered_at")
+            .eq("status", "delivered")
+            .lt("delivered_at", threeHoursAgo) as { data: any[] }
+
+        let autoCompleteCount = 0
+        for (const ddo of deliveredDriverOrders || []) {
+            // Check if the order is still "Dikirim" (meaning user hasn't clicked Selesaikan)
+            const { data: order } = await supabaseAdmin
+                .from("orders")
+                .select("id, status")
+                .eq("id", ddo.order_id)
+                .eq("status", "Dikirim")
+                .maybeSingle() as { data: any }
+                
+            if (order) {
+                await supabaseAdmin
+                    .from("orders")
+                    .update({ status: "Selesai" } as any)
+                    .eq("id", order.id)
+                autoCompleteCount++
+            }
+        }
+
+        return NextResponse.json({ 
+            success: true, 
+            processedOffers: expiredOffers?.length || 0, 
+            autoCompleted: autoCompleteCount,
+            results 
+        })
     } catch (error: any) {
         console.error("Cron Error:", error)
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

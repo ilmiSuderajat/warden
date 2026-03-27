@@ -107,7 +107,7 @@ export default function AdminProfilePage() {
 
             <div className="mt-4">
               <h2 className="text-lg font-bold text-slate-900">
-                {user?.user_metadata?.full_name || "Admin Warden"}
+                {user?.user_metadata?.full_name || "Admin Warung Kita"}
               </h2>
               <p className="text-xs text-slate-500 mt-1">
                 {user?.email}

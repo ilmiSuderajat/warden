@@ -96,8 +96,8 @@ export default function ProductDetail() {
   const handleShare = async () => {
     const url = `${window.location.origin}/product/${id}`
     const shareData = {
-      title: product?.name || "Produk WardenMall",
-      text: `Cek ${product?.name} di WardenMall! Harga Rp ${product?.price?.toLocaleString('id-ID')}`,
+      title: product?.name || "Produk Warung Kita Mall",
+      text: `Cek ${product?.name} di Warung Kita Mall! Harga Rp ${product?.price?.toLocaleString('id-ID')}`,
       url
     }
 

@@ -1,19 +1,27 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import * as Icons from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Skeleton from "@/app/components/Skeleton"
 
-export default function MyOrdersPage() {
+function OrdersContent() {
   const [activeTab, setActiveTab] = useState("all")
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   // State untuk menyimpan ID order yang sedang di-expand
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const activeOrderId = searchParams.get("active")
+
+  useEffect(() => {
+    if (activeOrderId && orders.length > 0) {
+      setExpandedOrderId(activeOrderId)
+    }
+  }, [activeOrderId, orders])
 
   const tabs = [
     { id: "all", label: "Semua", icon: "LayoutGrid" },
@@ -34,7 +42,7 @@ export default function MyOrdersPage() {
 
     let query = supabase
       .from("orders")
-      .select("*, order_items(*)")
+      .select("*, order_items(*), driver_orders(delivery_photo_url)")
       .eq("user_id", user.id)
 
     if (activeTab === "pending") query = query.eq("payment_status", "pending")
@@ -67,6 +75,20 @@ export default function MyOrdersPage() {
 
   const toggleExpand = (orderId: string) => {
     setExpandedOrderId(prev => prev === orderId ? null : orderId)
+  }
+
+  const completeOrder = async (orderId: string) => {
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: "Selesai" })
+      .eq("id", orderId)
+
+    if (error) {
+      toast.error("Gagal menyelesaikan pesanan")
+    } else {
+      toast.success("Pesanan telah selesai! Terima kasih.")
+      fetchOrders()
+    }
   }
 
   const checkPaymentStatus = async (orderId: string) => {
@@ -302,6 +324,29 @@ export default function MyOrdersPage() {
                         </div>
                       )}
 
+                      {/* Delivery Proof Photo */}
+                      {order.driver_orders?.[0]?.delivery_photo_url && (
+                        <div className="mt-4 pt-4 border-t border-slate-100">
+                          <p className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
+                            <Icons.Package size={14} className="text-emerald-500" /> Bukti Pengiriman
+                          </p>
+                          <div className="w-full h-40 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                            <img src={order.driver_orders[0].delivery_photo_url} alt="Bukti Pengiriman" className="w-full h-full object-cover" />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Tombol Selesaikan Pesanan — muncul saat status Dikirim */}
+                      {order.status === "Dikirim" && (
+                        <button
+                          onClick={() => completeOrder(order.id)}
+                          className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 active:scale-[0.98]"
+                        >
+                          <Icons.CheckCircle2 size={18} />
+                          Selesaikan Pesanan
+                        </button>
+                      )}
+
                       <button
                         onClick={() => window.open(`https://wa.me/628123456789?text=Halo Admin, saya mau konfirmasi pesanan #${order.id.slice(0, 8)}`)}
                         className={`w-full py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 ${order.payment_status === "pending"
@@ -338,5 +383,17 @@ export default function MyOrdersPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function MyOrdersPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Skeleton className="w-10 h-10 rounded-full" />
+      </div>
+    }>
+      <OrdersContent />
+    </Suspense>
   )
 }

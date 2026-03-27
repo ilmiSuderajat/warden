@@ -127,8 +127,8 @@ export default function ProfilePage() {
                 </button>
               </div>
 
-              <h2 className="text-lg font-bold text-slate-800">
-                {user?.user_metadata?.full_name || "Sobat Warden"}
+              <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+                {user?.user_metadata?.full_name || "Sobat Warung Kita"}
               </h2>
               <p className="text-xs text-slate-400 font-medium mt-1">
                 {user?.email || "Belum Login"}
@@ -203,8 +203,8 @@ export default function ProfilePage() {
         {/* FOOTER INFO */}
 
         {/* FOOTER INFO */}
-        <div className="mt-8 text-center">
-          <p className="text-[10px] text-slate-300 font-medium">Warden App v1.0.4</p>
+        <div className="text-center pb-8">
+          <p className="text-[10px] text-slate-300 font-medium">Warung Kita App v1.0.4</p>
         </div>
       </div>
     </div>
