@@ -81,7 +81,7 @@ export default function ProductList() {
   const [hasMore, setHasMore] = useState(true)
   const [isFetchingMore, setIsFetchingMore] = useState(false)
   const { location: userLoc } = useUserLocation()
-  
+
   const loaderRef = useRef<HTMLDivElement>(null)
   const PAGE_SIZE = 8
 
@@ -142,13 +142,12 @@ export default function ProductList() {
   }, [hasMore, loading, isFetchingMore, page])
 
   return (
-    <div className="px-2 pb-24 max-w-md mx-auto mt-2 bg-gray-50/50">
+    <div className=" max-w-md mx-auto bg-gray-50/50">
       {/* HEADER */}
       <div className="flex justify-between items-center mb-3 px-1">
-        <h2 className="font-semibold text-gray-800 text-sm">Hanya Untukmu</h2>
         <div className="flex bg-gray-200/50 p-0.5 rounded-lg border border-gray-100">
-          <button onClick={() => setView("grid")} className={`p-1 rounded-md transition-all ${view === "grid" ? "bg-white shadow-sm text-indigo-600" : "text-gray-400"}`}><LayoutGrid size={14} /></button>
-          <button onClick={() => setView("list")} className={`p-1 rounded-md transition-all ${view === "list" ? "bg-white shadow-sm text-indigo-600" : "text-gray-400"}`}><List size={14} /></button>
+          <button onClick={() => setView("grid")} className={`p-1 rounded-md transition-all ${view === "grid" ? "bg-white shadow-sm text-indigo-600" : "text-gray-400"}`}><LayoutGrid size={18} /></button>
+          <button onClick={() => setView("list")} className={`p-1 rounded-md transition-all ${view === "list" ? "bg-white shadow-sm text-indigo-600" : "text-gray-400"}`}><List size={18} /></button>
         </div>
       </div>
 
@@ -209,9 +208,9 @@ export default function ProductList() {
                       <div className="flex items-center gap-1">
                         <div className="flex items-center text-orange-400">
                           <Star size={8} fill="currentColor" />
-                          <span className="text-[9px] font-bold ml-0.5 text-gray-700">{p.rating || "5.0"}</span>
+                          <span className="text-[9px] font-bold ml-0.5 text-gray-700">{(p.rating || 5.0).toFixed(1)}</span>
                         </div>
-                        <span className="text-gray-400 text-[9px] ml-1">{p.sold_count || "0"} terjual</span>
+                        <span className="text-gray-400 text-[9px] ml-1">{p.sold_count || 0} terjual</span>
                       </div>
                       <div className="flex items-center text-gray-400 gap-0.5 overflow-hidden">
                         <MapPin size={8} className="text-orange-500 shrink-0" />

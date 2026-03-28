@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   ArrowLeft, ImagePlus, Loader2, Navigation,
-  Check, Plus, Search, Map as MapIcon,
-  ExternalLink, MapPin
+  Check, Plus, MapPin, Package, Tag, Type, FileText, MapPinned
 } from "lucide-react";
 import imageCompression from 'browser-image-compression';
 import { useRouter } from "next/navigation";
@@ -50,8 +49,7 @@ export default function AddMenuPage() {
         return router.push("/shop/create");
       }
       setShop(shopData);
-      
-      // Auto-fill location from shop if available
+
       setFormData(prev => ({
         ...prev,
         location: shopData.address || "",
@@ -158,7 +156,7 @@ export default function AddMenuPage() {
           latitude: formData.latitude,
           longitude: formData.longitude,
           is_ready: isReady,
-          shop_id: shop.id // LINK TO SHOP
+          shop_id: shop.id
         }]);
 
       if (productError) throw productError;
@@ -174,118 +172,141 @@ export default function AddMenuPage() {
 
   if (fetchingShop) {
     return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-            <Loader2 className="animate-spin text-[#ee4d2d]" size={32} />
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="animate-spin text-zinc-900" size={28} />
+          <span className="text-sm text-zinc-500 font-medium">Memuat Data...</span>
         </div>
+      </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-32">
-      {/* HEADER */}
-      <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
-        <div className="flex items-center gap-3 px-5 h-14">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
-            <ArrowLeft size={20} strokeWidth={2.5} />
-          </button>
-          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Tambah Menu</h1>
-        </div>
-      </div>
+    <div className="min-h-screen bg-zinc-50 font-sans max-w-md mx-auto pb-32">
 
-      <form onSubmit={handleSubmit} className="p-5 space-y-5">
-        {/* SNAPSHOT INFO */}
-        <div className="bg-[#ee4d2d]/5 border border-[#ee4d2d]/10 p-4 rounded-2xl flex items-center justify-between">
-          <div className="flex items-center gap-3">
-             <div className="w-10 h-10 bg-[#ee4d2d] rounded-xl flex items-center justify-center shadow-lg shadow-[#ee4d2d]/20">
-                <Check className="text-white" size={20} />
-             </div>
-             <div>
-                <h3 className="text-sm font-bold text-slate-800 tracking-tight">Status Tampilan</h3>
-                <p className="text-[10px] text-slate-400 font-medium italic">Produk langsung tayang di warungmu</p>
-             </div>
+      {/* FLOATING HEADER */}
+      <nav className="fixed top-0 inset-x-0 z-50 bg-white/80 backdrop-blur-lg border-b border-zinc-100/80 h-14 flex items-center px-4 max-w-md mx-auto">
+        <button onClick={() => router.back()} className="p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-xl transition-colors">
+          <ArrowLeft size={20} strokeWidth={2.5} />
+        </button>
+        <h1 className="text-base font-bold text-zinc-900 tracking-tight ml-2">Tambah Menu Baru</h1>
+      </nav>
+
+      <form onSubmit={handleSubmit} className="pt-20 px-4 space-y-4">
+
+        {/* IMAGE UPLOADER */}
+        <div className="bg-white rounded-2xl p-4 border border-zinc-100 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <ImagePlus size={16} className="text-zinc-400" />
+            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Foto Produk</label>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsReady(!isReady)}
-            className={`w-12 h-6 rounded-full relative transition-all duration-300 ${isReady ? 'bg-emerald-400' : 'bg-slate-200'}`}
-          >
-            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${isReady ? 'right-0.5' : 'left-0.5'}`}></div>
-          </button>
-        </div>
-
-        {/* UPLOAD FOTO */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Foto Produk</label>
           <div className="grid grid-cols-3 gap-3">
             {previews.map((src, index) => (
               <label
                 key={index}
-                className={`relative aspect-square bg-slate-50 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all hover:border-[#ee4d2d]/30 hover:bg-[#ee4d2d]/5 ${index === 0 ? 'border-[#ee4d2d]/30 bg-[#ee4d2d]/5' : 'border-slate-100'}`}
+                className={`relative aspect-square bg-zinc-50 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all group ${index === 0 ? 'border-zinc-300' : 'border-zinc-100 hover:border-zinc-200'}`}
               >
                 {src ? (
                   <img src={src} className="w-full h-full object-cover" alt="preview" />
                 ) : (
-                  <div className="text-center flex flex-col items-center justify-center">
-                    <ImagePlus size={20} className={`${index === 0 ? 'text-[#ee4d2d]/30' : 'text-slate-300'} mb-1`} />
-                    {index === 0 && <span className="text-[8px] font-bold text-[#ee4d2d]/60 uppercase tracking-tighter">Utama</span>}
+                  <div className="text-center flex flex-col items-center justify-center group-hover:scale-105 transition-transform">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${index === 0 ? 'bg-zinc-900 text-white' : 'bg-zinc-200 text-zinc-500'}`}>
+                      {index === 0 ? <Check size={14} /> : <Plus size={14} />}
+                    </div>
+                    {index === 0 && <span className="text-[9px] font-bold text-zinc-500 uppercase">Sampul</span>}
                   </div>
                 )}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(index, e)} />
               </label>
             ))}
           </div>
+          <p className="text-[10px] text-zinc-400 mt-3 text-center">Kotak pertama akan menjadi foto sampul utama</p>
         </div>
 
-        {/* INFO DASAR */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-5">
+        {/* MAIN INFO */}
+        <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm space-y-4">
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Nama Menu</label>
-            <input
-              type="text"
-              placeholder="Contoh: Sate Maranggi Sapi"
-              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:border-[#ee4d2d] focus:ring-4 focus:ring-[#ee4d2d]/5 transition-all placeholder:text-slate-300 text-slate-800 font-medium"
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
-              required
-            />
+            <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Nama Menu</label>
+            <div className="relative">
+              <Type size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
+              <input
+                type="text"
+                placeholder="Contoh: Sate Maranggi Sapi"
+                className="w-full pl-10 pr-4 py-3 bg-zinc-50 border border-transparent rounded-xl text-sm outline-none focus:bg-white focus:border-zinc-300 focus:ring-2 focus:ring-zinc-100 transition-all text-zinc-800 font-medium"
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Harga (Rp)</label>
-              <input
-                type="number"
-                placeholder="25000"
-                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:border-[#ee4d2d] focus:ring-4 focus:ring-[#ee4d2d]/5 transition-all text-slate-800 font-bold"
-                onChange={e => setFormData({ ...formData, price: e.target.value })}
-                required
-              />
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Harga (Rp)</label>
+              <div className="relative">
+                <Tag size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
+                <input
+                  type="number"
+                  placeholder="25000"
+                  className="w-full pl-10 pr-4 py-3 bg-zinc-50 border border-transparent rounded-xl text-sm outline-none focus:bg-white focus:border-zinc-300 focus:ring-2 focus:ring-zinc-100 transition-all text-zinc-800 font-bold"
+                  onChange={e => setFormData({ ...formData, price: e.target.value })}
+                  required
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Harga Coret</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Harga Coret</label>
               <input
                 type="number"
                 placeholder="30000"
-                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:border-[#ee4d2d] focus:ring-4 focus:ring-[#ee4d2d]/5 transition-all text-slate-400 decoration-slate-300"
+                className="w-full px-4 py-3 bg-zinc-50 border border-transparent rounded-xl text-sm outline-none focus:bg-white focus:border-zinc-300 focus:ring-2 focus:ring-zinc-100 transition-all text-zinc-400 font-medium"
                 onChange={e => setFormData({ ...formData, original_price: e.target.value })}
               />
             </div>
           </div>
-          
+
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Stok Masakan</label>
-            <input
-              type="number"
-              placeholder="99"
-              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:border-[#ee4d2d] focus:ring-4 focus:ring-[#ee4d2d]/5 transition-all text-slate-800 font-medium"
-              onChange={e => setFormData({ ...formData, stock: e.target.value })}
-              required
-            />
+            <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Stok Tersedia</label>
+            <div className="relative">
+              <Package size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
+              <input
+                type="number"
+                placeholder="99"
+                className="w-full pl-10 pr-4 py-3 bg-zinc-50 border border-transparent rounded-xl text-sm outline-none focus:bg-white focus:border-zinc-300 focus:ring-2 focus:ring-zinc-100 transition-all text-zinc-800 font-medium"
+                onChange={e => setFormData({ ...formData, stock: e.target.value })}
+                required
+              />
+            </div>
           </div>
         </div>
 
-        {/* KATEGORI */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Kategori</label>
+        {/* LOCATION */}
+        <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm space-y-3">
+          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Lokasi Produk</label>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-300" />
+              <input
+                type="text"
+                placeholder="Nama desa / alamat"
+                className="w-full pl-10 pr-4 py-3 bg-zinc-50 border border-transparent rounded-xl text-sm outline-none focus:bg-white focus:border-zinc-300 focus:ring-2 focus:ring-zinc-100 transition-all text-zinc-800 font-medium"
+                value={formData.location}
+                onChange={e => setFormData({ ...formData, location: e.target.value })}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={detectLocation}
+              disabled={detecting}
+              className="p-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl transition-colors disabled:bg-zinc-300 shrink-0"
+            >
+              {detecting ? <Loader2 size={18} className="animate-spin" /> : <Navigation size={18} />}
+            </button>
+          </div>
+        </div>
+
+        {/* CATEGORY */}
+        <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm">
+          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Kategori</label>
           <div className="flex flex-wrap gap-2">
             {categories.map((cat) => (
               <button
@@ -293,8 +314,8 @@ export default function AddMenuPage() {
                 type="button"
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${selectedCategory === cat.id
-                  ? "bg-[#ee4d2d] text-white border-[#ee4d2d] shadow-lg shadow-[#ee4d2d]/20"
-                  : "bg-slate-50 text-slate-500 border-slate-100 hover:border-slate-200"
+                    ? "bg-zinc-900 text-white border-zinc-900 shadow-sm"
+                    : "bg-zinc-50 text-zinc-500 border-zinc-100 hover:border-zinc-200"
                   }`}
               >
                 {cat.name}
@@ -303,36 +324,59 @@ export default function AddMenuPage() {
           </div>
         </div>
 
-        {/* DESKRIPSI */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Deskripsi Menu</label>
+        {/* DESCRIPTION */}
+        <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <FileText size={14} className="text-zinc-400" />
+            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Deskripsi</label>
+          </div>
           <textarea
             placeholder="Jelaskan kelezatan menumu..."
-            className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl h-28 text-sm outline-none focus:bg-white focus:border-[#ee4d2d] focus:ring-4 focus:ring-[#ee4d2d]/5 transition-all resize-none placeholder:text-slate-300 text-slate-600 font-medium"
+            className="w-full px-4 py-3 bg-zinc-50 border border-transparent rounded-xl h-32 text-sm outline-none focus:bg-white focus:border-zinc-300 focus:ring-2 focus:ring-zinc-100 transition-all resize-none placeholder:text-zinc-300 text-zinc-600 font-medium"
             onChange={e => setFormData({ ...formData, description: e.target.value })}
           />
         </div>
 
-        {/* SUBMIT BUTTON */}
-        <div className="pt-2">
+        {/* VISIBILITY TOGGLE */}
+        <div className="bg-white rounded-2xl p-4 border border-zinc-100 shadow-sm flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isReady ? 'bg-emerald-50' : 'bg-zinc-100'}`}>
+              <Check className={`size-5 ${isReady ? 'text-emerald-500' : 'text-zinc-400'}`} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-zinc-800">Status Produk</h3>
+              <p className="text-[10px] text-zinc-400 font-medium">{isReady ? "Produk aktif dan bisa dipesan" : "Disembunyikan sementara"}</p>
+            </div>
+          </div>
           <button
-            disabled={loading}
-            className="w-full bg-[#ee4d2d] hover:bg-[#d73211] text-white py-4 rounded-2xl font-black text-sm transition-all active:scale-[0.98] disabled:bg-slate-300 shadow-xl shadow-[#ee4d2d]/20 flex items-center justify-center gap-2"
+            type="button"
+            onClick={() => setIsReady(!isReady)}
+            className={`w-12 h-6 rounded-full relative transition-all duration-300 ${isReady ? 'bg-emerald-500' : 'bg-zinc-200'}`}
           >
-            {loading ? (
-              <>
-                <Loader2 size={18} className="animate-spin" />
-                <span>Menyimpan...</span>
-              </>
-            ) : (
-              <>
-                <Plus size={18} strokeWidth={3} />
-                <span>Simpan ke Menu</span>
-              </>
-            )}
+            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${isReady ? 'right-0.5' : 'left-0.5'}`}></div>
           </button>
         </div>
       </form>
+
+      {/* STICKY BOTTOM BAR */}
+      <div className="fixed bottom-0 inset-x-0 z-50 bg-white/80 backdrop-blur-xl border-t border-zinc-200/50 max-w-md mx-auto p-4">
+        <button
+          disabled={loading}
+          className="w-full bg-zinc-900 hover:bg-zinc-800 text-white py-4 rounded-2xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-zinc-300 shadow-lg shadow-zinc-900/10 flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <>
+              <Loader2 size={18} className="animate-spin" />
+              <span>Menyimpan...</span>
+            </>
+          ) : (
+            <>
+              <Plus size={18} strokeWidth={3} />
+              <span>Simpan Menu</span>
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }

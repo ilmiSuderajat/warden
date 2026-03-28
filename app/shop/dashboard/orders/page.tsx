@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase"
 import * as Icons from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import Skeleton from "@/app/components/Skeleton"
 
 export default function ShopOrdersPage() {
     const router = useRouter()
@@ -30,7 +29,6 @@ export default function ShopOrdersPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return router.push("/login")
 
-        // Get shop
         const { data: shopData } = await supabase
             .from("shops")
             .select("*")
@@ -41,21 +39,18 @@ export default function ShopOrdersPage() {
         setShop(shopData)
 
         try {
-            // Fetch all orders with their items
             const { data: allOrders, error: orderError } = await supabase
                 .from("orders")
                 .select("*, order_items(*)")
-            
+
             if (orderError) throw orderError
 
-            // Step 2: Filter orders that contain items from this shop using the embedded | SHOP_ID
-            let filteredOrders = allOrders?.filter(order => 
-                order.order_items?.some((item: any) => 
+            let filteredOrders = allOrders?.filter(order =>
+                order.order_items?.some((item: any) =>
                     item.product_name?.includes(`| ${shopData.id}`)
                 )
             ) || []
 
-            // Cleanup and Filter items for display (only those belonging to THIS shop)
             filteredOrders = filteredOrders.map(order => ({
                 ...order,
                 items: order.order_items
@@ -65,6 +60,7 @@ export default function ShopOrdersPage() {
                         product_name: item.product_name?.split(" | ")[0]
                     })) || []
             }))
+
             if (activeTab === "baru") filteredOrders = filteredOrders.filter((o: any) => ["Menunggu Konfirmasi", "Perlu Dikemas", "Mencari Kurir", "Kurir Menuju Lokasi"].includes(o.status))
             if (activeTab === "proses") filteredOrders = filteredOrders.filter((o: any) => ["Diproses", "Kurir di Toko"].includes(o.status))
             if (activeTab === "dikirim") filteredOrders = filteredOrders.filter((o: any) => ["Dikirim", "Kurir di Lokasi", "Kurir Tidak Tersedia"].includes(o.status))
@@ -79,49 +75,36 @@ export default function ShopOrdersPage() {
         }
     }
 
-    const updateStatus = async (orderId: string, newStatus: string) => {
-        const { error } = await supabase
-            .from("orders")
-            .update({ status: newStatus })
-            .eq("id", orderId)
-
-        if (error) {
-            toast.error("Gagal mengupdate status")
-        } else {
-            toast.success(`Pesanan ${newStatus}`)
-            fetchShopAndOrders()
-        }
-    }
-
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'Perlu Dikemas': return 'bg-orange-50 text-orange-600 border-orange-100'
-            case 'Diproses': return 'bg-blue-50 text-blue-600 border-blue-100'
-            case 'Mencari Kurir': return 'bg-yellow-50 text-yellow-600 border-yellow-100 animate-pulse'
+            case 'Perlu Dikemas': return 'bg-amber-50 text-amber-700 border-amber-100'
+            case 'Diproses': return 'bg-blue-50 text-blue-700 border-blue-100'
+            case 'Mencari Kurir': return 'bg-yellow-50 text-yellow-700 border-yellow-100 animate-pulse'
             case 'Kurir Menuju Lokasi':
             case 'Kurir di Toko':
-            case 'Dikirim': 
-            case 'Kurir di Lokasi': return 'bg-indigo-50 text-indigo-600 border-indigo-100'
-            case 'Kurir Tidak Tersedia': return 'bg-rose-50 text-rose-600 border-rose-100'
-            case 'Selesai': return 'bg-emerald-50 text-emerald-600 border-emerald-100'
-            case 'Dibatalkan': return 'bg-slate-100 text-slate-500 border-slate-200'
-            default: return 'bg-slate-50 text-slate-600 border-slate-100'
+            case 'Dikirim':
+            case 'Kurir di Lokasi': return 'bg-indigo-50 text-indigo-700 border-indigo-100'
+            case 'Kurir Tidak Tersedia': return 'bg-rose-50 text-rose-700 border-rose-100'
+            case 'Selesai': return 'bg-emerald-50 text-emerald-700 border-emerald-100'
+            case 'Dibatalkan': return 'bg-zinc-50 text-zinc-500 border-zinc-100'
+            default: return 'bg-zinc-50 text-zinc-600 border-zinc-100'
         }
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans pb-24">
-            {/* HEADER */}
-            <header className="bg-white border-b border-slate-100 sticky top-0 z-40">
+        <div className="min-h-screen bg-zinc-50 max-w-md mx-auto font-sans pb-24">
+
+            {/* FLOATING HEADER & TABS */}
+            <header className="sticky top-0 z-40 bg-zinc-50/80 backdrop-blur-lg border-b border-zinc-100/80">
                 <div className="flex items-center gap-3 px-4 h-14">
-                    <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+                    <button onClick={() => router.back()} className="p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-xl transition-colors">
                         <Icons.ArrowLeft size={20} strokeWidth={2.5} />
                     </button>
-                    <h1 className="text-lg font-bold text-slate-900 tracking-tight">Kelola Pesanan</h1>
+                    <h1 className="text-lg font-bold text-zinc-900 tracking-tight">Pesanan</h1>
                 </div>
 
-                {/* TABS */}
-                <div className="flex px-4 pb-2 gap-2">
+                {/* MODERN PILL TABS */}
+                <div className="px-4 pb-3 pt-1 flex gap-2 overflow-x-auto scrollbar-hide">
                     {tabs.map((tab) => {
                         const Icon = (Icons as any)[tab.icon]
                         const isActive = activeTab === tab.id
@@ -129,13 +112,13 @@ export default function ShopOrdersPage() {
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`flex-1 flex flex-col items-center py-2.5 rounded-2xl transition-all border ${isActive 
-                                    ? 'bg-[#ee4d2d] text-white border-[#ee4d2d] shadow-lg shadow-[#ee4d2d]/10' 
-                                    : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-white hover:border-slate-200'
-                                }`}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap ${isActive
+                                        ? 'bg-zinc-900 text-white shadow-sm'
+                                        : 'bg-white text-zinc-500 border border-zinc-200 hover:border-zinc-300 hover:text-zinc-700'
+                                    }`}
                             >
-                                <Icon size={18} className="mb-1" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
+                                <Icon size={14} strokeWidth={isActive ? 2.5 : 2} />
+                                <span>{tab.label}</span>
                             </button>
                         )
                     })}
@@ -144,125 +127,148 @@ export default function ShopOrdersPage() {
 
             <div className="p-4 space-y-4">
                 {loading ? (
-                    Array(3).fill(0).map((_, i) => (
-                        <div key={i} className="bg-white rounded-3xl p-5 border border-slate-100 animate-pulse space-y-4">
-                            <div className="flex justify-between items-center pb-3 border-b border-slate-50">
-                                <div className="h-4 bg-slate-100 rounded w-24"></div>
-                                <div className="h-4 bg-slate-100 rounded w-16"></div>
+                    // SKELETON LOADING
+                    Array(2).fill(0).map((_, i) => (
+                        <div key={i} className="bg-white rounded-2xl p-5 border border-zinc-100 animate-pulse space-y-4">
+                            <div className="flex justify-between items-center">
+                                <div className="h-3 bg-zinc-100 rounded w-20"></div>
+                                <div className="h-3 bg-zinc-100 rounded w-16"></div>
                             </div>
-                            <div className="flex gap-4">
-                                <div className="w-16 h-16 bg-slate-100 rounded-2xl"></div>
+                            <div className="flex gap-3 items-center">
+                                <div className="w-14 h-14 bg-zinc-100 rounded-xl"></div>
                                 <div className="flex-1 space-y-2">
-                                    <div className="h-4 bg-slate-100 rounded w-3/4"></div>
-                                    <div className="h-3 bg-slate-100 rounded w-1/4"></div>
+                                    <div className="h-3 bg-zinc-100 rounded w-3/4"></div>
+                                    <div className="h-3 bg-zinc-100 rounded w-1/2"></div>
                                 </div>
                             </div>
+                            <div className="h-10 bg-zinc-50 rounded-xl"></div>
                         </div>
                     ))
                 ) : orders.length === 0 ? (
-                    <div className="bg-white rounded-[40px] p-12 border border-slate-100 flex flex-col items-center justify-center text-center shadow-sm">
-                        <div className="w-20 h-20 bg-slate-50 flex items-center justify-center rounded-3xl mb-6">
-                            <Icons.Inbox size={36} className="text-slate-200" />
+                    // EMPTY STATE
+                    <div className="bg-white rounded-3xl p-12 border border-zinc-100 flex flex-col items-center justify-center text-center shadow-sm mt-8">
+                        <div className="w-16 h-16 bg-zinc-50 flex items-center justify-center rounded-2xl mb-4 border border-zinc-100">
+                            <Icons.Inbox size={28} className="text-zinc-300" />
                         </div>
-                        <h3 className="text-base font-black text-slate-800 tracking-tight">Belum Ada Pesanan</h3>
-                        <p className="text-xs text-slate-400 mt-2 max-w-[200px] leading-relaxed">Pesanan pelanggan di kategori ini akan muncul di sini secara otomatis.</p>
+                        <h3 className="text-sm font-bold text-zinc-800">Tidak Ada Pesanan</h3>
+                        <p className="text-xs text-zinc-400 mt-1 max-w-[200px] leading-relaxed">
+                            Pesanan untuk kategori {tabs.find(t => t.id === activeTab)?.label} akan muncul di sini.
+                        </p>
                     </div>
                 ) : (
+                    // ORDER LIST
                     orders.map((order) => (
-                        <div key={order.id} className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden transition-all">
+                        <div key={order.id} className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden transition-all">
+
                             {/* Card Header */}
-                            <div className="px-5 py-4 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
-                                <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">ID PESANAN</p>
-                                    <p className="text-xs font-black text-slate-800">#{order.id.slice(0, 8).toUpperCase()}</p>
+                            <div className="px-4 py-3 border-b border-zinc-50 bg-zinc-50/40 flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center border border-zinc-100">
+                                        <Icons.Hash size={14} className="text-zinc-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">ID Pesanan</p>
+                                        <p className="text-xs font-bold text-zinc-800">{order.id.slice(0, 8).toUpperCase()}</p>
+                                    </div>
                                 </div>
-                                <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusBadge(order.status)}`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${getStatusBadge(order.status)}`}>
                                     {order.status}
                                 </span>
                             </div>
 
                             {/* Card Body */}
-                            <div className="p-5 space-y-4">
-                                {order.items.map((item: any) => (
-                                    <div key={item.id} className="flex gap-4 items-center">
-                                        <div className="w-14 h-14 bg-slate-50 rounded-2xl overflow-hidden shrink-0 border border-slate-100">
-                                            <img src={item.image_url} className="w-full h-full object-cover" alt={item.product_name} />
+                            <div className="p-4 space-y-3">
+                                {/* Items List */}
+                                <div className="space-y-2">
+                                    {order.items.map((item: any) => (
+                                        <div key={item.id} className="flex gap-3 items-center">
+                                            <div className="w-14 h-14 bg-zinc-50 rounded-xl overflow-hidden shrink-0 border border-zinc-50">
+                                                <img src={item.image_url} className="w-full h-full object-cover" alt={item.product_name} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="text-sm font-semibold text-zinc-800 truncate">{item.product_name}</h4>
+                                                <p className="text-xs text-zinc-400 font-medium flex items-center gap-1">
+                                                    {item.quantity}x
+                                                    <span className="text-zinc-300">•</span>
+                                                    Rp {item.price?.toLocaleString('id-ID')}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="text-sm font-bold text-slate-800 truncate">{item.product_name}</h4>
-                                            <p className="text-xs text-slate-400 font-medium">x{item.quantity} • Rp {item.price?.toLocaleString('id-ID')}</p>
-                                        </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
 
                                 {/* Customer Info */}
-                                <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-2.5">
-                                    <div className="flex items-start gap-3">
-                                        <Icons.User size={14} className="text-slate-400 shrink-0 mt-0.5" />
-                                        <div className="min-w-0">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mb-0.5">Pemesan</p>
-                                            <p className="text-xs font-bold text-slate-800">{order.customer_name}</p>
+                                <div className="bg-zinc-50 rounded-xl p-3 flex flex-col gap-2.5 border border-zinc-50">
+                                    <div className="flex items-start gap-2.5">
+                                        <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shrink-0 border border-zinc-100">
+                                            <Icons.User size={12} className="text-zinc-400" />
+                                        </div>
+                                        <div className="min-w-0 pt-0.5">
+                                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Pemesan</p>
+                                            <p className="text-xs font-semibold text-zinc-800">{order.customer_name}</p>
                                         </div>
                                     </div>
-                                    <div className="flex items-start gap-3">
-                                        <Icons.MapPin size={14} className="text-[#ee4d2d] shrink-0 mt-0.5" />
-                                        <div className="min-w-0">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mb-0.5">Alamat Antar</p>
-                                            <p className="text-xs font-medium text-slate-600 line-clamp-2">{order.address}</p>
+                                    <div className="flex items-start gap-2.5">
+                                        <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shrink-0 border border-zinc-100">
+                                            <Icons.MapPin size={12} className="text-indigo-500" />
+                                        </div>
+                                        <div className="min-w-0 pt-0.5">
+                                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Alamat</p>
+                                            <p className="text-xs font-medium text-zinc-600 line-clamp-2">{order.address}</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Card Footer Actions */}
-                            <div className="px-5 pb-5 pt-0 flex gap-2">
+                            {/* Actions Footer */}
+                            <div className="px-4 pb-4 flex gap-2">
                                 {order.status === "Perlu Dikemas" && (
-                                    <button 
+                                    <button
                                         onClick={async () => {
                                             const { error } = await supabase.from("orders").update({ status: "Mencari Kurir" }).eq("id", order.id)
                                             if (!error) {
-                                                toast.success("Mencari Kurir Berlangsung...")
+                                                toast.success("Mencari Kurir...")
                                                 await fetch("/api/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }) })
                                                 fetchShopAndOrders()
                                             }
                                         }}
-                                        className="flex-1 bg-[#ee4d2d] hover:bg-[#d73211] text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-[#ee4d2d]/20 active:scale-[0.98]"
+                                        className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white py-3 rounded-xl font-bold text-xs transition-all active:scale-[0.98]"
                                     >
-                                        Auto Cari Kurir (Manual)
+                                        Proses & Cari Kurir
                                     </button>
                                 )}
                                 {order.status === "Diproses" && (
-                                    <button 
+                                    <button
                                         onClick={async () => {
                                             const { error } = await supabase.from("orders").update({ status: "Mencari Kurir" }).eq("id", order.id)
                                             if (!error) {
-                                                toast.success("Mencari Kurir Berlangsung...")
+                                                toast.success("Mencari Kurir...")
                                                 await fetch("/api/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }) })
                                                 fetchShopAndOrders()
                                             }
                                         }}
-                                        className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98]"
+                                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold text-xs transition-all active:scale-[0.98]"
                                     >
-                                        Lanjutkan Cari Kurir (Manual)
+                                        Cari Kurir Sekarang
                                     </button>
                                 )}
                                 {["Mencari Kurir", "Kurir Tidak Tersedia"].includes(order.status) && (
-                                    <button 
+                                    <button
                                         onClick={async () => {
-                                            toast.success("Mencari Kurir Diulang...")
+                                            toast.success("Mencoba mencari kurir ulang...")
                                             await fetch("/api/dispatch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }) })
                                             fetchShopAndOrders()
                                         }}
-                                        className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20 active:scale-[0.98]"
+                                        className="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold text-xs transition-all active:scale-[0.98]"
                                     >
-                                        Cari Kurir Lagi
+                                        Cari Ulang Kurir
                                     </button>
                                 )}
-                                <button 
+                                <button
                                     onClick={() => window.open(`https://wa.me/${order.whatsapp_number}`, '_blank')}
-                                    className="px-4 bg-white border border-slate-200 text-slate-600 rounded-2xl active:scale-95 transition-all flex items-center justify-center"
+                                    className="px-4 bg-white border border-zinc-200 text-zinc-600 rounded-xl active:scale-95 transition-all flex items-center justify-center hover:bg-zinc-50"
                                 >
-                                    <Icons.MessageCircle size={18} />
+                                    <Icons.MessageCircle size={18} className="text-emerald-600" />
                                 </button>
                             </div>
                         </div>

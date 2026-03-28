@@ -21,7 +21,6 @@ export default function ShopMenuPage() {
                 return
             }
 
-            // Get shop
             const { data: shopData } = await supabase
                 .from("shops")
                 .select("*")
@@ -34,7 +33,6 @@ export default function ShopMenuPage() {
             }
             setShop(shopData)
 
-            // Get products for this shop
             const { data: productData, error } = await supabase
                 .from("products")
                 .select("*")
@@ -55,7 +53,7 @@ export default function ShopMenuPage() {
 
     const toggleReady = async (productId: string, currentStatus: boolean) => {
         const newStatus = !currentStatus
-        // Optimistic UI
+        // Optimistic UI Update
         setProducts(prev => prev.map(p => p.id === productId ? { ...p, is_ready: newStatus } : p))
 
         const { error } = await supabase
@@ -68,100 +66,140 @@ export default function ShopMenuPage() {
             // Rollback
             setProducts(prev => prev.map(p => p.id === productId ? { ...p, is_ready: currentStatus } : p))
         } else {
-            toast.success(`Menu ${newStatus ? 'diaktifkan' : 'dinonaktifkan'}`)
+            toast.success(`Menu ${newStatus ? 'diaktifkan' : 'disembunyikan'}`)
         }
     }
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <Icons.Loader2 className="animate-spin text-[#ee4d2d]" size={32} />
+            <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                    <Icons.Loader2 className="animate-spin text-zinc-900" size={28} />
+                    <span className="text-sm text-zinc-500 font-medium">Memuat Menu...</span>
+                </div>
             </div>
         )
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans pb-24">
-            {/* HEADER */}
-            <header className="bg-white border-b border-slate-100 sticky top-0 z-40">
-                <div className="flex items-center gap-3 px-4 h-14">
-                    <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
-                        <Icons.ArrowLeft size={20} strokeWidth={2.5} />
-                    </button>
-                    <h1 className="text-lg font-bold text-slate-900 tracking-tight">Daftar Menu</h1>
+        <div className="min-h-screen bg-zinc-50 max-w-md mx-auto font-sans pb-32">
+
+            {/* FLOATING HEADER */}
+            <header className="sticky top-0 z-40 bg-zinc-50/80 backdrop-blur-lg border-b border-zinc-100/80">
+                <div className="flex items-center justify-between px-4 h-14">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => router.back()} className="p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-xl transition-colors">
+                            <Icons.ArrowLeft size={20} strokeWidth={2.5} />
+                        </button>
+                        <div>
+                            <h1 className="text-base font-bold text-zinc-900 tracking-tight">Daftar Menu</h1>
+                            <p className="text-[10px] text-zinc-400 font-medium -mt-0.5">{products.length} Produk</p>
+                        </div>
+                    </div>
+                    {/* Settings or Filter button could go here */}
                 </div>
             </header>
 
-            <div className="p-4 space-y-4">
-                {/* ADD PRODUCT BUTTON */}
+            <div className="p-4 space-y-6">
+
+                {/* ADD NEW PRODUCT CARD */}
                 <Link
                     href="/shop/dashboard/menu/add"
-                    className="w-full bg-[#ee4d2d] text-white p-4 rounded-2xl flex items-center justify-between shadow-lg shadow-[#ee4d2d]/20 active:scale-[0.98] transition-all"
+                    className="relative w-full bg-zinc-900 text-white p-5 rounded-2xl flex items-center justify-between shadow-lg shadow-zinc-900/10 active:scale-[0.98] transition-all overflow-hidden group"
                 >
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                            <Icons.Plus size={20} />
+                    {/* Decorative Element */}
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full -translate-y-8 translate-x-8 group-hover:scale-110 transition-transform" />
+
+                    <div className="flex items-center gap-4 relative z-10">
+                        <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center border border-white/10">
+                            <Icons.Plus size={24} className="text-white" />
                         </div>
                         <div>
-                            <p className="text-sm font-bold uppercase tracking-tight">Tambah Menu Baru</p>
-                            <p className="text-[10px] text-white/70 font-medium">Tambah jagoan kulinermu</p>
+                            <p className="text-sm font-bold text-white">Tambah Menu Baru</p>
+                            <p className="text-[11px] text-zinc-400 font-medium">Perluas variasi jualanmu</p>
                         </div>
                     </div>
-                    <Icons.ChevronRight size={18} />
+                    <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center relative z-10">
+                        <Icons.ChevronRight size={18} className="text-white/70" />
+                    </div>
                 </Link>
 
-                {/* PRODUCT LIST */}
+                {/* PRODUCT LIST SECTION */}
                 <div className="space-y-3">
-                    <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Semua Produk ({products.length})</h2>
-                    
+                    <div className="flex items-center justify-between px-1">
+                        <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Semua Produk</h2>
+                    </div>
+
                     {products.length === 0 ? (
-                        <div className="bg-white rounded-3xl p-10 border border-slate-100 flex flex-col items-center justify-center text-center">
-                            <div className="w-16 h-16 bg-slate-50 flex items-center justify-center rounded-full mb-4">
-                                <Icons.Utensils size={28} className="text-slate-300" />
+                        <div className="bg-white rounded-2xl p-10 border border-zinc-100 flex flex-col items-center justify-center text-center shadow-sm">
+                            <div className="w-16 h-16 bg-zinc-50 flex items-center justify-center rounded-2xl mb-4 border border-zinc-100">
+                                <Icons.UtensilsCrossed size={28} className="text-zinc-300" />
                             </div>
-                            <p className="text-sm font-bold text-slate-700">Belum ada menu</p>
-                            <p className="text-xs text-slate-400 mt-1 max-w-[200px]">Mulai tambahkan menu jualanmu agar pembeli bisa memesan.</p>
+                            <p className="text-sm font-bold text-zinc-800">Belum ada menu</p>
+                            <p className="text-xs text-zinc-400 mt-1 max-w-[200px] leading-relaxed">Mulai tambahkan menu jualanmu agar pembeli bisa memesan.</p>
                         </div>
                     ) : (
-                        products.map((p) => (
-                            <div key={p.id} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex gap-4 transition-all">
-                                <div className="w-20 h-20 rounded-xl bg-slate-50 overflow-hidden shrink-0 border border-slate-50">
-                                    <img 
-                                        src={Array.isArray(p.image_url) ? p.image_url[0] : p.image_url || "/placeholder.png"} 
-                                        className="w-full h-full object-cover" 
-                                        alt={p.name} 
-                                    />
-                                </div>
-                                <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
-                                    <div>
-                                        <h3 className="text-sm font-bold text-slate-800 line-clamp-1 leading-tight">{p.name}</h3>
-                                        <p className="text-sm font-black text-[#ee4d2d] mt-1">Rp {p.price?.toLocaleString('id-ID')}</p>
-                                    </div>
-                                    
-                                    <div className="flex items-center justify-between mt-2">
-                                        <div className="flex items-center gap-1">
-                                            <span className={`w-1.5 h-1.5 rounded-full ${p.is_ready ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{p.is_ready ? 'Tampilkan' : 'Sembunyikan'}</span>
+                        <div className="space-y-3">
+                            {products.map((p) => (
+                                <div
+                                    key={p.id}
+                                    className={`bg-white rounded-2xl border transition-all duration-200 ${p.is_ready ? 'border-zinc-100 shadow-sm' : 'border-zinc-200 bg-zinc-50/50 opacity-80'}`}
+                                >
+                                    <div className="p-4 flex gap-4">
+                                        {/* Product Image */}
+                                        <div className="w-20 h-20 rounded-xl bg-zinc-100 overflow-hidden shrink-0 border border-zinc-50 relative">
+                                            <img
+                                                src={Array.isArray(p.image_url) ? p.image_url[0] : p.image_url || "/placeholder.png"}
+                                                className="w-full h-full object-cover"
+                                                alt={p.name}
+                                            />
+                                            {!p.is_ready && (
+                                                <div className="absolute inset-0 bg-zinc-900/40 backdrop-blur-[1px] flex items-center justify-center">
+                                                    <Icons.EyeOff size={16} className="text-white" />
+                                                </div>
+                                            )}
                                         </div>
-                                        
-                                        <div className="flex items-center gap-2">
-                                            <button 
-                                                onClick={() => toggleReady(p.id, p.is_ready)}
-                                                className={`w-10 h-6 rounded-full relative transition-all duration-300 ${p.is_ready ? 'bg-emerald-400' : 'bg-slate-200'}`}
-                                            >
-                                                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-300 ${p.is_ready ? 'right-0.5' : 'left-0.5'}`} />
-                                            </button>
-                                            <button 
-                                                onClick={() => router.push(`/shop/dashboard/menu/edit/${p.id}`)}
-                                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-colors"
-                                            >
-                                                <Icons.Edit3 size={16} />
-                                            </button>
+
+                                        {/* Product Info */}
+                                        <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
+                                            <div>
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <h3 className="text-sm font-bold text-zinc-800 line-clamp-1 leading-tight">{p.name}</h3>
+                                                </div>
+                                                <p className="text-lg font-bold text-zinc-900 mt-1 tracking-tight">
+                                                    Rp {p.price?.toLocaleString('id-ID')}
+                                                </p>
+                                            </div>
+
+                                            <div className="flex items-center justify-between mt-2">
+                                                <div className="flex items-center gap-1.5 text-zinc-500">
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${p.is_ready ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+                                                    <span className="text-[10px] font-bold uppercase tracking-wide">
+                                                        {p.is_ready ? 'Tersedia' : 'Disembunyikan'}
+                                                    </span>
+                                                </div>
+
+                                                {/* Action Buttons */}
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        onClick={() => router.push(`/shop/dashboard/menu/edit/${p.id}`)}
+                                                        className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                    >
+                                                        <Icons.Edit3 size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => toggleReady(p.id, p.is_ready)}
+                                                        className={`w-10 h-6 rounded-full relative transition-all duration-300 ${p.is_ready ? 'bg-emerald-500' : 'bg-zinc-200'}`}
+                                                    >
+                                                        <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-300 ${p.is_ready ? 'right-0.5' : 'left-0.5'}`} />
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))
+                            ))}
+                        </div>
                     )}
                 </div>
             </div>

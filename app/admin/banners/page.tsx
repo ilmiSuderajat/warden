@@ -58,8 +58,8 @@ export default function AdminBannersPage() {
     const openEditForm = (banner: any) => {
         setTitle(banner.title || "")
         setSubtitle(banner.subtitle || "")
-        // Coba extract category id dari link_url format /category/xxx
-        const match = (banner.link_url || "").match(/\/category\/(.+)/)
+        // Coba extract category id dari link_url format /category/xxx atau /category?id=xxx
+        const match = (banner.link_url || "").match(/\/category(?:\?id=|\/)(.+)/)
         setSelectedCategoryId(match ? match[1] : "")
         setImagePreview(banner.image_url || "")
         setEditingBanner(banner)
@@ -106,7 +106,7 @@ export default function AdminBannersPage() {
                 finalImageUrl = publicUrl
             }
 
-            const finalLinkUrl = selectedCategoryId ? `/category/${selectedCategoryId}` : ""
+            const finalLinkUrl = selectedCategoryId ? `/category?id=${selectedCategoryId}` : ""
 
             if (editingBanner) {
                 // UPDATE

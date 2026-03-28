@@ -42,7 +42,7 @@ export default function Hero() {
 
           return (
             <Link
-              href={`/category/${item.id}`}
+              href={`/category?id=${item.id}`}
               key={item.id}
               className="flex flex-col items-center group active:scale-90 transition-transform"
             >

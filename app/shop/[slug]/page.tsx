@@ -204,7 +204,7 @@ export default function PublicShopPage() {
                                     </div>
                                     <div className="flex items-center gap-1 mt-2">
                                         <Icons.Star size={10} className="text-amber-400 fill-amber-400" />
-                                        <span className="text-[10px] font-bold text-slate-500">{p.rating || "5.0"}</span>
+                                        <span className="text-[10px] font-bold text-slate-500">{(p.rating || 5.0).toFixed(1)}</span>
                                     </div>
                                 </div>
                             </Link>

@@ -77,6 +77,27 @@ export async function POST(req: Request) {
         let commission = 0
         if (status === "delivered") {
             commission = (await addDriverCommission(driverId, orderId)) || 0
+
+            // Increment sold_count for each product in the order
+            try {
+                const { data: orderItems } = await supabaseAdmin
+                    .from("order_items")
+                    .select("product_id, quantity")
+                    .eq("order_id", orderId)
+                
+                if (orderItems && orderItems.length > 0) {
+                    for (const item of orderItems) {
+                        if (item.product_id && item.quantity) {
+                            await supabaseAdmin.rpc("increment_product_sold_count", {
+                                p_id: item.product_id,
+                                qty: item.quantity
+                            })
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to increment product sold count:", err)
+            }
         }
 
         return NextResponse.json({ success: true, orderStatus: STATUS_MAP[status], commission })

@@ -162,7 +162,7 @@ export default function ProductDetail() {
     : []
 
   return (
-    <div className="bg-slate-50/80 min-h-screen pb-28 max-w-md mx-auto relative font-sans text-slate-800">
+    <div className="bg-white min-h-screen pb-28 max-w-md mx-auto relative font-sans text-slate-800">
 
       {/* IMAGE PREVIEW FULLSCREEN */}
       {isPreviewOpen && (
@@ -208,9 +208,9 @@ export default function ProductDetail() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-full">
                   <Star size={12} className="text-amber-400 fill-amber-400" />
-                  <span className="text-xs font-bold text-amber-600">{product.rating || "5.0"}</span>
+                  <span className="text-xs font-bold text-amber-600">{(product.rating || 5.0).toFixed(1)}</span>
                 </div>
-                <span className="text-xs text-slate-400">• {product.sold_count || "0"} Terjual</span>
+                <span className="text-xs text-slate-400">• {product.sold_count || 0} Terjual</span>
               </div>
             </div>
             <div className="flex items-center gap-2">

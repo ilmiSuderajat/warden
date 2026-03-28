@@ -189,6 +189,8 @@ export interface Database {
           image_url: string | null
           category: string | null
           created_at: string
+          rating?: number | null
+          sold_count?: number | null
         }
         Insert: {
           id?: string
@@ -199,6 +201,8 @@ export interface Database {
           image_url?: string | null
           category?: string | null
           created_at?: string
+          rating?: number | null
+          sold_count?: number | null
         }
         Update: {
           id?: string
@@ -209,6 +213,37 @@ export interface Database {
           image_url?: string | null
           category?: string | null
           created_at?: string
+          rating?: number | null
+          sold_count?: number | null
+        }
+      }
+      product_reviews: {
+        Row: {
+          id: string
+          product_id: string | null
+          order_id: string | null
+          user_id: string | null
+          rating: number
+          comment: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          product_id?: string | null
+          order_id?: string | null
+          user_id?: string | null
+          rating: number
+          comment?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          product_id?: string | null
+          order_id?: string | null
+          user_id?: string | null
+          rating?: number
+          comment?: string | null
+          created_at?: string | null
         }
       }
       categories: {

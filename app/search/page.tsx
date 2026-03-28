@@ -143,7 +143,7 @@ function SearchContent() {
                     <div className="mt-2 pt-2 border-t border-slate-50 flex items-center justify-between text-slate-400">
                       <div className="flex items-center gap-0.5">
                         <Star size={10} className="text-orange-400 fill-orange-400" />
-                        <span className="text-[10px] font-medium text-slate-600">{p.rating || "5.0"}</span>
+                        <span className="text-[10px] font-medium text-slate-600">{(p.rating || 5.0).toFixed(1)}</span>
                       </div>
                       <div className="flex items-center gap-0.5">
                         <MapPin size={10} />
