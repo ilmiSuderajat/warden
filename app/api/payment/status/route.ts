@@ -1,115 +1,125 @@
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import Midtrans from "midtrans-client"
+import { getAuthenticatedUser, createAdminClient } from "@/lib/serverAuth"
+
+const isValidUUID = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 
 const snap = new Midtrans.Snap({
-    isProduction: false, // Sandbox
-    serverKey: process.env.MIDTRANS_SERVER_KEY!,
-    clientKey: process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!,
+  isProduction: true,
+  serverKey: process.env.MIDTRANS_SERVER_KEY!,
+  clientKey: process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!,
 })
 
 export async function POST(req: Request) {
-    try {
-        const body = await req.json()
-        const { orderId } = body
+  try {
+    const body = await req.json()
+    const { orderId } = body
 
-        if (!orderId) {
-            return NextResponse.json({ error: "Order ID diperlukan." }, { status: 400 })
-        }
-
-        const cookieStore = await cookies()
-        const supabaseAdmin = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            {
-                cookies: {
-                    getAll: () => [],
-                    setAll: () => { },
-                },
-            }
-        )
-
-        // 1. Cek detail transaksi ke Midtrans
-        // Karena kita menggunakan suffix timestamp, kita perlu mencoba beberapa format order_id atau mencarinya.
-        // Namun, Midtrans Snap API memungkinkan kita mencari status berdasarkan order_id asli jika itu yang terakhir digunakan.
-        // Atau kita bisa menyimpan order_id unik tersebut di kolom lain di DB, tapi untuk sekarang kita coba cari status transaksi.
-
-        // Kita coba ambil data order dulu untuk mendapatkan ID aslinya
-        const { data: order, error: orderError } = await supabaseAdmin
-            .from("orders")
-            .select("*")
-            .eq("id", orderId)
-            .maybeSingle()
-
-        if (orderError || !order) {
-            return NextResponse.json({ error: "Pesanan tidak ditemukan." }, { status: 404 })
-        }
-
-        // Kita butuh order_id yang dikirim ke Midtrans. 
-        // Karena kita tidak menyimpannya, kita akan mencoba fetch status dari Midtrans.
-        // Masalah: Midtrans butuh order_id yang PERSIS sama. 
-        // Solusi: Kita akan query Midtrans API untuk mencari transaksi terbaru untuk order ini.
-        // Untuk mempermudah, kita akan meminta user untuk klik 'Bayar' yang akan generate ID baru, 
-        // atau kita simpan 'last_midtrans_id' di database.
-
-        // SEMENTARA: Kita akan mencoba memanggil status Midtrans dengan ID pesanan saja (tanpa suffix)
-        // Jika gagal, kita beri pesan ke user.
-        let statusResponse;
-        try {
-            // Kita coba fetch status. Catatan: Ini mungkin gagal jika ID tidak persis sama.
-            // Di update berikutnya kita harus simpan midtrans_order_id di tabel orders.
-            statusResponse = await snap.transaction.status(orderId)
-        } catch (err: any) {
-            console.log("[Status Check] Failed with raw ID, trying to find transaction...")
-            // Jika gagal, kita tidak bisa menebak timestamp-nya.
-            return NextResponse.json({
-                error: "Status belum lunas atau ID transaksi tidak sinkron.",
-                details: "Jika Anda sudah bayar namun status belum berubah, mohon hubungi admin."
-            }, { status: 404 })
-        }
-
-        console.log("[Status Check] Midtrans Response:", statusResponse.transaction_status)
-
-        const transactionStatus = statusResponse.transaction_status
-        let paymentStatus = 'pending'
-        let orderStatus = 'Menunggu Pembayaran'
-
-        if (transactionStatus === 'settlement' || transactionStatus === 'capture') {
-            paymentStatus = 'paid'
-            // Kembali ke Perlu Dikemas agar admin bisa memproses pesanan dulu sebelum cari kurir
-            orderStatus = 'Perlu Dikemas'
-        } else if (['cancel', 'deny', 'expire'].includes(transactionStatus)) {
-            paymentStatus = 'cancelled'
-            orderStatus = 'Dibatalkan'
-        }
-
-        // 2. Update DB jika ada perubahan
-        if (paymentStatus === 'paid') {
-            await supabaseAdmin
-                .from("orders")
-                .update({
-                    payment_status: paymentStatus,
-                    status: orderStatus,
-                    payment_method: 'online'
-                })
-                .eq("id", orderId)
-
-            return NextResponse.json({
-                success: true,
-                message: "Pembayaran terverifikasi!",
-                status: orderStatus
-            })
-        }
-
-        return NextResponse.json({
-            success: false,
-            message: `Status saat ini: ${transactionStatus}`,
-            status: transactionStatus
-        })
-
-    } catch (err: any) {
-        console.error("[Status Check Error]", err)
-        return NextResponse.json({ error: "Gagal cek status pembayaran." }, { status: 500 })
+    if (!orderId || !isValidUUID(orderId)) {
+      return NextResponse.json({ error: "Order ID tidak valid." }, { status: 400 })
     }
+
+    // ── 1. Auth: verify identity ──────────────────────────────────
+    const user = await getAuthenticatedUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 })
+    }
+
+    const supabase = createAdminClient()
+
+    // ── 2. Fetch order with ownership check ───────────────────────
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select("id, payment_status, midtrans_order_id")
+      .eq("id", orderId)
+      .eq("user_id", user.id)  // ✅ ownership enforcement
+      .maybeSingle()
+
+    if (orderError || !order) {
+      return NextResponse.json({ error: "Pesanan tidak ditemukan." }, { status: 404 })
+    }
+
+    // ── 3. Short-circuit if already paid ─────────────────────────
+    if (order.payment_status === "paid") {
+      return NextResponse.json({
+        success: true,
+        message: "Pembayaran sudah terverifikasi.",
+        status: "paid",
+      })
+    }
+
+    // ── 4. Require midtrans_order_id to query Midtrans ────────────
+    if (!order.midtrans_order_id) {
+      return NextResponse.json({
+        success: false,
+        message: "Transaksi belum diinisiasi. Silakan klik 'Bayar Sekarang' terlebih dahulu.",
+        status: order.payment_status,
+      })
+    }
+
+    // ── 5. Query Midtrans for live status ─────────────────────────
+    let statusResponse: any
+    try {
+      statusResponse = await snap.transaction.status(order.midtrans_order_id)
+    } catch (err: any) {
+      console.warn(`[Status] Midtrans query failed for ${order.midtrans_order_id}:`, err.message)
+      return NextResponse.json({
+        success: false,
+        message: "Belum ada update dari payment gateway. Coba beberapa saat lagi.",
+        status: order.payment_status,
+      })
+    }
+
+    const transactionStatus = statusResponse.transaction_status
+    console.log(`[Status] Order ${orderId} → Midtrans: ${transactionStatus}`)
+
+    // ── 6. Map status ─────────────────────────────────────────────
+    let paymentStatus = order.payment_status
+    let orderStatus = "Menunggu Pembayaran"
+
+    if (transactionStatus === "settlement" || transactionStatus === "capture") {
+      paymentStatus = "paid"
+      orderStatus = "Mencari Kurir"
+    } else if (transactionStatus === "cancel" || transactionStatus === "deny") {
+      paymentStatus = "failed"
+      orderStatus = "Dibatalkan"
+    } else if (transactionStatus === "expire") {
+      paymentStatus = "expired"
+      orderStatus = "Dibatalkan"
+    }
+
+    // ── 7. Sync DB only on state change ──────────────────────────
+    if (paymentStatus !== order.payment_status) {
+      const updatePayload: Record<string, any> = {
+        payment_status: paymentStatus,
+        status: orderStatus,
+        payment_method: "online",
+      }
+      if (paymentStatus === "paid") {
+        updatePayload.paid_at = new Date().toISOString()
+      }
+
+      await supabase
+        .from("orders")
+        .update(updatePayload)
+        .eq("id", orderId)
+    }
+
+    return NextResponse.json({
+      success: paymentStatus === "paid",
+      message:
+        paymentStatus === "paid"
+          ? "Pembayaran terverifikasi!"
+          : `Status saat ini: ${transactionStatus}`,
+      status: paymentStatus,
+    })
+
+  } catch (err: any) {
+    console.error("[Status Check Error]", err)
+    return NextResponse.json(
+      { error: "Gagal memeriksa status pembayaran." },
+      { status: 500 }
+    )
+  }
 }

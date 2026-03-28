@@ -25,7 +25,14 @@ function SearchContent() {
       try {
         const { data } = await supabase
           .from("products")
-          .select("*")
+          .select(`
+            *,
+            shops (
+              address,
+              latitude,
+              longitude
+            )
+          `)
           .eq("is_ready", true)
           .ilike("name", `%${q}%`)
           .order('created_at', { ascending: false })
@@ -148,10 +155,10 @@ function SearchContent() {
                       <div className="flex items-center gap-0.5">
                         <MapPin size={10} />
                         <span className="text-[10px] truncate max-w-20">
-                          {p.location || "Jakarta"}
-                          {userLoc && p.latitude && p.longitude && (
+                          {p.shops?.address || p.location || "Jakarta"}
+                          {userLoc && (p.shops?.latitude || p.latitude) && (p.shops?.longitude || p.longitude) && (
                             <span className="ml-1 text-indigo-600 font-bold">
-                              • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.latitude, p.longitude))}
+                              • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.shops?.latitude || p.latitude, p.shops?.longitude || p.longitude))}
                             </span>
                           )}
                         </span>

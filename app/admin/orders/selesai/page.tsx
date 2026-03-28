@@ -33,7 +33,7 @@ export default function CompletedOrdersPage() {
                 return
             }
 
-            const { data: prodData } = await supabase.from("products").select("name, latitude, longitude, location")
+            const { data: prodData } = await supabase.from("products").select("name, latitude, longitude, location, shops(address, latitude, longitude)")
 
             const orderIds = ordersData.map(o => o.id)
             const { data: itemsData, error: itemsError } = await supabase
@@ -179,11 +179,15 @@ export default function CompletedOrdersPage() {
                                                     <p className="text-[10px] text-slate-400">{item.quantity} x Rp {item.price.toLocaleString('id-ID')}</p>
                                                     {item.product_details?.latitude && (
                                                         <button
-                                                            onClick={() => window.open(`https://www.google.com/maps?q=${item.product_details.latitude},${item.product_details.longitude}`, '_blank')}
+                                                            onClick={() => {
+                                                                const lat = item.product_details?.shops?.latitude || item.product_details?.latitude;
+                                                                const lon = item.product_details?.shops?.longitude || item.product_details?.longitude;
+                                                                if (lat && lon) window.open(`https://www.google.com/maps?q=${lat},${lon}`, '_blank');
+                                                            }}
                                                             className="mt-1 text-[9px] text-emerald-600 font-medium flex items-center gap-1 hover:underline"
                                                         >
                                                             <MapPin size={8} />
-                                                            Ambil Produk ({item.product_details.location || 'Toko'})
+                                                            Ambil Produk ({item.product_details?.shops?.address || item.product_details?.location || 'Toko'})
                                                         </button>
                                                     )}
                                                 </div>

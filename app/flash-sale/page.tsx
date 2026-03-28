@@ -32,7 +32,14 @@ export default function FlashSalePage() {
 
             const { data: productData } = await supabase
                 .from("products")
-                .select("*")
+                .select(`
+                    *,
+                    shops (
+                        address,
+                        latitude,
+                        longitude
+                    )
+                `)
                 .eq("is_flash_sale", true)
                 .eq("is_ready", true)
 
@@ -193,9 +200,9 @@ export default function FlashSalePage() {
                                         <div className="flex justify-between text-[8px] font-bold text-slate-400 mb-1 px-0.5 uppercase tracking-tighter">
                                             <div className="flex items-center gap-1">
                                                 <span>Stok Terbatas</span>
-                                                {userLoc && p.latitude && p.longitude && (
+                                                {userLoc && (p.shops?.latitude || p.latitude) && (p.shops?.longitude || p.longitude) && (
                                                     <span className="text-indigo-600">
-                                                        • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.latitude, p.longitude))}
+                                                        • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.shops?.latitude || p.latitude, p.shops?.longitude || p.longitude))}
                                                     </span>
                                                 )}
                                             </div>

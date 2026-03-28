@@ -7,10 +7,67 @@ import * as Icons from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Skeleton from "@/app/components/Skeleton"
 
+/** Compress image to under maxKB using Canvas (client-side only) */
+async function compressImage(file: File, maxKB = 100): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+
+      const canvas = document.createElement("canvas")
+      let { width, height } = img
+
+      // Scale down to max 1200px on longest side
+      const MAX_PX = 1200
+      if (width > MAX_PX || height > MAX_PX) {
+        const ratio = Math.min(MAX_PX / width, MAX_PX / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext("2d")!
+      ctx.fillStyle = "#fff" // white bg for transparent PNGs
+      ctx.fillRect(0, 0, width, height)
+      ctx.drawImage(img, 0, 0, width, height)
+
+      let quality = 0.85
+
+      const tryCompress = (): void => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) { reject(new Error("Compression failed")); return }
+            if (blob.size <= maxKB * 1024 || quality <= 0.05) {
+              resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }))
+            } else {
+              quality = Math.max(0.05, quality - 0.1)
+              tryCompress()
+            }
+          },
+          "image/jpeg",
+          quality
+        )
+      }
+      tryCompress()
+    }
+
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Gagal memuat gambar")) }
+    img.src = objectUrl
+  })
+}
+
 function OrdersContent() {
   const [activeTab, setActiveTab] = useState("all")
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [reviewOrder, setReviewOrder] = useState<any>(null)
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false)
+  const [reviewsState, setReviewsState] = useState<Record<string, { rating: number, comment: string, photoFile?: File | null, photoPreview?: string }>>({} )
+  const [reviewerName, setReviewerName] = useState<string>("")
+
   // State untuk menyimpan ID order yang sedang di-expand
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null)
   const router = useRouter()
@@ -82,17 +139,143 @@ function OrdersContent() {
     setExpandedOrderId(prev => prev === orderId ? null : orderId)
   }
 
-  const completeOrder = async (orderId: string) => {
+  const openReviewModal = async (order: any) => {
+      const initial: Record<string, any> = {}
+      let hasReviewableItems = false;
+      order.order_items?.forEach((item: any) => {
+         if (item.product_id) {
+            initial[item.product_id] = { rating: 5, comment: "", photoFile: null, photoPreview: "" }
+            hasReviewableItems = true;
+         }
+      })
+
+      if (!hasReviewableItems) {
+         toast.info("Pesanan ini adalah pesanan lama yang belum mendukung Ulasan Produk.");
+         return;
+      }
+
+      // Ambil nama reviewer dari alamat utama user
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: addr } = await supabase
+          .from("addresses")
+          .select("name")
+          .eq("user_id", user.id)
+          .order("is_default", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (addr?.name) setReviewerName(addr.name)
+        else setReviewerName(order.customer_name || "Pembeli")
+      }
+
+      // Fetch existing reviews so users can edit them
+      const { data: existing } = await supabase
+        .from("product_reviews")
+        .select("id, product_id, rating, comment, photo_url")
+        .eq("order_id", order.id);
+      if (existing) {
+         existing.forEach(ex => {
+            if (initial[ex.product_id]) {
+               initial[ex.product_id] = {
+                 rating: ex.rating,
+                 comment: ex.comment || "",
+                 photoFile: null,
+                 photoPreview: ex.photo_url || "",
+                 id: ex.id
+               }
+            }
+         })
+      }
+
+      setReviewsState(initial)
+      setReviewOrder(order)
+  }
+
+  const completeOrder = async (order: any) => {
     const { error } = await supabase
       .from("orders")
       .update({ status: "Selesai" })
-      .eq("id", orderId)
+      .eq("id", order.id)
 
     if (error) {
       toast.error("Gagal menyelesaikan pesanan")
     } else {
       toast.success("Pesanan telah selesai! Terima kasih.")
       fetchOrders()
+      openReviewModal(order)
+    }
+  }
+
+  const submitReviews = async () => {
+    setIsSubmittingReview(true)
+
+    try {
+      const reviewPayload = await Promise.all(
+        Object.entries(reviewsState).map(async ([productId, rev]: any) => {
+          let photoUrl: string | null = rev.photoPreview || null
+
+          // Only upload if there's a NEW file (not an existing URL)
+          if (rev.photoFile) {
+            try {
+              // Step 1: Compress to max 100KB
+              const compressed = await compressImage(rev.photoFile, 100)
+              console.log(`[Review] Compressed: ${(rev.photoFile.size / 1024).toFixed(1)}KB → ${(compressed.size / 1024).toFixed(1)}KB`)
+
+              // Step 2: Upload via server API (bypasses storage RLS)
+              const fd = new FormData()
+              fd.append("file", compressed)
+              fd.append("orderId", reviewOrder.id)
+              fd.append("productId", productId)
+
+              const uploadRes = await fetch("/api/review/photo", { method: "POST", body: fd })
+              const uploadData = await uploadRes.json()
+
+              if (uploadRes.ok && uploadData.url) {
+                photoUrl = uploadData.url
+              } else {
+                toast.warning("Foto gagal diupload, ulasan tetap dikirim tanpa foto.")
+                photoUrl = null
+              }
+            } catch (err) {
+              console.warn("[Review] Compression/upload error:", err)
+              photoUrl = null
+            }
+          }
+
+          return {
+            productId,
+            rating: rev.rating,
+            comment: rev.comment,
+            photoUrl,
+            existingId: rev.id || undefined,
+          }
+        })
+      )
+
+      // Step 3: Submit all reviews via server API (bypasses table RLS)
+      const res = await fetch("/api/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: reviewOrder.id,
+          reviewerName,
+          reviews: reviewPayload,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast.error(data.error || "Gagal mengirim ulasan.")
+      } else {
+        toast.success("Terima kasih atas ulasan Anda! 🎉")
+        setReviewOrder(null)
+      }
+    } catch (err) {
+      console.error("[submitReviews]", err)
+      toast.error("Terjadi kesalahan saat mengirim ulasan.")
+    } finally {
+      setIsSubmittingReview(false)
     }
   }
 
@@ -344,11 +527,22 @@ function OrdersContent() {
                       {/* Tombol Selesaikan Pesanan — muncul saat status Dikirim */}
                       {order.status === "Dikirim" && (
                         <button
-                          onClick={() => completeOrder(order.id)}
+                          onClick={() => completeOrder(order)}
                           className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 active:scale-[0.98]"
                         >
                           <Icons.CheckCircle2 size={18} />
                           Selesaikan Pesanan
+                        </button>
+                      )}
+
+                      {/* Tombol Beri Ulasan — muncul saat status Selesai */}
+                      {order.status === "Selesai" && (
+                        <button
+                          onClick={() => openReviewModal(order)}
+                          className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-amber-200 flex items-center justify-center gap-2 active:scale-[0.98]"
+                        >
+                          <Icons.Star size={18} />
+                          Nilai & Ulas Produk
                         </button>
                       )}
 
@@ -387,6 +581,125 @@ function OrdersContent() {
           </div>
         )}
       </div>
+
+      {/* REVIEW MODAL (POPUP ULASAN) */}
+      {reviewOrder && (
+         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-sm transition-opacity animate-in fade-in">
+            <div className="bg-white w-full max-w-md rounded-t-[1.5rem] p-5 shadow-2xl pb-safe pt-2 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom">
+               <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto my-3" />
+               <div className="mb-5 text-center">
+                 <h2 className="text-lg font-bold text-slate-900">Pesanan Selesai! 🎉</h2>
+                 <p className="text-xs text-slate-500 mt-1">Gimana pesanannya? Yuk kasih bintang.</p>
+               </div>
+               {/* Nama Reviewer */}
+               <div className="flex items-center gap-2 px-1 mb-1">
+                 <Icons.UserCircle2 size={14} className="text-slate-400" />
+                 <span className="text-[11px] text-slate-500 font-medium">Ulasan atas nama: <span className="font-bold text-slate-700">{reviewerName || "Pembeli"}</span></span>
+               </div>
+
+               <div className="space-y-4">
+                  {reviewOrder.order_items?.filter((i:any) => i.product_id).map((item: any) => {
+                     const PId = item.product_id;
+                     const revState = reviewsState[PId] || { rating: 5, comment: "", photoFile: null, photoPreview: "" };
+
+                     return (
+                        <div key={PId} className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
+                           <div className="flex gap-3 mb-3 border-b border-slate-200/50 pb-3">
+                              <img src={item.image_url || "/placeholder.png"} className="w-12 h-12 rounded-lg object-cover bg-white shrink-0 border border-slate-100" alt="prod" />
+                              <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                 <p className="text-xs font-bold text-slate-800 line-clamp-2 leading-tight">{item.product_name?.split(" | ")[0]}</p>
+                              </div>
+                           </div>
+                           
+                           <div className="flex items-center justify-center gap-2 mb-3">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                 <button 
+                                    key={star}
+                                    onClick={() => setReviewsState(prev => ({...prev, [PId]: { ...prev[PId], rating: star }}))}
+                                    className="p-1 transition-transform hover:scale-110 active:scale-90"
+                                 >
+                                    <Icons.Star 
+                                       size={28} 
+                                       className={star <= revState.rating ? "text-amber-400 fill-amber-400 drop-shadow-sm" : "text-slate-200 fill-slate-100"} 
+                                    />
+                                 </button>
+                              ))}
+                           </div>
+
+                           <textarea 
+                              placeholder="Ceritakan kepuasanmu (Opsional)..."
+                              value={revState.comment}
+                              onChange={(e) => setReviewsState(prev => ({...prev, [PId]: { ...prev[PId], comment: e.target.value }}))}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-medium outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all resize-none h-20"
+                           ></textarea>
+
+                           {/* Upload Foto (Opsional) */}
+                           <div className="mt-3">
+                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                               <Icons.Camera size={10} /> Foto Ulasan (Opsional)
+                             </p>
+                             {revState.photoPreview ? (
+                               <div className="relative w-24 h-24">
+                                 <img src={revState.photoPreview} className="w-24 h-24 rounded-xl object-cover border border-slate-200" alt="preview" />
+                                 <button
+                                   onClick={() => setReviewsState(prev => ({...prev, [PId]: { ...prev[PId], photoFile: null, photoPreview: "" }}))}
+                                   className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-sm"
+                                 >
+                                   <Icons.X size={10} strokeWidth={3} />
+                                 </button>
+                               </div>
+                             ) : (
+                               <label className="flex items-center gap-2 w-fit cursor-pointer">
+                                 <div className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 bg-white flex flex-col items-center justify-center gap-1 hover:border-indigo-400 hover:bg-indigo-50/50 transition-colors">
+                                   <Icons.ImagePlus size={20} className="text-slate-400" />
+                                   <span className="text-[9px] font-bold text-slate-400">Tambah</span>
+                                 </div>
+                                 <input
+                                   type="file"
+                                   accept="image/*"
+                                   className="hidden"
+                                   onChange={(e) => {
+                                     const file = e.target.files?.[0]
+                                     if (!file) return
+                                     if (file.size > 5 * 1024 * 1024) {
+                                       toast.error("Ukuran foto maksimal 5MB")
+                                       return
+                                     }
+                                     const reader = new FileReader()
+                                     reader.onload = (ev) => {
+                                       setReviewsState(prev => ({
+                                         ...prev,
+                                         [PId]: { ...prev[PId], photoFile: file, photoPreview: ev.target?.result as string }
+                                       }))
+                                     }
+                                     reader.readAsDataURL(file)
+                                   }}
+                                 />
+                               </label>
+                             )}
+                           </div>
+                        </div>
+                     )
+                  })}
+               </div>
+
+               <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100 sticky bottom-0 bg-white pb-6">
+                  <button 
+                     onClick={() => setReviewOrder(null)}
+                     className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold transition-all active:scale-95"
+                  >Nanti Saja</button>
+                  <button 
+                     disabled={isSubmittingReview}
+                     onClick={submitReviews}
+                     className="flex-[2] py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all active:scale-[0.98] shadow-lg shadow-indigo-600/20 flex items-center justify-center"
+                  >
+                     {isSubmittingReview ? <Icons.Loader2 size={16} className="animate-spin" /> : "Kirim Ulasan"}
+                  </button>
+               </div>
+            </div>
+         </div>
+      )}
+
     </div>
   )
 }

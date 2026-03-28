@@ -1,11 +1,29 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { ArrowLeft, MapPin, Pencil, Route, PlusCircle, Minus, Plus, ShieldCheck, Loader2, ArrowRight, TicketPercent } from "lucide-react";
+import {
+  ArrowLeft, MapPin, Route, PlusCircle, Minus, Plus,
+  ShieldCheck, Loader2, ArrowRight, TicketPercent,
+  CheckCircle2, AlertTriangle, Store, Tag, ChevronRight,
+  Package, Bike
+} from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Skeleton from "@/app/components/Skeleton";
+
+interface VariantOption {
+  label: string;
+  price: number;
+  isAutoSelected?: boolean;
+}
+
+interface SelectedVariants {
+  [cartId: string]: {
+    [groupName: string]: VariantOption;
+  };
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -15,6 +33,9 @@ export default function CheckoutPage() {
   const [distance, setDistance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedVariants, setSelectedVariants] = useState<SelectedVariants>({});
+  const [multiShopError, setMultiShopError] = useState(false);
+  const [shopName, setShopName] = useState("");
 
   // Voucher states
   const [voucherCode, setVoucherCode] = useState("");
@@ -25,19 +46,24 @@ export default function CheckoutPage() {
   const TARIF_PER_KM = 2000;
   const ONGKIR_MINIMAL = 10000;
 
-  // Fungsi hitung jarak (Haversine Formula)
+  // Haversine
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
     const dLat = (lat2 - lat1) * (Math.PI / 180);
     const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
   useEffect(() => {
     prepareCheckout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const prepareCheckout = async () => {
@@ -56,25 +82,80 @@ export default function CheckoutPage() {
 
       setAddress(addrData);
 
-      const { data: cartData } = await supabase
+      // ✅ FIX: Join shops table to get shop lat/lng
+      const { data: cartData, error: cartError } = await supabase
         .from("cart")
-        .select("*, products(*)")
+        .select("*, products(*, shops(id, name, latitude, longitude))")
         .eq("user_id", user.id);
 
-      if (cartData) {
-        const formattedCart = cartData.map(item => ({
-          cart_id: item.id,
-          id: item.product_id,
-          name: item.products.name,
-          price: item.products.price,
-          image_url: Array.isArray(item.products.image_url) ? item.products.image_url[0] : item.products.image_url,
-          quantity: item.quantity,
-          lat: item.products.latitude,
-          lng: item.products.longitude,
-          shop_id: item.products.shop_id
-        }));
+      if (cartError) {
+        console.warn("Cart fetch error:", cartError);
+      }
+
+      if (cartData && cartData.length > 0) {
+        const firstShopId = cartData[0].products.shop_id;
+        const hasMultipleShops = cartData.some(
+          (item) => item.products.shop_id !== firstShopId
+        );
+        if (hasMultipleShops) setMultiShopError(true);
+
+        // Set shop name for display
+        const sName = cartData[0].products.shops?.name || "";
+        setShopName(sName);
+
+        const initialVariants: SelectedVariants = {};
+
+        const formattedCart = cartData.map((item) => {
+          initialVariants[item.id] = {};
+
+          if (item.variants && Object.keys(item.variants).length > 0) {
+            initialVariants[item.id] = item.variants;
+          } else if (
+            item.products.variants &&
+            Array.isArray(item.products.variants)
+          ) {
+            let hasUpdates = false;
+            item.products.variants.forEach((group: any) => {
+              if (group.options && group.options.length > 0) {
+                const defaultOpt = { ...group.options[0], isAutoSelected: true };
+                initialVariants[item.id][group.name] = defaultOpt;
+                hasUpdates = true;
+              }
+            });
+            if (hasUpdates) {
+              supabase
+                .from("cart")
+                .update({ variants: initialVariants[item.id] })
+                .eq("id", item.id)
+                .then();
+            }
+          }
+
+          // ✅ FIX: Prefer shop lat/lng, fallback to product lat/lng
+          const shopLat = item.products.shops?.latitude ?? item.products.latitude;
+          const shopLng = item.products.shops?.longitude ?? item.products.longitude;
+
+          return {
+            cart_id: item.id,
+            id: item.product_id,
+            name: item.products.name,
+            price: item.products.price,
+            image_url: Array.isArray(item.products.image_url)
+              ? item.products.image_url[0]
+              : item.products.image_url,
+            quantity: item.quantity,
+            lat: shopLat,
+            lng: shopLng,
+            shop_id: item.products.shop_id,
+            product_variants: item.products.variants || null,
+          };
+        });
+
+        setSelectedVariants(initialVariants);
         setCartItems(formattedCart);
-        if (addrData) updateShipping(formattedCart, addrData);
+        if (addrData && !hasMultipleShops) updateShipping(formattedCart, addrData);
+      } else {
+        setCartItems([]);
       }
     } catch (error) {
       console.error("Error preparing checkout:", error);
@@ -85,7 +166,12 @@ export default function CheckoutPage() {
 
   const updateShipping = (items: any[], addr: any) => {
     if (items.length > 0 && addr?.latitude && items[0].lat && items[0].lng) {
-      const dist = calculateDistance(items[0].lat, items[0].lng, addr.latitude, addr.longitude);
+      const dist = calculateDistance(
+        items[0].lat,
+        items[0].lng,
+        addr.latitude,
+        addr.longitude
+      );
       setDistance(dist);
       const fee = Math.ceil(dist) * TARIF_PER_KM;
       setShippingFee(fee < ONGKIR_MINIMAL ? ONGKIR_MINIMAL : fee);
@@ -93,40 +179,88 @@ export default function CheckoutPage() {
   };
 
   const updateQuantity = async (cartId: string, newQty: number) => {
-    const prevItems = [...cartItems];
-
-    // Optimistic UI Update
     let newItems;
     if (newQty < 1) {
-      newItems = cartItems.filter(item => item.cart_id !== cartId);
+      newItems = cartItems.filter((item) => item.cart_id !== cartId);
       setCartItems(newItems);
       if (newItems.length === 0) setShippingFee(0);
+      await supabase.from("cart").delete().eq("id", cartId);
     } else {
-      newItems = cartItems.map(item =>
+      newItems = cartItems.map((item) =>
         item.cart_id === cartId ? { ...item, quantity: newQty } : item
       );
       setCartItems(newItems);
-    }
-
-    // Update ke Supabase
-    if (newQty < 1) {
-      await supabase.from("cart").delete().eq("id", cartId);
-    } else {
       await supabase.from("cart").update({ quantity: newQty }).eq("id", cartId);
     }
-
-    // Hitung ulang ongkir jika perlu
-    if (address && newItems.length > 0) updateShipping(newItems, address);
+    if (address && newItems.length > 0 && !multiShopError)
+      updateShipping(newItems, address);
   };
 
-  const totalPrice = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const handleSelectVariant = async (
+    cartId: string,
+    groupName: string,
+    option: VariantOption
+  ) => {
+    const newVariantStateForCart = {
+      ...selectedVariants[cartId],
+      [groupName]: { ...option, isAutoSelected: false },
+    };
+    setSelectedVariants((prev) => ({ ...prev, [cartId]: newVariantStateForCart }));
+    await supabase
+      .from("cart")
+      .update({ variants: newVariantStateForCart })
+      .eq("id", cartId);
+  };
+
+  const getVariantPrice = (cartId: string) => {
+    const selections = selectedVariants[cartId];
+    if (!selections) return 0;
+    return Object.values(selections).reduce(
+      (sum, opt) => sum + (opt.price || 0),
+      0
+    );
+  };
+
+  const getSubtotal = () => {
+    return cartItems.reduce((acc, item) => {
+      const unitPrice = item.price + getVariantPrice(item.cart_id);
+      return acc + unitPrice * item.quantity;
+    }, 0);
+  };
+
+  const subTotalPrice = getSubtotal();
+
+  useEffect(() => {
+    if (
+      appliedVoucher &&
+      subTotalPrice < (appliedVoucher.min_order_amount || 0)
+    ) {
+      toast.info("Voucher dilepas karena total belanja tidak memenuhi syarat.");
+      removeVoucher();
+    } else if (appliedVoucher) {
+      recalcVoucher(subTotalPrice, appliedVoucher);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subTotalPrice]);
+
+  const recalcVoucher = (total: number, vData: any) => {
+    let calc = 0;
+    if (vData.discount_type === "percentage") {
+      calc = total * (vData.discount_value / 100);
+      if (vData.max_discount_amount && calc > vData.max_discount_amount)
+        calc = vData.max_discount_amount;
+    } else {
+      calc = vData.discount_value;
+    }
+    if (calc > total) calc = total;
+    setDiscountAmount(calc);
+  };
 
   const applyVoucher = async () => {
     if (!voucherCode.trim()) {
       toast.error("Masukkan kode voucher terlebih dahulu!");
       return;
     }
-
     setIsCheckingVoucher(true);
     try {
       const nowIso = new Date().toISOString();
@@ -145,39 +279,23 @@ export default function CheckoutPage() {
         setDiscountAmount(0);
         return;
       }
-
       if (data.usage_limit && data.used_count >= data.usage_limit) {
-        toast.error("Kuota voucher ini sudah habis digunakan");
+        toast.error("Kuota voucher ini sudah habis");
         setAppliedVoucher(null);
         setDiscountAmount(0);
         return;
       }
-
-      if (data.min_order_amount && totalPrice < data.min_order_amount) {
-        toast.error(`Voucher ini memerlukan minimal belanja Rp ${data.min_order_amount.toLocaleString('id-ID')}`);
+      if (data.min_order_amount && subTotalPrice < data.min_order_amount) {
+        toast.error(
+          `Minimal belanja Rp ${data.min_order_amount.toLocaleString("id-ID")}`
+        );
         setAppliedVoucher(null);
         setDiscountAmount(0);
         return;
       }
-
-      let calculatedDiscount = 0;
-      if (data.discount_type === 'percentage') {
-        calculatedDiscount = totalPrice * (data.discount_value / 100);
-        if (data.max_discount_amount && calculatedDiscount > data.max_discount_amount) {
-          calculatedDiscount = data.max_discount_amount;
-        }
-      } else {
-        calculatedDiscount = data.discount_value;
-      }
-
-      if (calculatedDiscount > totalPrice) {
-        calculatedDiscount = totalPrice;
-      }
-
-      setDiscountAmount(calculatedDiscount);
+      recalcVoucher(subTotalPrice, data);
       setAppliedVoucher(data);
       toast.success("Voucher berhasil digunakan!");
-
     } catch (err) {
       console.error(err);
       toast.error("Terjadi kesalahan saat mengecek voucher");
@@ -190,21 +308,38 @@ export default function CheckoutPage() {
     setVoucherCode("");
     setAppliedVoucher(null);
     setDiscountAmount(0);
-    toast.info("Penggunaan voucher dibatalkan");
   };
 
   const handlePlaceOrder = async () => {
+    if (multiShopError) {
+      toast.error("Selesaikan pesanan dari 1 toko terlebih dahulu!");
+      return;
+    }
     if (!address || cartItems.length === 0) {
       toast.error("Alamat atau keranjang tidak valid!");
       return;
     }
-
     setIsProcessing(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User tidak ditemukan");
 
-      const orderAddress = `${address.detail}, RT ${address.rt || '00'} / RW ${address.rw || '00'}, ${address.kelurahan}, ${address.kecamatan}, ${address.city}`;
+      for (const item of cartItems) {
+        if (item.product_variants) {
+          const userSelections = selectedVariants[item.cart_id] || {};
+          const missingGroup = item.product_variants.find(
+            (g: any) => !userSelections[g.name]
+          );
+          if (missingGroup) {
+            throw new Error(
+              `Pilih varian "${missingGroup.name}" pada produk "${item.name}"`
+            );
+          }
+        }
+      }
+
+      const orderAddress = `${address.detail}, RT ${address.rt || "00"}/RW ${address.rw || "00"}, ${address.kelurahan}, ${address.kecamatan}, ${address.city}`;
+      const finalTotal = Math.max(0, subTotalPrice + shippingFee - discountAmount);
 
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
@@ -214,277 +349,575 @@ export default function CheckoutPage() {
           address: orderAddress,
           latitude: address.latitude ?? null,
           longitude: address.longitude ?? null,
-          maps_link: (address.latitude && address.longitude) 
-            ? `https://www.google.com/maps/place/${address.latitude},${address.longitude}/@${address.latitude},${address.longitude},17z` 
-            : null,
-          subtotal_amount: totalPrice,
+          maps_link:
+            address.latitude && address.longitude
+              ? `https://www.google.com/maps/place/${address.latitude},${address.longitude}/@${address.latitude},${address.longitude},17z`
+              : null,
+          subtotal_amount: subTotalPrice,
           shipping_amount: shippingFee,
           distance_km: distance,
-          total_amount: Math.max(0, totalPrice + shippingFee - discountAmount),
+          total_amount: finalTotal,
           status: "Menunggu Pembayaran",
           payment_status: "pending",
           user_id: user.id,
           voucher_code: appliedVoucher ? appliedVoucher.code : null,
-          discount_amount: discountAmount
-        }]).select().maybeSingle();
+          discount_amount: discountAmount,
+        }])
+        .select()
+        .maybeSingle();
 
       if (orderError) throw orderError;
 
       if (appliedVoucher) {
         try {
-          await supabase.rpc('increment_voucher_usage', { v_id: appliedVoucher.id });
-        } catch (e) {
-          await supabase.from("vouchers")
+          await supabase.rpc("increment_voucher_usage", {
+            v_id: appliedVoucher.id,
+          });
+        } catch {
+          await supabase
+            .from("vouchers")
             .update({ used_count: appliedVoucher.used_count + 1 })
             .eq("id", appliedVoucher.id);
         }
       }
 
-      const itemsToInsert = cartItems.map((item: any) => ({
-        order_id: orderData.id,
-        product_name: `${item.name} | ${item.shop_id}`,
-        quantity: item.quantity,
-        price: item.price,
-        image_url: item.image_url
-      }));
-      await supabase.from("order_items").insert(itemsToInsert);
-      
-      // Clear cart
+      const itemsToInsert = cartItems.map((item: any) => {
+        const finalPricePerItem = item.price + getVariantPrice(item.cart_id);
+        let cleanVariants: Record<string, any> | null = null;
+        if (selectedVariants[item.cart_id]) {
+          cleanVariants = JSON.parse(
+            JSON.stringify(selectedVariants[item.cart_id])
+          );
+          if (cleanVariants) {
+            Object.keys(cleanVariants).forEach(
+              (k) => delete cleanVariants![k].isAutoSelected
+            );
+          }
+        }
+        return {
+          order_id: orderData.id,
+          product_id: item.id,
+          product_name: `${item.name} | ${item.shop_id}`,
+          quantity: item.quantity,
+          price: item.price,
+          final_price: finalPricePerItem,
+          variants: cleanVariants,
+          image_url: item.image_url,
+        };
+      });
+
+      const { error: insertItemsError } = await supabase
+        .from("order_items")
+        .insert(itemsToInsert);
+
+      if (insertItemsError) {
+        await supabase.from("orders").delete().eq("id", orderData.id);
+        throw new Error("Gagal finalisasi item: " + insertItemsError.message);
+      }
+
       await supabase.from("cart").delete().eq("user_id", user.id);
-
       router.push(`/checkout/payment?order_id=${orderData.id}`);
-
     } catch (error: any) {
       console.error(error);
-      toast.error("Gagal memproses pesanan: " + error.message);
+      toast.error(error.message || "Gagal memproses pesanan.");
       setIsProcessing(false);
     }
   };
 
-  // ── Loading Skeleton ──────────────────────────────────────────────────────
+  const fmt = (n: number) => n.toLocaleString("id-ID");
+
+  // ─── LOADING SKELETON ───────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-28">
-        <div className="bg-white/80 backdrop-blur-xl border-b border-slate-200 sticky top-0 z-40">
-          <div className="flex items-center gap-3 px-5 pt-14 pb-4">
-            <Skeleton className="w-10 h-10 rounded-full bg-slate-200" />
-            <Skeleton className="h-6 w-40 bg-slate-200 rounded-lg" />
+      <div className="min-h-screen bg-[#F5F5F5] max-w-md mx-auto">
+        <div className="bg-white sticky top-0 z-40 border-b border-slate-100">
+          <div className="flex items-center gap-3 px-4 pt-14 pb-4">
+            <Skeleton className="w-9 h-9 rounded-full bg-slate-200" />
+            <Skeleton className="h-5 w-40 bg-slate-200 rounded" />
           </div>
         </div>
-        <div className="p-5 space-y-5">
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 flex gap-4">
-            <Skeleton className="w-12 h-12 rounded-2xl shrink-0 bg-slate-100" />
-            <div className="flex-1 space-y-3">
-              <Skeleton className="h-4 w-3/4 bg-slate-100 rounded-lg" />
-              <Skeleton className="h-3 w-full bg-slate-100 rounded-lg" />
-              <Skeleton className="h-6 w-1/3 rounded-full mt-2 bg-slate-100" />
-            </div>
-          </div>
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden p-5">
-            <Skeleton className="h-4 w-24 mb-5 bg-slate-100 rounded-lg" />
-            <div className="flex justify-between items-center gap-4">
-              <div className="flex items-center gap-4 flex-1">
-                <Skeleton className="w-16 h-16 rounded-2xl bg-slate-100" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-1/2 bg-slate-100 rounded-lg" />
-                  <Skeleton className="h-3 w-1/3 bg-slate-100 rounded-lg" />
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="p-4 space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-28 w-full bg-white rounded-2xl" />
+          ))}
         </div>
       </div>
     );
   }
 
-  // ── Main Render ───────────────────────────────────────────────────────────
+  const grandTotal = Math.max(0, subTotalPrice + shippingFee - discountAmount);
+
+  // ─── MAIN RENDER ────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-32">
-      {/* HEADER */}
-      <div className="bg-white/80 border-b border-slate-200 sticky top-0 z-40 backdrop-blur-xl">
-        <div className="flex items-center gap-3 px-5 pt-14 pb-4">
-          <button 
-            onClick={() => router.back()} 
-            className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-full transition-colors active:scale-90"
+    <div className="min-h-screen bg-[#F5F5F5] max-w-md mx-auto pb-52 font-sans">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        .checkout-page * { font-family: 'Inter', sans-serif; }
+        .price-tag { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .btn-order { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); }
+        .btn-order:disabled { background: #e2e8f0; color: #94a3b8; }
+        @keyframes slideUp { from { opacity:0; transform: translateY(8px);} to { opacity:1; transform:none; } }
+        .slide-up { animation: slideUp 0.25s ease forwards; }
+      `}</style>
+
+      {/* ── HEADER ── */}
+      <div className="bg-white sticky top-0 z-40 border-b border-slate-100 shadow-sm checkout-page">
+        <div className="flex items-center gap-3 px-4 pt-14 pb-4">
+          <button
+            onClick={() => router.back()}
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 text-slate-700 active:scale-90 transition-transform"
           >
-            <ArrowLeft size={20} strokeWidth={2.5} />
+            <ArrowLeft size={18} strokeWidth={2.5} />
           </button>
-          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Konfirmasi Pesanan</h1>
+          <h1 className="text-[15px] font-bold text-slate-900 flex-1">Checkout</h1>
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
+            <span className="w-5 h-5 rounded-full bg-orange-500 text-white flex items-center justify-center text-[10px] font-bold">1</span>
+            <span className="text-orange-500 font-semibold">Pesanan</span>
+            <ChevronRight size={12} className="text-slate-300" />
+            <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center text-[10px] font-bold">2</span>
+            <span>Bayar</span>
+          </div>
         </div>
       </div>
 
-      <div className="p-5 space-y-5">
+      <div className="checkout-page">
 
-        {/* ALAMAT PENGIRIMAN */}
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-              <MapPin size={16} className="text-indigo-500" />
-              Alamat Pengiriman
-            </h2>
-            {address && (
-              <button onClick={() => router.push("/address")} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 bg-indigo-50 px-3 py-1.5 rounded-full transition-colors">
-                Ubah
+        {/* ── MULTI SHOP ERROR ── */}
+        {multiShopError && (
+          <div className="mx-4 mt-4 bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3 slide-up">
+            <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
+              <AlertTriangle size={18} className="text-red-500" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[13px] font-bold text-red-700 mb-1">Checkout dari 2 toko berbeda!</p>
+              <p className="text-[11px] text-red-600 leading-relaxed">Kamu hanya bisa checkout dari 1 toko sekaligus. Hapus produk dari toko lain.</p>
+              <button
+                onClick={() => router.push("/cart")}
+                className="mt-2.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-[11px] font-bold active:scale-95 transition-transform"
+              >
+                Edit Keranjang
               </button>
-            )}
+            </div>
+          </div>
+        )}
+
+        {/* ── ALAMAT PENGIRIMAN ── */}
+        <div className="mx-4 mt-4 bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100">
+          {/* Section header */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-50">
+            <MapPin size={14} className="text-orange-500" strokeWidth={2.5} />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Alamat Pengiriman</span>
           </div>
 
           {address ? (
-            <div className="pl-6 border-l-2 border-slate-100 ml-2">
-              <p className="text-sm font-bold text-slate-900 mb-1">{address.name} <span className="font-normal text-slate-500">• {address.phone}</span></p>
-              <p className="text-xs text-slate-500 leading-relaxed capitalize">
-                {address.detail}, RT {address.rt || '00'}/RW {address.rw || '00'}, {address.kelurahan}, {address.kecamatan}, {address.city}
-              </p>
-              <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200">
-                <Route size={14} className="text-slate-400" />
-                <span className="text-xs font-semibold text-slate-600">{distance.toFixed(1)} KM dari toko</span>
+            <div className="px-4 py-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-[13px] font-bold text-slate-900">{address.name}</p>
+                    <span className="text-[10px] text-slate-400 font-medium">{address.phone}</span>
+                  </div>
+                  <p className="text-[12px] text-slate-500 leading-relaxed capitalize">
+                    {address.detail}, RT {address.rt || "00"}/RW {address.rw || "00"},<br />
+                    {address.kelurahan}, {address.kecamatan}, {address.city}
+                  </p>
+                  {distance > 0 && (
+                    <div className="mt-2.5 inline-flex items-center gap-1.5 bg-blue-50 border border-blue-100 px-2.5 py-1.5 rounded-lg">
+                      <Route size={11} className="text-blue-500" />
+                      <span className="text-[11px] font-semibold text-blue-600">
+                        {distance.toFixed(1)} km dari toko
+                      </span>
+                    </div>
+                  )}
+                  {!distance && address && cartItems.length > 0 && (
+                    <div className="mt-2.5 inline-flex items-center gap-1.5 bg-amber-50 border border-amber-100 px-2.5 py-1.5 rounded-lg">
+                      <AlertTriangle size={11} className="text-amber-500" />
+                      <span className="text-[11px] font-semibold text-amber-600">
+                        Lokasi toko belum diatur
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => router.push("/address")}
+                  className="shrink-0 text-[11px] font-bold text-orange-500 border border-orange-200 bg-orange-50 px-3 py-1.5 rounded-lg active:scale-95 transition-transform"
+                >
+                  Ubah
+                </button>
               </div>
             </div>
           ) : (
             <button
               onClick={() => router.push("/address/add")}
-              className="w-full py-8 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50/50 transition-all flex flex-col items-center gap-3 mt-2"
+              className="w-full px-4 py-5 flex items-center gap-3 text-slate-500 hover:bg-slate-50 transition-colors active:scale-[0.99]"
             >
-              <PlusCircle size={24} className="text-slate-400" />
-              <span className="text-sm font-bold">Tambah Alamat Pengiriman</span>
+              <div className="w-10 h-10 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center">
+                <PlusCircle size={18} className="text-slate-400" />
+              </div>
+              <div className="text-left">
+                <p className="text-[13px] font-bold text-slate-700">Tambah Alamat Pengiriman</p>
+                <p className="text-[11px] text-slate-400">Belum ada alamat tersimpan</p>
+              </div>
             </button>
           )}
         </div>
 
-        {/* ITEM BELANJA */}
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-sm font-bold text-slate-800">Pesananmu</h2>
-            <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">{cartItems.length} Item</span>
+        {/* ── PESANAN DARI TOKO ── */}
+        <div className={`mx-4 mt-3 bg-white rounded-2xl overflow-hidden shadow-sm border ${multiShopError ? "border-red-200" : "border-slate-100"}`}>
+          {/* Store header */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-50 bg-slate-50/60">
+            <Store size={13} className="text-slate-500" />
+            <span className="text-[12px] font-bold text-slate-700 flex-1 truncate">
+              {shopName || "Toko"}
+            </span>
+            <Package size={12} className="text-slate-400" />
+            <span className="text-[11px] text-slate-400 font-medium">{cartItems.length} produk</span>
           </div>
 
-          <div className="space-y-4">
-            {cartItems.map((item: any) => (
-              <div key={item.cart_id} className="flex gap-4">
-                <div className="w-20 h-20 bg-slate-50 rounded-2xl overflow-hidden shrink-0 border border-slate-100">
-                  <img src={item.image_url} className="w-full h-full object-cover" alt={item.name} />
-                </div>
-                <div className="flex-1 flex flex-col justify-between py-0.5">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 line-clamp-2 leading-snug">{item.name}</p>
-                    <p className="text-sm font-bold text-indigo-600 mt-1">Rp {item.price.toLocaleString('id-ID')}</p>
-                  </div>
-                  
-                  {/* Refined Quantity Control */}
-                  <div className="flex justify-end mt-2">
-                    <div className="flex items-center bg-slate-50 rounded-full border border-slate-200 p-0.5">
-                      <button
-                        onClick={() => updateQuantity(item.cart_id, item.quantity - 1)}
-                        className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-white rounded-full transition-all"
-                      >
-                        <Minus size={14} strokeWidth={2.5} />
-                      </button>
-                      <span className="w-8 text-center text-xs font-bold text-slate-700">{item.quantity}</span>
-                      <button
-                        onClick={() => updateQuantity(item.cart_id, item.quantity + 1)}
-                        className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded-full transition-all"
-                      >
-                        <Plus size={14} strokeWidth={2.5} />
-                      </button>
+          {/* Cart Items */}
+          <div className="divide-y divide-slate-50">
+            {cartItems.map((item: any) => {
+              const variantAddon = getVariantPrice(item.cart_id);
+              const unitPrice = item.price + variantAddon;
+              const itemTotal = unitPrice * item.quantity;
+
+              return (
+                <div key={item.cart_id} className="px-4 py-4 slide-up">
+                  {/* Product row */}
+                  <div className="flex gap-3">
+                    <div className="w-[72px] h-[72px] rounded-xl overflow-hidden bg-slate-100 shrink-0 border border-slate-100">
+                      <img
+                        src={item.image_url}
+                        className="w-full h-full object-cover"
+                        alt={item.name}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-slate-800 leading-snug line-clamp-2 mb-1">
+                        {item.name}
+                      </p>
+
+                      {/* Price display */}
+                      <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                        <span className="text-[13px] font-extrabold text-orange-600">
+                          Rp {fmt(item.price)}
+                        </span>
+                        {variantAddon > 0 && (
+                          <>
+                            <span className="text-[11px] text-slate-400">+</span>
+                            <span className="text-[11px] font-bold text-purple-600 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded-md">
+                              +Rp {fmt(variantAddon)}
+                            </span>
+                            <span className="text-[11px] text-slate-400">=</span>
+                            <span className="text-[12px] font-bold text-slate-700">
+                              Rp {fmt(unitPrice)}
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Quantity control */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                          <button
+                            disabled={multiShopError}
+                            onClick={() => updateQuantity(item.cart_id, item.quantity - 1)}
+                            className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors disabled:opacity-40"
+                          >
+                            <Minus size={13} strokeWidth={2.5} />
+                          </button>
+                          <span className="w-8 text-center text-[13px] font-bold text-slate-800">
+                            {item.quantity}
+                          </span>
+                          <button
+                            disabled={multiShopError}
+                            onClick={() => updateQuantity(item.cart_id, item.quantity + 1)}
+                            className="w-8 h-8 flex items-center justify-center text-orange-600 hover:bg-orange-100 active:bg-orange-200 bg-orange-50/50 transition-colors disabled:opacity-40"
+                          >
+                            <Plus size={13} strokeWidth={2.5} />
+                          </button>
+                        </div>
+                        {/* Item subtotal */}
+                        <div className="text-right">
+                          <p className="text-[10px] text-slate-400 font-medium">
+                            {item.quantity} × Rp {fmt(unitPrice)}
+                          </p>
+                          <p className="text-[14px] font-extrabold text-slate-900">
+                            Rp {fmt(itemTotal)}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Variant Selector */}
+                  {item.product_variants && item.product_variants.length > 0 && (
+                    <div className="mt-3 bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-3">
+                      {item.product_variants.map((group: any) => {
+                        const currentSel = selectedVariants[item.cart_id]?.[group.name];
+                        const isAuto = currentSel?.isAutoSelected;
+
+                        return (
+                          <div key={group.name}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                                {group.name}
+                              </span>
+                              {isAuto && (
+                                <span className="text-[9px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                                  <AlertTriangle size={8} />
+                                  Otomatis
+                                </span>
+                              )}
+                              {!isAuto && currentSel && (
+                                <span className="text-[9px] font-semibold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                                  <CheckCircle2 size={8} />
+                                  Terpilih
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {group.options.map((opt: VariantOption) => {
+                                const isSel = currentSel?.label === opt.label;
+                                return (
+                                  <button
+                                    disabled={multiShopError}
+                                    key={opt.label}
+                                    onClick={() =>
+                                      handleSelectVariant(item.cart_id, group.name, opt)
+                                    }
+                                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all border outline-none active:scale-95 flex items-center gap-1 disabled:opacity-50
+                                      ${isSel
+                                        ? "bg-orange-500 text-white border-orange-500 shadow-sm shadow-orange-300/40"
+                                        : "bg-white text-slate-600 border-slate-200 hover:border-orange-300"
+                                      }`}
+                                  >
+                                    {isSel && <CheckCircle2 size={10} />}
+                                    {opt.label}
+                                    {opt.price > 0 && (
+                                      <span
+                                        className={
+                                          isSel
+                                            ? "text-orange-200"
+                                            : "text-purple-500 font-semibold"
+                                        }
+                                      >
+                                        +{fmt(opt.price)}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        </div>
 
-        {/* INPUT VOUCHER DISKON */}
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 space-y-4">
-          <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-             <TicketPercent size={16} className="text-emerald-500" />
-             Makin Hemat Pakai Promo
-          </h2>
-          
-          {appliedVoucher ? (
-            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-emerald-800 flex items-center gap-1.5 mb-1">
-                  <ShieldCheck size={14} /> Voucher Terpasang
-                </p>
-                <p className="text-sm font-extrabold text-emerald-600 uppercase tracking-wider">{appliedVoucher.code}</p>
+          {/* Shipping info row */}
+          {!multiShopError && (
+            <div className="px-4 py-3 bg-blue-50 border-t border-blue-100 flex items-center gap-2">
+              <Bike size={14} className="text-blue-500 shrink-0" />
+              <div className="flex-1">
+                <span className="text-[11px] text-blue-700 font-semibold">
+                  Pengiriman reguler
+                  {distance > 0 && ` • ${distance.toFixed(1)} km`}
+                </span>
               </div>
-              <button 
-                onClick={removeVoucher}
-                className="text-xs font-bold text-red-500 hover:text-red-700 bg-white px-4 py-2 rounded-full shadow-sm transition-colors"
-              >
-                Hapus
-              </button>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <input 
-                type="text" 
-                placeholder="Punya kode voucher?"
-                value={voucherCode}
-                onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 text-sm font-bold text-slate-700 placeholder:font-medium placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 uppercase transition-all"
-              />
-              <button 
-                onClick={applyVoucher}
-                disabled={isCheckingVoucher || !voucherCode}
-                className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm px-6 py-3.5 rounded-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center shrink-0"
-              >
-                {isCheckingVoucher ? <Loader2 size={16} className="animate-spin" /> : 'Terapkan'}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* RINCIAN PEMBAYARAN */}
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 space-y-3.5">
-          <h2 className="text-sm font-bold text-slate-800 mb-2">Rincian Pembayaran</h2>
-          
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-500">Subtotal Produk</span>
-            <span className="text-slate-800 font-semibold">Rp {totalPrice.toLocaleString('id-ID')}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-500">Ongkos Kirim <span className="text-xs text-slate-400">({distance.toFixed(1)} km)</span></span>
-            <span className="text-slate-800 font-semibold">Rp {shippingFee.toLocaleString('id-ID')}</span>
-          </div>
-          {discountAmount > 0 && (
-            <div className="flex justify-between text-sm items-center">
-              <span className="text-emerald-600 font-medium">Diskon Voucher</span>
-              <span className="text-emerald-600 font-bold">- Rp {discountAmount.toLocaleString('id-ID')}</span>
-            </div>
-          )}
-          
-          <div className="border-t border-dashed border-slate-200 pt-4 mt-2">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-bold text-slate-800">Total Tagihan</span>
-              <span className="text-xl font-extrabold text-indigo-600 tracking-tight">
-                Rp {Math.max(0, totalPrice + shippingFee - discountAmount).toLocaleString('id-ID')}
+              <span className="text-[12px] font-bold text-blue-700">
+                Rp {fmt(shippingFee)}
               </span>
             </div>
+          )}
+        </div>
+
+        {/* ── VOUCHER ── */}
+        <div className="mx-4 mt-3 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-50">
+            <Tag size={13} className="text-emerald-500" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex-1">
+              Voucher / Promo
+            </span>
+          </div>
+
+          <div className="px-4 py-3.5">
+            {appliedVoucher ? (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-3 flex items-center justify-between slide-up">
+                <div>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <ShieldCheck size={12} className="text-emerald-600" />
+                    <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
+                      Voucher Aktif
+                    </span>
+                  </div>
+                  <p className="text-[13px] font-extrabold text-emerald-800 uppercase">
+                    {appliedVoucher.code}
+                  </p>
+                  <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">
+                    Hemat Rp {fmt(discountAmount)}
+                  </p>
+                </div>
+                <button
+                  onClick={removeVoucher}
+                  className="text-[11px] font-bold text-red-500 border border-red-200 bg-white px-3 py-1.5 rounded-lg active:scale-95 transition-transform"
+                >
+                  Hapus
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  disabled={multiShopError}
+                  type="text"
+                  placeholder="Masukkan kode voucher..."
+                  value={voucherCode}
+                  onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold text-slate-800 placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-orange-400 focus:ring-3 focus:ring-orange-400/10 transition uppercase disabled:opacity-50"
+                />
+                <button
+                  onClick={applyVoucher}
+                  disabled={isCheckingVoucher || !voucherCode || multiShopError}
+                  className="bg-slate-900 text-white font-bold text-[12px] px-4 py-2.5 rounded-xl active:scale-95 transition-transform disabled:opacity-40 flex items-center gap-1.5 shrink-0"
+                >
+                  {isCheckingVoucher ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <TicketPercent size={14} />
+                  )}
+                  Pakai
+                </button>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* ── RINCIAN HARGA ── */}
+        <div className="mx-4 mt-3 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-50">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              Rincian Harga
+            </span>
+          </div>
+          <div className="px-4 py-3.5 space-y-2.5">
+            {/* Per item breakdown */}
+            {cartItems.map((item) => {
+              const va = getVariantPrice(item.cart_id);
+              const unitP = item.price + va;
+              return (
+                <div key={item.cart_id} className="flex justify-between items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] text-slate-600 font-medium truncate">{item.name}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {item.quantity} × Rp {fmt(unitP)}
+                      {va > 0 && (
+                        <span className="text-purple-500 font-semibold">
+                          {" "}(+Rp {fmt(va)} varian)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <span className="text-[12px] font-bold text-slate-700 shrink-0">
+                    Rp {fmt(unitP * item.quantity)}
+                  </span>
+                </div>
+              );
+            })}
+
+            <div className="border-t border-dashed border-slate-200 pt-2.5 space-y-2">
+              <div className="flex justify-between text-[12px]">
+                <span className="text-slate-500">Subtotal Produk</span>
+                <span className="font-bold text-slate-700">Rp {fmt(subTotalPrice)}</span>
+              </div>
+              <div className="flex justify-between text-[12px]">
+                <span className="text-slate-500">
+                  Ongkos Kirim
+                  {distance > 0 && (
+                    <span className="text-slate-400"> ({distance.toFixed(1)} km × Rp {fmt(TARIF_PER_KM)})</span>
+                  )}
+                </span>
+                <span className="font-bold text-slate-700">Rp {fmt(shippingFee)}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-[12px]">
+                  <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                    <TicketPercent size={11} />
+                    Diskon Voucher
+                  </span>
+                  <span className="font-bold text-emerald-600">- Rp {fmt(discountAmount)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      {/* FLOATING ACTION BUTTON */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-5 max-w-md mx-auto z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-        <button
-          onClick={handlePlaceOrder}
-          disabled={isProcessing || !address || cartItems.length === 0}
-          className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-bold transition-all active:scale-[0.98] disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/30 disabled:shadow-none flex items-center justify-center gap-2"
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 size={18} className="animate-spin" />
-              <span>Memproses Pesanan...</span>
-            </>
-          ) : (
-            <>
-              <span>Lanjut ke Pembayaran</span>
-              <ArrowRight size={18} strokeWidth={2.5} />
-            </>
-          )}
-        </button>
+      {/* ── STICKY FOOTER ── */}
+      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-50 checkout-page">
+        <div className="bg-white border-t border-slate-100 shadow-[0_-8px_32px_rgba(0,0,0,0.10)] px-4 pt-4 pb-6">
+          {/* Total row */}
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-0.5">
+                Total Pembayaran
+              </p>
+              <p className="text-[22px] font-black text-slate-900 leading-none tracking-tight">
+                Rp {fmt(grandTotal)}
+              </p>
+              {discountAmount > 0 && (
+                <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                  Hemat Rp {fmt(discountAmount)} 🎉
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={handlePlaceOrder}
+              disabled={
+                isProcessing ||
+                !address ||
+                cartItems.length === 0 ||
+                multiShopError
+              }
+              className="btn-order h-12 px-6 text-white rounded-2xl text-[13px] font-bold transition-all active:scale-[0.96] disabled:bg-slate-200 disabled:text-slate-400 shadow-lg shadow-orange-500/25 flex items-center gap-2 min-w-[150px] justify-center"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  <span>Memproses...</span>
+                </>
+              ) : (
+                <>
+                  <span>Bayar Sekarang</span>
+                  <ArrowRight size={15} strokeWidth={2.5} className="group-hover:translate-x-0.5 transition-transform" />
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Trust badges */}
+          <div className="flex items-center justify-center gap-3 pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-1">
+              <ShieldCheck size={11} className="text-emerald-500" />
+              <span className="text-[10px] text-slate-400 font-medium">Transaksi Aman</span>
+            </div>
+            <span className="text-slate-200">•</span>
+            <div className="flex items-center gap-1">
+              <Package size={11} className="text-blue-500" />
+              <span className="text-[10px] text-slate-400 font-medium">Garansi Pesanan</span>
+            </div>
+            <span className="text-slate-200">•</span>
+            <div className="flex items-center gap-1">
+              <Bike size={11} className="text-orange-400" />
+              <span className="text-[10px] text-slate-400 font-medium">Antar ke Pintu</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

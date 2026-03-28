@@ -87,16 +87,30 @@ export default function CartPage() {
       .eq("user_id", user.id);
     if (data) {
       setCartItems(
-        data.map((item) => ({
-          id: item.id,
-          product_id: item.product_id,
-          name: item.products.name,
-          price: item.products.price,
-          image_url: Array.isArray(item.products.image_url)
-            ? item.products.image_url[0]
-            : item.products.image_url,
-          quantity: item.quantity,
-        }))
+        data.map((item) => {
+          let variantPrice = 0;
+          let variantLabels: string[] = [];
+          
+          if (item.variants) {
+             Object.values(item.variants).forEach((opt: any) => {
+                variantPrice += (opt.price || 0);
+                variantLabels.push(opt.label);
+             });
+          }
+
+          return {
+            id: item.id,
+            product_id: item.product_id,
+            name: item.products.name,
+            price: item.products.price + variantPrice,
+            base_price: item.products.price,
+            variant_labels: variantLabels,
+            image_url: Array.isArray(item.products.image_url)
+              ? item.products.image_url[0]
+              : item.products.image_url,
+            quantity: item.quantity,
+          };
+        })
       );
     }
     setLoading(false);
@@ -249,6 +263,11 @@ export default function CartPage() {
                     <h3 className="text-sm font-semibold text-slate-800 line-clamp-2 leading-snug mb-1">
                       {item.name}
                     </h3>
+                    {item.variant_labels && item.variant_labels.length > 0 && (
+                      <p className="text-[11px] font-medium text-slate-500 mb-1 line-clamp-1">
+                        Varian: {item.variant_labels.join(', ')}
+                      </p>
+                    )}
                     <p className="text-base font-bold text-indigo-600">
                       Rp {item.price.toLocaleString("id-ID")}
                     </p>

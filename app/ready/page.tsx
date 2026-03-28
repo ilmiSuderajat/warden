@@ -19,7 +19,14 @@ export default function ReadySnackPage() {
         try {
             let supabaseQuery = supabase
                 .from("products")
-                .select("*")
+                .select(`
+                    *,
+                    shops (
+                        address,
+                        latitude,
+                        longitude
+                    )
+                `)
                 .eq("is_ready", true)
 
             if (query) {
@@ -136,10 +143,10 @@ export default function ReadySnackPage() {
                                         <div className="mt-2 flex items-center text-slate-400 gap-1 overflow-hidden">
                                             <Icons.MapPin size={10} className="text-orange-500 shrink-0" />
                                             <span className="text-[9px] truncate font-medium">
-                                                {p.location || "Lokasi"}
-                                                {userLoc && p.latitude && p.longitude && (
+                                                {p.shops?.address || p.location || "Lokasi"}
+                                                {userLoc && (p.shops?.latitude || p.latitude) && (p.shops?.longitude || p.longitude) && (
                                                     <span className="ml-1 text-indigo-600 font-bold">
-                                                        • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.latitude, p.longitude))}
+                                                        • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.shops?.latitude || p.latitude, p.shops?.longitude || p.longitude))}
                                                     </span>
                                                 )}
                                             </span>

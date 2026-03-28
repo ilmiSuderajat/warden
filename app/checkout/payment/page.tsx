@@ -1,24 +1,25 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, CheckCircle2, Truck, Loader2, CreditCard, Wallet, ShieldCheck } from "lucide-react"
+import {
+  ArrowLeft, CheckCircle2, Truck, Loader2, CreditCard,
+  Wallet, ShieldCheck, MapPin, AlertCircle, Info
+} from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 
-// ✅ UUID validation — cegah injeksi dari URL param
 const isValidUUID = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 
-const loadMidtransScript = (clientKey: string) => {
-  return new Promise<void>((resolve, reject) => {
+// Load Midtrans Snap script — production URL
+const loadMidtransScript = (clientKey: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
     if ((window as any).snap) { resolve(); return }
 
-    const existingScript = document.querySelector(
-      'script[src="https://app.midtrans.com/snap/snap.js"]'
-    )
-    if (existingScript) {
-      existingScript.addEventListener("load", () => resolve())
+    const existing = document.querySelector('script[src*="midtrans.com/snap/snap.js"]')
+    if (existing) {
+      existing.addEventListener("load", () => resolve())
       return
     }
 
@@ -27,9 +28,17 @@ const loadMidtransScript = (clientKey: string) => {
     script.setAttribute("data-client-key", clientKey)
     script.async = true
     script.onload = () => resolve()
-    script.onerror = () => reject(new Error("Gagal load Midtrans"))
+    script.onerror = () => reject(new Error("Gagal memuat payment gateway"))
     document.body.appendChild(script)
   })
+}
+
+interface OrderInfo {
+  id: string
+  total_amount: number
+  customer_name: string
+  payment_status: string
+  distance_km: number | null
 }
 
 function PaymentContent() {
@@ -37,46 +46,53 @@ function PaymentContent() {
   const searchParams = useSearchParams()
   const orderId = searchParams.get("order_id")
 
-  const [selectedMethod, setSelectedMethod] = useState<string>("online")
+  const [selectedMethod, setSelectedMethod] = useState<"online" | "cod">("online")
   const [loading, setLoading] = useState(false)
   const [fetchingData, setFetchingData] = useState(true)
-  const [orderInfo, setOrderInfo] = useState<{
-    id: string
-    total_amount: number
-    customer_name: string
-    payment_status: string
-  } | null>(null)
+  const [orderInfo, setOrderInfo] = useState<OrderInfo | null>(null)
+  const [codError, setCodError] = useState<string | null>(null)
+
+  // ✅ Ref guard: prevents concurrent payment requests entirely
+  const isProcessingRef = useRef(false)
+
+  const COD_MAX_KM = 15
 
   useEffect(() => {
-    const initializePage = async () => {
-      // ✅ Validasi format UUID sebelum query ke DB
+    const init = async () => {
       if (!orderId || !isValidUUID(orderId)) {
         router.push("/cart")
         return
       }
 
       try {
-        // ✅ Supabase RLS akan memfilter — hanya kembalikan order milik user sendiri
-        // Pastikan RLS policy: auth.uid() = user_id pada tabel orders
+        // RLS ensures only own orders are returned
         const { data: order, error } = await supabase
           .from("orders")
-          .select("id, total_amount, customer_name, payment_status")
+          .select("id, total_amount, customer_name, payment_status, distance_km")
           .eq("id", orderId)
           .maybeSingle()
 
         if (error || !order) {
-          // ✅ Pesan generik — jangan bocorkan apakah order ada tapi bukan miliknya
           toast.error("Pesanan tidak ditemukan atau Anda tidak memiliki akses.")
           router.push("/cart")
           return
         }
 
-        if (order.payment_status !== "pending") {
+        // If already processed, redirect to orders
+        if (order.payment_status !== "pending" && order.payment_status !== "waiting_payment") {
           router.push("/orders")
           return
         }
 
         setOrderInfo(order)
+
+        // Preemptively warn if COD won't be available
+        const dist = Number(order.distance_km ?? 0)
+        if (dist > COD_MAX_KM) {
+          setCodError(
+            `COD tidak tersedia — jarak pesanan Anda ${dist.toFixed(1)} km melebihi batas ${COD_MAX_KM} km.`
+          )
+        }
       } catch (err) {
         console.error(err)
         router.push("/cart")
@@ -85,16 +101,24 @@ function PaymentContent() {
       }
     }
 
-    initializePage()
+    init()
   }, [orderId, router])
+
+  // Reset COD error when switching methods
+  useEffect(() => {
+    if (selectedMethod === "online") setCodError(null)
+  }, [selectedMethod])
 
   const handleProcessPayment = async () => {
     if (!orderInfo) return
+
+    // ✅ Hard guard: block concurrent requests even if button state is stale
+    if (isProcessingRef.current) return
+    isProcessingRef.current = true
     setLoading(true)
 
     try {
       if (selectedMethod === "cod") {
-        // ✅ Menggunakan route khusus COD
         const response = await fetch("/api/payment/cod", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -102,17 +126,24 @@ function PaymentContent() {
         })
 
         const data = await response.json()
-        console.log("[Payment] COD Response:", data)
 
-        if (!response.ok) throw new Error(data.error || "Gagal konfirmasi COD")
+        if (!response.ok) {
+          // Show specific COD errors (distance, disabled) clearly
+          if (data.code === "COD_DISTANCE_EXCEEDED" || data.code === "COD_DISABLED") {
+            setCodError(data.error)
+            toast.error(data.error)
+            setSelectedMethod("online")
+          } else {
+            toast.error(data.error || "Gagal konfirmasi COD. Coba lagi.")
+          }
+          return
+        }
 
-        setLoading(false)
         router.push(`/checkout/success?method=cod&order_id=${orderInfo.id}`)
         return
       }
 
-      // Online payment flow
-      console.log("[Payment] Requesting Snap token for order:", orderInfo.id)
+      // ── Online payment ─────────────────────────────────────────
       const response = await fetch("/api/payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -120,139 +151,238 @@ function PaymentContent() {
       })
 
       const data = await response.json()
-      console.log("[Payment] API Response:", data)
 
       if (!response.ok) {
-        const errorMsg = data.apiResponse?.error_messages?.[0] || data.details || data.error || "Gagal memproses pembayaran"
-        throw new Error(errorMsg)
+        throw new Error(data.error || "Gagal memproses pembayaran.")
       }
-      if (!data.token) throw new Error("Snap token tidak ditemukan dalam respon server.")
+      if (!data.token) {
+        throw new Error("Token pembayaran tidak diterima dari server.")
+      }
 
       const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!
       await loadMidtransScript(clientKey)
 
-      if (!(window as any).snap) throw new Error("Payment gateway tidak siap")
+      if (!(window as any).snap) {
+        throw new Error("Payment gateway tidak siap. Refresh halaman dan coba lagi.")
+      }
 
-      console.log("[Payment] Calling Snap with token:", data.token)
-        ; (window as any).snap.pay(data.token, {
-          onSuccess: () => {
-            console.log("[Payment] Success")
-            setLoading(false);
-            router.push(`/checkout/success?order_id=${orderInfo.id}`)
-          },
-          onPending: () => {
-            console.log("[Payment] Pending")
-            setLoading(false);
-            router.push(`/orders?active=${orderInfo.id}`)
-          },
-          onError: (result: any) => {
-            console.error("[Payment] Error:", result)
-            toast.error("Terjadi kesalahan saat pembayaran.")
-            router.push(`/orders?active=${orderInfo.id}`)
-          },
-          onClose: () => {
-            console.log("[Payment] Closed")
-            toast.info("Pembayaran dibatalkan. Pesanan tersimpan di menu Pesanan.")
-            router.push(`/orders?active=${orderInfo.id}`)
-          },
-        })
+      ;(window as any).snap.pay(data.token, {
+        onSuccess: () => {
+          router.push(`/checkout/success?order_id=${orderInfo.id}`)
+        },
+        onPending: () => {
+          toast.info("Pembayaran sedang diproses. Cek status di Pesanan saya.")
+          router.push(`/orders?active=${orderInfo.id}`)
+        },
+        onError: () => {
+          toast.error("Terjadi kesalahan saat pembayaran. Pesanan tersimpan di menu Pesanan.")
+          router.push(`/orders?active=${orderInfo.id}`)
+        },
+        onClose: () => {
+          toast.info("Pembayaran dibatalkan. Pesanan masih tersimpan.")
+          router.push(`/orders?active=${orderInfo.id}`)
+        },
+      })
+
     } catch (error: any) {
-      toast.error(error.message)
+      toast.error(error.message || "Terjadi kesalahan. Silakan coba lagi.")
     } finally {
+      isProcessingRef.current = false
       setLoading(false)
     }
   }
 
+  const distanceKm = Number(orderInfo?.distance_km ?? 0)
+  const codUnavailable = distanceKm > COD_MAX_KM
+
   if (fetchingData) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="animate-spin text-indigo-600" size={32} />
-        <p className="text-slate-400 text-sm font-medium">Memuat data...</p>
+      <div className="min-h-screen bg-[#F5F5F5] flex flex-col items-center justify-center gap-3">
+        <Loader2 className="animate-spin text-orange-500" size={32} />
+        <p className="text-slate-400 text-sm font-medium">Memuat data pesanan...</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-28">
-      <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
-        <div className="flex items-center gap-3 px-5 pt-12 pb-4">
-          <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
-            <ArrowLeft size={20} strokeWidth={2.5} />
+    <div className="min-h-screen bg-[#F5F5F5] font-sans max-w-md mx-auto pb-32">
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap'); * { font-family: 'Inter', sans-serif; }`}</style>
+
+      {/* ── Header ── */}
+      <div className="bg-white sticky top-0 z-40 border-b border-slate-100 shadow-sm">
+        <div className="flex items-center gap-3 px-4 pt-14 pb-4">
+          <button
+            onClick={() => router.back()}
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 text-slate-700 active:scale-90 transition-transform"
+          >
+            <ArrowLeft size={18} strokeWidth={2.5} />
           </button>
-          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Pembayaran</h1>
+          <h1 className="text-[15px] font-bold text-slate-900 flex-1">Pilih Pembayaran</h1>
+          {/* Step indicator */}
+          <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+            <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center text-[10px] font-bold">1</span>
+            <span className="w-8 h-px bg-slate-200" />
+            <span className="w-5 h-5 rounded-full bg-orange-500 text-white flex items-center justify-center text-[10px] font-bold">2</span>
+            <span className="text-orange-500 font-semibold ml-0.5">Bayar</span>
+          </div>
         </div>
       </div>
 
-      <div className="p-5 space-y-6">
-        <div>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 px-1">Pilih Metode</p>
-          <div className="space-y-3">
-            <button
-              onClick={() => setSelectedMethod("online")}
-              className={`w-full p-4 rounded-2xl flex items-center gap-4 transition-all border-2 ${selectedMethod === "online"
-                ? "bg-white border-indigo-600 shadow-sm shadow-indigo-100"
-                : "bg-white border-transparent hover:border-slate-200"
-                }`}
-            >
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${selectedMethod === "online" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-400"
-                }`}>
-                <CreditCard size={22} />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-sm font-bold text-slate-800">Pembayaran Online</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">VA, QRIS, E-Wallet, dll</p>
-              </div>
-              {selectedMethod === "online" && <CheckCircle2 size={20} className="text-indigo-600 shrink-0" />}
-            </button>
+      <div className="p-4 space-y-3">
 
-            <button
-              onClick={() => setSelectedMethod("cod")}
-              className={`w-full p-4 rounded-2xl flex items-center gap-4 transition-all border-2 ${selectedMethod === "cod"
-                ? "bg-white border-indigo-600 shadow-sm shadow-indigo-100"
-                : "bg-white border-transparent hover:border-slate-200"
-                }`}
-            >
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${selectedMethod === "cod" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-400"
-                }`}>
-                <Truck size={22} />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-sm font-bold text-slate-800">Bayar di Tempat (COD)</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Bayar tunai saat kurir tiba</p>
-              </div>
-              {selectedMethod === "cod" && <CheckCircle2 size={20} className="text-indigo-600 shrink-0" />}
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-4">
-          <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
-            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-              <Wallet size={20} className="text-indigo-600" />
+        {/* ── Order Total Card ── */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-4 flex items-center gap-3">
+            <div className="w-11 h-11 bg-orange-50 rounded-xl flex items-center justify-center shrink-0">
+              <Wallet size={20} className="text-orange-500" />
             </div>
-            <div>
-              <p className="text-xs text-slate-400 font-medium">Total Tagihan</p>
-              <p className="text-xl font-bold text-slate-900 tracking-tight">
+            <div className="flex-1">
+              <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wider">Total Tagihan</p>
+              <p className="text-[22px] font-black text-slate-900 leading-none mt-0.5">
                 Rp {orderInfo?.total_amount?.toLocaleString("id-ID")}
               </p>
             </div>
           </div>
-          <div className="flex items-start gap-2 text-slate-500 text-xs">
-            <ShieldCheck size={14} className="text-green-500 mt-0.5 shrink-0" />
-            <span>Transaksi aman & terenkripsi. Pesanan akan diproses setelah pembayaran berhasil.</span>
+
+          {/* Distance info */}
+          {distanceKm > 0 && (
+            <div className="px-4 py-2.5 bg-blue-50 border-t border-blue-100 flex items-center gap-2">
+              <MapPin size={12} className="text-blue-500 shrink-0" />
+              <span className="text-[11px] text-blue-700 font-semibold">
+                Jarak pengiriman: {distanceKm.toFixed(1)} km
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Method Selection ── */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-2.5">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+            Metode Pembayaran
+          </p>
+
+          {/* Online */}
+          <button
+            onClick={() => setSelectedMethod("online")}
+            className={`w-full p-3.5 rounded-xl flex items-center gap-3.5 transition-all border-2 active:scale-[0.99]
+              ${selectedMethod === "online"
+                ? "bg-orange-50 border-orange-400 shadow-sm"
+                : "bg-slate-50 border-transparent hover:border-slate-200"
+              }`}
+          >
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors
+              ${selectedMethod === "online" ? "bg-orange-500 text-white shadow-sm shadow-orange-300/40" : "bg-white text-slate-400 border border-slate-200"}`}
+            >
+              <CreditCard size={20} />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-[13px] font-bold text-slate-800">Pembayaran Online</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Transfer VA, QRIS, E-Wallet, Kartu Kredit</p>
+            </div>
+            {selectedMethod === "online" && (
+              <CheckCircle2 size={18} className="text-orange-500 shrink-0" />
+            )}
+          </button>
+
+          {/* COD */}
+          <button
+            onClick={() => !codUnavailable && setSelectedMethod("cod")}
+            disabled={codUnavailable}
+            className={`w-full p-3.5 rounded-xl flex items-center gap-3.5 transition-all border-2 active:scale-[0.99]
+              ${codUnavailable
+                ? "bg-slate-50 border-dashed border-slate-200 opacity-60 cursor-not-allowed"
+                : selectedMethod === "cod"
+                  ? "bg-orange-50 border-orange-400 shadow-sm"
+                  : "bg-slate-50 border-transparent hover:border-slate-200"
+              }`}
+          >
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors
+              ${codUnavailable
+                ? "bg-white text-slate-300 border border-slate-200"
+                : selectedMethod === "cod"
+                  ? "bg-orange-500 text-white shadow-sm shadow-orange-300/40"
+                  : "bg-white text-slate-400 border border-slate-200"
+              }`}
+            >
+              <Truck size={20} />
+            </div>
+            <div className="flex-1 text-left">
+              <div className="flex items-center gap-2">
+                <p className="text-[13px] font-bold text-slate-800">Bayar di Tempat (COD)</p>
+                {codUnavailable && (
+                  <span className="text-[9px] font-bold text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+                    Tidak Tersedia
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {codUnavailable
+                  ? `Hanya tersedia untuk jarak ≤ ${COD_MAX_KM} km`
+                  : "Bayar tunai saat kurir tiba di lokasi"}
+              </p>
+            </div>
+            {!codUnavailable && selectedMethod === "cod" && (
+              <CheckCircle2 size={18} className="text-orange-500 shrink-0" />
+            )}
+          </button>
+        </div>
+
+        {/* ── COD Error Banner ── */}
+        {codError && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex gap-3">
+            <AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-[12px] text-amber-700 font-medium leading-relaxed">{codError}</p>
+          </div>
+        )}
+
+        {/* ── Trust Badges ── */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3.5">
+          <div className="flex items-start gap-2.5">
+            <ShieldCheck size={15} className="text-emerald-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[12px] font-semibold text-slate-700">Transaksi Aman & Terenkripsi</p>
+              <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                Pembayaran diproses oleh Midtrans — payment gateway terpercaya. Data Anda tidak disimpan di server kami.
+              </p>
+            </div>
           </div>
         </div>
+
+        {/* Info: online payment note */}
+        {selectedMethod === "online" && (
+          <div className="flex items-start gap-2 px-1">
+            <Info size={12} className="text-slate-400 mt-0.5 shrink-0" />
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Setelah klik Bayar, jendela pembayaran Midtrans akan terbuka. Pesanan dikonfirmasi otomatis setelah pembayaran berhasil.
+            </p>
+          </div>
+        )}
+
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-5 bg-white/80 backdrop-blur-md border-t border-slate-100 max-w-md mx-auto">
+      {/* ── Sticky Footer CTA ── */}
+      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-slate-100 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] px-4 pt-4 pb-6">
         <button
-          disabled={loading}
+          disabled={loading || !orderInfo}
           onClick={handleProcessPayment}
-          className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:bg-indigo-300 shadow-lg shadow-indigo-200 active:scale-[0.98] transition-transform"
+          style={{
+            background: loading ? undefined : "linear-gradient(135deg, #f97316 0%, #ea580c 100%)"
+          }}
+          className="w-full h-13 py-3.5 text-white rounded-2xl text-[14px] font-bold
+            flex items-center justify-center gap-2
+            disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none
+            shadow-lg shadow-orange-500/25 active:scale-[0.98] transition-transform"
         >
           {loading ? (
-            <><Loader2 className="animate-spin" size={18} /><span>Memproses...</span></>
-          ) : selectedMethod === "online" ? "Bayar Sekarang" : "Konfirmasi Pesanan COD"}
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              <span>Memproses...</span>
+            </>
+          ) : selectedMethod === "online" ? (
+            "Bayar Sekarang"
+          ) : (
+            "Konfirmasi Pesanan COD"
+          )}
         </button>
       </div>
     </div>
@@ -261,11 +391,13 @@ function PaymentContent() {
 
 export default function PaymentPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 className="animate-spin text-indigo-600" size={32} />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+          <Loader2 className="animate-spin text-orange-500" size={32} />
+        </div>
+      }
+    >
       <PaymentContent />
     </Suspense>
   )

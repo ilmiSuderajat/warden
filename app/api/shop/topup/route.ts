@@ -15,7 +15,7 @@ export async function POST(req: Request) {
         const supabaseAuth = createServerClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+            { cookies: { getAll: () => cookieStore.getAll(), setAll: () => { } } }
         )
 
         const { data: { session } } = await supabaseAuth.auth.getSession()
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
         const supabaseAdmin = createServerClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            { cookies: { getAll: () => [], setAll: () => {} } }
+            { cookies: { getAll: () => [], setAll: () => { } } }
         )
 
         // Ambil shop milik owner
@@ -45,7 +45,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Warung tidak ditemukan." }, { status: 404 })
         }
 
-        const midtransOrderId = `TOPUP-${shop.id}-${Date.now()}`
+        const shopIdShort = shop.id.replace(/-/g, "").substring(0, 8)
+        const midtransOrderId = `TOPUP-${shopIdShort}-${Date.now()}`
 
         // Insert request topup ke DB
         const { data: topupReq, error: insertError } = await supabaseAdmin

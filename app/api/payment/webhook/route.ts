@@ -1,14 +1,9 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import crypto from 'crypto'
+import { NextResponse } from "next/server"
+import { createAdminClient } from "@/lib/serverAuth"
 import { dispatchOrder } from "@/lib/driverOrders"
+import crypto from "crypto"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
-const COMMISSION_RATE = 0.05 // 5%
+const COMMISSION_RATE = 0.05
 
 export async function POST(req: Request) {
   try {
@@ -20,113 +15,169 @@ export async function POST(req: Request) {
       gross_amount,
       signature_key,
       transaction_status,
-      fraud_status
+      fraud_status,
     } = body
 
-    // 🔐 1. Verifikasi Signature
+    // ── 1. Validate Midtrans signature (anti-spoofing) ────────────
     const serverKey = process.env.MIDTRANS_SERVER_KEY!
-    const hash = crypto
-      .createHash('sha512')
+    const expectedHash = crypto
+      .createHash("sha512")
       .update(order_id + status_code + gross_amount + serverKey)
-      .digest('hex')
+      .digest("hex")
 
-    if (hash !== signature_key) {
-      console.log("❌ Signature tidak valid")
+    if (expectedHash !== signature_key) {
+      console.warn(`[Webhook] ❌ Invalid signature. order_id=${order_id}`)
       return NextResponse.json({ message: "Invalid signature" }, { status: 403 })
     }
 
-    // 🧠 2. Extract real Order ID (remove timestamp suffix if present)
-    const realOrderId = order_id.length > 36 ? order_id.substring(0, 36) : order_id
+    const supabase = createAdminClient()
 
-    console.log("🔔 Webhook received for order:", order_id)
-    console.log("➡ Identified Real UUID:", realOrderId)
-    console.log("➡ Status:", transaction_status)
+    // ── 2. Resolve Midtrans order_id → DB order UUID ──────────────
+    const realOrderId = await resolveOrderId(supabase, order_id)
+    if (!realOrderId) {
+      // Return 200 to prevent Midtrans retry spam for unknown orders
+      console.warn(`[Webhook] Could not resolve order_id=${order_id} — ignoring`)
+      return NextResponse.json({ message: "Order not found, acknowledged" })
+    }
 
-    let paymentStatus = 'pending'
-    let orderStatus = 'Menunggu Pembayaran'
+    console.log(`[Webhook] 🔔 order_id=${order_id}, resolved=${realOrderId}, status=${transaction_status}`)
 
-    // 🧠 3. Mapping Status Midtrans
-    if (transaction_status === 'capture') {
-      if (fraud_status === 'challenge') {
-        paymentStatus = 'pending'
-        orderStatus = 'Menunggu Pembayaran'
-      } else if (fraud_status === 'accept') {
-        paymentStatus = 'paid'
-        orderStatus = 'Mencari Kurir'
+    // ── 3. Idempotency: skip if already in a final state ─────────
+    const { data: existingOrder } = await supabase
+      .from("orders")
+      .select("id, payment_status")
+      .eq("id", realOrderId)
+      .maybeSingle()
+
+    if (!existingOrder) {
+      console.warn(`[Webhook] Order ${realOrderId} missing from DB`)
+      return NextResponse.json({ message: "Order not found, acknowledged" })
+    }
+
+    const FINAL_STATUSES = ["paid", "failed", "expired", "cancelled"]
+    if (FINAL_STATUSES.includes(existingOrder.payment_status)) {
+      console.log(`[Webhook] ⏭ Order ${realOrderId} already finalized as '${existingOrder.payment_status}', skipping`)
+      return NextResponse.json({ message: "Already processed" })
+    }
+
+    // ── 4. Map Midtrans transaction_status → internal status ──────
+    let paymentStatus = "pending"
+    let orderStatus = "Menunggu Pembayaran"
+    let isPaid = false
+
+    if (transaction_status === "capture") {
+      if (fraud_status === "challenge") {
+        paymentStatus = "pending"
+        orderStatus = "Menunggu Pembayaran"
+      } else if (fraud_status === "accept") {
+        paymentStatus = "paid"
+        orderStatus = "Mencari Kurir"
+        isPaid = true
       }
+    } else if (transaction_status === "settlement") {
+      paymentStatus = "paid"
+      orderStatus = "Mencari Kurir"
+      isPaid = true
+    } else if (transaction_status === "pending") {
+      paymentStatus = "waiting_payment"
+      orderStatus = "Menunggu Pembayaran"
+    } else if (transaction_status === "cancel") {
+      paymentStatus = "cancelled"
+      orderStatus = "Dibatalkan"
+    } else if (transaction_status === "deny") {
+      paymentStatus = "failed"
+      orderStatus = "Dibatalkan"
+    } else if (transaction_status === "expire") {
+      paymentStatus = "expired"
+      orderStatus = "Dibatalkan"
     }
 
-    if (transaction_status === 'settlement') {
-      paymentStatus = 'paid'
-      orderStatus = 'Mencari Kurir'
+    // ── 5. Persist status update ──────────────────────────────────
+    const updatePayload: Record<string, any> = {
+      payment_status: paymentStatus,
+      status: orderStatus,
+      payment_method: "online",
+    }
+    if (isPaid) {
+      updatePayload.paid_at = new Date().toISOString()
     }
 
-    if (
-      transaction_status === 'cancel' ||
-      transaction_status === 'deny' ||
-      transaction_status === 'expire'
-    ) {
-      paymentStatus = 'cancelled'
-      orderStatus = 'Dibatalkan'
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update(updatePayload)
+      .eq("id", realOrderId)
+
+    if (updateError) {
+      console.error(`[Webhook] DB update error for ${realOrderId}:`, updateError.message)
+      return NextResponse.json({ error: "DB update failed" }, { status: 500 })
     }
 
-    // 📦 4. Update Database
-    const { error } = await supabase
-      .from('orders')
-      .update({
-        payment_status: paymentStatus,
-        status: orderStatus,
-        payment_method: 'online'
-      })
-      .eq('id', realOrderId)
-
-    if (error) {
-      console.log("❌ DB Error:", error.message)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    // 💰 5. Jika pembayaran berhasil, kredit saldo warung (dikurangi komisi 5%)
-    if (paymentStatus === 'paid') {
-      await creditShopBalance(realOrderId)
-    }
-
-    // 🚗 6. Trigger dispatcher
-    if (orderStatus === 'Mencari Kurir') {
+    // ── 6. On paid: credit shop balance + trigger dispatch ────────
+    if (isPaid) {
+      await creditShopBalance(supabase, realOrderId)
       await dispatchOrder(realOrderId)
+      console.log(`[Webhook] ✅ Order ${realOrderId} PAID → driver dispatch triggered`)
     }
 
-    console.log(`✅ Success updated order ${realOrderId} to ${paymentStatus}/${orderStatus}`)
+    console.log(`[Webhook] ✅ Order ${realOrderId} → payment_status=${paymentStatus}`)
     return NextResponse.json({ message: "OK" })
 
   } catch (err: any) {
-    console.log("🔥 Webhook Crash:", err.message)
+    console.error("[Webhook] 🔥 Unhandled crash:", err.message)
+    // Return 500 so Midtrans retries
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
-/** Kredit saldo shop setelah pembayaran online berhasil (dikurangi komisi 5%) */
-async function creditShopBalance(orderId: string) {
+/**
+ * Resolves a Midtrans order_id string back to the real DB order UUID.
+ * Priority: midtrans_order_id column → raw UUID fallback (legacy orders)
+ */
+async function resolveOrderId(supabase: any, midtransOrderId: string): Promise<string | null> {
+  // Primary: look up via stored midtrans_order_id column (new orders)
+  const { data: byMidtransId } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("midtrans_order_id", midtransOrderId)
+    .maybeSingle()
+
+  if (byMidtransId?.id) return byMidtransId.id
+
+  // Fallback: if the value is itself a raw UUID (legacy orders before this patch)
+  const isRawUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(midtransOrderId)
+  if (isRawUUID) return midtransOrderId
+
+  // Fallback: old format was "{uuid}-{timestamp}" — first 36 chars
+  if (midtransOrderId.length > 36) {
+    const candidate = midtransOrderId.substring(0, 36)
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate)
+    if (isUUID) return candidate
+  }
+
+  return null
+}
+
+/** Credit shop balance after successful online payment (net of 5% platform commission) */
+async function creditShopBalance(supabase: any, orderId: string) {
   try {
-    // Ambil order beserta items untuk cari shop_id
     const { data: order } = await supabase
-      .from('orders')
-      .select('id, subtotal_amount, total_amount, order_items(*)')
-      .eq('id', orderId)
+      .from("orders")
+      .select("id, subtotal_amount, total_amount, order_items(*)")
+      .eq("id", orderId)
       .single()
 
     if (!order) return
 
     const shopId = extractShopId(order.order_items)
     if (!shopId) {
-      console.log(`[Webhook] Tidak menemukan shop_id untuk order ${orderId}`)
+      console.warn(`[Webhook] No shop_id found in order_items for order ${orderId}`)
       return
     }
 
-    // Ambil saldo terbaru shop
     const { data: shop } = await supabase
-      .from('shops')
-      .select('id, balance')
-      .eq('id', shopId)
+      .from("shops")
+      .select("id, balance")
+      .eq("id", shopId)
       .single()
 
     if (!shop) return
@@ -136,29 +187,23 @@ async function creditShopBalance(orderId: string) {
     const shopEarnings = subtotal - commission
     const newBalance = (shop.balance || 0) + shopEarnings
 
-    // Update saldo shop
-    await supabase
-      .from('shops')
-      .update({ balance: newBalance })
-      .eq('id', shopId)
+    await supabase.from("shops").update({ balance: newBalance }).eq("id", shopId)
 
-    // Insert log
-    await supabase.from('shop_balance_logs').insert({
+    await supabase.from("shop_balance_logs").insert({
       shop_id: shopId,
-      type: 'commission',
+      type: "commission",
       amount: shopEarnings,
       balance_after: newBalance,
-      description: `Pembayaran online pesanan #${orderId.slice(0, 8)} (komisi 5% = Rp ${commission.toLocaleString('id-ID')})`,
+      description: `Pembayaran online pesanan #${orderId.slice(0, 8)} (komisi 5% = Rp ${commission.toLocaleString("id-ID")})`,
       order_id: orderId,
     })
 
-    console.log(`💰 [Webhook] Shop ${shopId} balance += ${shopEarnings} (komisi ${commission}) → ${newBalance}`)
+    console.log(`[Webhook] 💰 Shop ${shopId} +${shopEarnings} (komisi ${commission}) → ${newBalance}`)
   } catch (err) {
-    console.error('[creditShopBalance] Error:', err)
+    console.error("[creditShopBalance] Error:", err)
   }
 }
 
-/** Ekstrak shop_id dari order_items (format: "nama produk | {shop_id}") */
 function extractShopId(orderItems: any[]): string | null {
   if (!orderItems?.length) return null
   for (const item of orderItems) {

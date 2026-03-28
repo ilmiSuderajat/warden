@@ -19,6 +19,7 @@ export default function ProductDetail() {
   const router = useRouter()
   const [product, setProduct] = useState<any>(null)
   const [shop, setShop] = useState<any>(null)
+  const [reviews, setReviews] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
@@ -33,8 +34,17 @@ export default function ProductDetail() {
         setProduct(data)
         // Fetch associated shop
         if (data.shop_id) {
-          const { data: shopData } = await supabase.from("shops").select("id, name, slug, image_url").eq("id", data.shop_id).maybeSingle()
+          const { data: shopData } = await supabase.from("shops").select("id, name, slug, image_url, address, latitude, longitude").eq("id", data.shop_id).maybeSingle()
           if (shopData) setShop(shopData)
+        }
+
+        const { data: revData, error } = await supabase
+          .from("product_reviews")
+          .select("id, rating, comment, reviewer_name, photo_url, created_at")
+          .eq("product_id", id)
+          .order("created_at", { ascending: false })
+        if (revData && !error) {
+           setReviews(revData)
         }
       }
       setLoading(false)
@@ -208,7 +218,9 @@ export default function ProductDetail() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-full">
                   <Star size={12} className="text-amber-400 fill-amber-400" />
-                  <span className="text-xs font-bold text-amber-600">{(product.rating || 5.0).toFixed(1)}</span>
+                  <span className="text-xs font-bold text-amber-600">
+                     {product.rating ? product.rating.toFixed(1) : (reviews.length > 0 ? (reviews.reduce((acc: any, r: any) => acc + r.rating, 0) / reviews.length).toFixed(1) : "Baru")}
+                  </span>
                 </div>
                 <span className="text-xs text-slate-400">• {product.sold_count || 0} Terjual</span>
               </div>
@@ -273,10 +285,10 @@ export default function ProductDetail() {
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Pengiriman</p>
               <p className="text-xs font-semibold text-slate-700 mt-0.5">
-                Dari <span className="text-slate-900">{product.location || "Gudang Utama"}</span>
-                {userLoc && product.latitude && product.longitude && (
+                Dari <span className="text-slate-900">{shop?.address || product.location || "Gudang Utama"}</span>
+                {userLoc && (shop?.latitude || product.latitude) && (shop?.longitude || product.longitude) && (
                   <span className="ml-1 text-indigo-600 font-bold">
-                    ({formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, product.latitude, product.longitude))} dari lokasi anda)
+                    ({formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, shop?.latitude || product.latitude, shop?.longitude || product.longitude))} dari lokasi anda)
                   </span>
                 )}
               </p>
@@ -290,6 +302,63 @@ export default function ProductDetail() {
           <div className="text-sm leading-relaxed text-slate-600 whitespace-pre-line">
             {product.description || "Tidak ada deskripsi."}
           </div>
+        </div>
+
+        {/* ULASAN PEMBELI */}
+        <div className="mt-2 bg-white p-5 border-t border-slate-100">
+           <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm font-bold text-slate-900">Ulasan Pembeli ({reviews.length})</h3>
+           </div>
+           
+           {reviews.length > 0 ? (
+              <div className="space-y-5">
+                 {reviews.map((rev: any) => (
+                    <div key={rev.id} className="border-b border-slate-50 pb-5 last:border-0 last:pb-0">
+                       <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                             <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100 shrink-0">
+                                <span className="text-xs font-bold text-indigo-500">
+                                  {(rev.reviewer_name || "PB").slice(0, 2).toUpperCase()}
+                                </span>
+                             </div>
+                             <div>
+                                <p className="text-[11px] font-bold text-slate-700">
+                                  {rev.reviewer_name || "Pembeli"}
+                                </p>
+                                <div className="flex gap-0.5 mt-0.5">
+                                   {[1, 2, 3, 4, 5].map(star => (
+                                      <Star key={star} size={10} className={star <= rev.rating ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-100"} />
+                                   ))}
+                                </div>
+                             </div>
+                          </div>
+                          <span className="text-[9px] text-slate-400 bg-slate-50 px-2 py-1 rounded-md shrink-0">
+                            {new Date(rev.created_at).toLocaleDateString('id-ID')}
+                          </span>
+                       </div>
+                       {rev.comment && <p className="text-xs text-slate-600 mt-2 leading-relaxed pl-10">{rev.comment}</p>}
+                       {rev.photo_url && (
+                         <div className="pl-10 mt-2">
+                           <img
+                             src={rev.photo_url}
+                             alt="Foto ulasan"
+                             className="w-28 h-28 object-cover rounded-xl border border-slate-100 cursor-pointer hover:opacity-90 transition-opacity"
+                             onClick={() => window.open(rev.photo_url, '_blank')}
+                           />
+                         </div>
+                       )}
+                    </div>
+                 ))}
+              </div>
+           ) : (
+              <div className="py-8 flex flex-col items-center justify-center text-center bg-slate-50 rounded-[1rem] border border-slate-100/50 outline-dashed outline-1 outline-slate-200">
+                 <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm text-slate-300">
+                    <MessageCircle size={20} />
+                 </div>
+                 <p className="text-sm font-bold text-slate-700">Belum ada ulasan</p>
+                 <p className="text-xs text-slate-400 mt-1 max-w-[200px]">Jadilah yang pertama memberikan ulasan untuk produk ini!</p>
+              </div>
+           )}
         </div>
 
         {/* PRODUK TERKAIT */}

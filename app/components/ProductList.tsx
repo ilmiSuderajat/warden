@@ -95,7 +95,14 @@ export default function ProductList() {
     try {
       const { data, error } = await supabase
         .from("products")
-        .select("*")
+        .select(`
+          *,
+          shops (
+            address,
+            latitude,
+            longitude
+          )
+        `)
         .eq("is_ready", true)
         .order("created_at", { ascending: false })
         .range(from, to)
@@ -169,7 +176,7 @@ export default function ProductList() {
                 key={p.id}
                 className="block active:scale-[0.98] transition-transform duration-150"
               >
-                <div className={`bg-white overflow-hidden border border-gray-100 mx-auto h-full w-full ${view === "list" ? "flex flex-row" : "flex flex-col  "
+                <div className={`bg-white overflow-hidden border border-gray-100 mx-auto h-full w-[90%] ${view === "list" ? "flex flex-row" : "flex flex-col  "
                   }`}>
                   {/* IMAGE CONTAINER */}
                   <div className={`relative shrink-0 overflow-hidden ${view === "grid" ? "aspect-square w-full" : "w-28 h-28"
@@ -215,10 +222,10 @@ export default function ProductList() {
                       <div className="flex items-center text-gray-400 gap-0.5 overflow-hidden">
                         <MapPin size={8} className="text-orange-500 shrink-0" />
                         <span className="text-[9px] truncate font-medium">
-                          {p.location || "Lokasi tidak tersedia"}
-                          {userLoc && p.latitude && p.longitude && (
+                          {p.shops?.address || p.location || "Lokasi tidak tersedia"}
+                          {userLoc && (p.shops?.latitude || p.latitude) && (p.shops?.longitude || p.longitude) && (
                             <span className="ml-1 text-indigo-600 font-bold">
-                              • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.latitude, p.longitude))}
+                              • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.shops?.latitude || p.latitude, p.shops?.longitude || p.longitude))}
                             </span>
                           )}
                         </span>

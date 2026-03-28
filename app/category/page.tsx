@@ -51,7 +51,14 @@ function CategoryContent() {
     try {
       const { data, error } = await supabase
         .from("products")
-        .select("*")
+        .select(`
+          *,
+          shops (
+            address,
+            latitude,
+            longitude
+          )
+        `)
         .eq("category_id", catId)
         .eq("is_ready", true)
         .order('created_at', { ascending: false })
@@ -224,10 +231,10 @@ function CategoryContent() {
                       <div className="flex items-center gap-1.5 mt-2 mb-0.5 text-zinc-400">
                         <MapPin size={10} className="text-emerald-500 shrink-0" />
                         <span className="text-[9px] truncate font-medium">
-                          {p.location || "Lokasi"}
-                          {userLoc && p.latitude && p.longitude && (
+                          {p.shops?.address || p.location || "Lokasi"}
+                          {userLoc && (p.shops?.latitude || p.latitude) && (p.shops?.longitude || p.longitude) && (
                             <span className="ml-1 text-indigo-500 font-bold">
-                              • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.latitude, p.longitude))}
+                              • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.shops?.latitude || p.latitude, p.shops?.longitude || p.longitude))}
                             </span>
                           )}
                         </span>
