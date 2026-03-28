@@ -125,9 +125,6 @@ function extractShopId(orderItems: any[]): string | null {
   return null
 }
 
-function isValidUUID(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
-}
 
 async function deductShopCommission(
   supabase: any,
