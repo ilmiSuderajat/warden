@@ -36,11 +36,11 @@ export default function AddMenuPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [fetchingShop, setFetchingShop] = useState(true);
-  
+
   const [files, setFiles] = useState<(File | null)[]>([null, null, null]);
   const [previews, setPreviews] = useState<string[]>(["", "", ""]);
   const [uploadingImageIndices, setUploadingImageIndices] = useState<boolean[]>([false, false, false]);
-  
+
   const [isReady, setIsReady] = useState(true);
   const [shop, setShop] = useState<any>(null);
 
@@ -82,7 +82,7 @@ export default function AddMenuPage() {
 
       const { data: catData } = await supabase.from("categories").select("id, name");
       if (catData) setCategories(catData);
-      
+
       // Load Draft
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) {
@@ -96,7 +96,7 @@ export default function AddMenuPage() {
           console.error("Gagal memuat auto save draft", e);
         }
       }
-      
+
       setFetchingShop(false);
     };
     initPage();
@@ -120,7 +120,7 @@ export default function AddMenuPage() {
 
     const newFiles = [...files];
     const newPreviews = [...previews];
-    
+
     // Swap files
     const tempFile = newFiles[sourceIndex];
     newFiles[sourceIndex] = newFiles[targetIndex];
@@ -145,7 +145,7 @@ export default function AddMenuPage() {
       const newFiles = [...files];
       newFiles[index] = file;
       setFiles(newFiles);
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
         const newPreviews = [...previews];
@@ -259,15 +259,15 @@ export default function AddMenuPage() {
     e.preventDefault();
     if (!validateForm()) return;
     if (!shop) return toast.error("Data warung tidak ditemukan!");
-    
+
     setLoading(true);
 
     try {
       // 1. Upload Images
       const uploadedUrls = await handleUploadImages();
-      
+
       if (uploadedUrls.length === 0) {
-         throw new Error("Gagal mengunggah foto. Pastikan ada foto sampul.");
+        throw new Error("Gagal mengunggah foto. Pastikan ada foto sampul.");
       }
 
       // 2. Insert to Database
@@ -294,7 +294,7 @@ export default function AddMenuPage() {
       localStorage.removeItem(DRAFT_KEY);
       toast.success("Menu berhasil ditambahkan!");
       router.push("/shop/dashboard/menu");
-      
+
     } catch (error: any) {
       toast.error(error.message || "Terjadi kesalahan sistem, silakan coba lagi.");
     } finally {
@@ -356,7 +356,7 @@ export default function AddMenuPage() {
                   <>
                     <img src={src} className="w-full h-full object-cover" alt="preview" />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                       <span className="text-white text-[10px] font-bold uppercase tracking-wider">Ganti</span>
+                      <span className="text-white text-[10px] font-bold uppercase tracking-wider">Ganti</span>
                     </div>
                   </>
                 ) : (
@@ -439,8 +439,8 @@ export default function AddMenuPage() {
         <div className="bg-white rounded-2xl p-4 border border-zinc-100 shadow-sm space-y-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-               <ListPlus size={16} className="text-zinc-400" />
-               <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Varian & Tambahan Opsional</label>
+              <ListPlus size={16} className="text-zinc-400" />
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Varian & Tambahan Opsional</label>
             </div>
             <button
               type="button"
@@ -452,15 +452,15 @@ export default function AddMenuPage() {
           </div>
 
           {variants.length === 0 ? (
-             <div className="text-center py-6 px-4 bg-zinc-50 rounded-xl border border-dashed border-zinc-200">
-                <p className="text-xs text-zinc-400">Belum ada varian produk. Klik tombol di atas untuk menambah varian seperti Ukuran, Level Pedas, atau Topping.</p>
-             </div>
+            <div className="text-center py-6 px-4 bg-zinc-50 rounded-xl border border-dashed border-zinc-200">
+              <p className="text-xs text-zinc-400">Belum ada varian produk. Klik tombol di atas untuk menambah varian seperti Ukuran, Level Pedas, atau Topping.</p>
+            </div>
           ) : (
             <div className="space-y-4">
               {variants.map((group, gIndex) => (
                 <div key={gIndex} className="p-4 border border-zinc-200 bg-zinc-50 rounded-xl relative">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => setVariants(variants.filter((_, i) => i !== gIndex))}
                     className="absolute top-4 right-4 text-red-400 hover:text-red-600 transition-colors p-1"
                     title="Hapus Grup Varian"
@@ -470,8 +470,8 @@ export default function AddMenuPage() {
 
                   <div className="pr-8 mb-4">
                     <label className="block text-xs font-bold text-zinc-700 mb-1">Nama Grup Varian</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="Contoh: Ukuran, Level Pedas, Topping"
                       value={group.name}
                       onChange={(e) => {
@@ -486,60 +486,60 @@ export default function AddMenuPage() {
                   <div className="space-y-2">
                     <label className="block text-xs font-bold text-zinc-700 mb-2">Pilihan Opsi</label>
                     {group.options.map((opt, oIndex) => (
-                        <div key={oIndex} className="flex gap-2 items-center mb-2">
-                          <input 
+                      <div key={oIndex} className="flex gap-2 items-center mb-2">
+                        <input
+                          type="text"
+                          placeholder="Nama opsi (Misal: Besar)"
+                          value={opt.label}
+                          onChange={(e) => {
+                            const newVariants = [...variants];
+                            newVariants[gIndex].options[oIndex].label = e.target.value;
+                            setVariants(newVariants);
+                          }}
+                          className="flex-1 px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm outline-none focus:border-zinc-400"
+                        />
+                        <div className="relative w-[130px] shrink-0">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm font-medium">+</span>
+                          <input
                             type="text"
-                            placeholder="Nama opsi (Misal: Besar)"
-                            value={opt.label}
+                            placeholder="Harga (Opsional)"
+                            value={opt.price ? formatRupiah(opt.price) : ""}
                             onChange={(e) => {
+                              const numericValue = e.target.value.replace(/[^0-9]/g, '');
                               const newVariants = [...variants];
-                              newVariants[gIndex].options[oIndex].label = e.target.value;
+                              newVariants[gIndex].options[oIndex].price = numericValue ? parseInt(numericValue) : 0;
                               setVariants(newVariants);
                             }}
-                            className="flex-1 px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm outline-none focus:border-zinc-400"
+                            className="w-[70%] pl-7 pr-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm outline-none focus:border-zinc-400"
                           />
-                          <div className="relative w-[130px] shrink-0">
-                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm font-medium">+</span>
-                             <input 
-                              type="text"
-                              placeholder="Harga (Opsional)"
-                              value={opt.price ? formatRupiah(opt.price) : ""}
-                              onChange={(e) => {
-                                const numericValue = e.target.value.replace(/[^0-9]/g, '');
-                                const newVariants = [...variants];
-                                newVariants[gIndex].options[oIndex].price = numericValue ? parseInt(numericValue) : 0;
-                                setVariants(newVariants);
-                              }}
-                              className="w-full pl-7 pr-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm outline-none focus:border-zinc-400"
-                             />
-                          </div>
-                          
-                          <button 
-                            type="button" 
-                            disabled={group.options.length <= 1}
-                            onClick={() => {
-                              if (group.options.length > 1) {
-                                const newVariants = [...variants];
-                                newVariants[gIndex].options = newVariants[gIndex].options.filter((_, i) => i !== oIndex);
-                                setVariants(newVariants);
-                              }
-                            }} 
-                            className={`p-2 rounded-lg transition-colors ${group.options.length <= 1 ? 'text-zinc-300' : 'text-red-400 hover:text-red-600 hover:bg-red-50'}`}
-                          >
-                            <Trash2 size={16} />
-                          </button>
                         </div>
+
+                        <button
+                          type="button"
+                          disabled={group.options.length <= 1}
+                          onClick={() => {
+                            if (group.options.length > 1) {
+                              const newVariants = [...variants];
+                              newVariants[gIndex].options = newVariants[gIndex].options.filter((_, i) => i !== oIndex);
+                              setVariants(newVariants);
+                            }
+                          }}
+                          className={`p-2 rounded-lg transition-colors ${group.options.length <= 1 ? 'text-zinc-300' : 'text-red-400 hover:text-red-600 hover:bg-red-50'}`}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     ))}
-                    <button 
-                        type="button"
-                        onClick={() => {
-                          const newVariants = [...variants];
-                          newVariants[gIndex].options.push({ label: "", price: 0 });
-                          setVariants(newVariants);
-                        }}
-                        className="text-xs font-semibold text-zinc-600 border border-dashed border-zinc-300 w-full py-2 rounded-lg hover:bg-zinc-100 transition-colors mt-2"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newVariants = [...variants];
+                        newVariants[gIndex].options.push({ label: "", price: 0 });
+                        setVariants(newVariants);
+                      }}
+                      className="text-xs font-semibold text-zinc-600 border border-dashed border-zinc-300 w-full py-2 rounded-lg hover:bg-zinc-100 transition-colors mt-2"
                     >
-                        + Tambah Opsi
+                      + Tambah Opsi
                     </button>
                   </div>
                 </div>
@@ -558,8 +558,8 @@ export default function AddMenuPage() {
                 type="button"
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${selectedCategory === cat.id
-                    ? "bg-zinc-900 text-white border-zinc-900 shadow-sm"
-                    : "bg-zinc-50 text-zinc-500 border-zinc-100 hover:border-zinc-200"
+                  ? "bg-zinc-900 text-white border-zinc-900 shadow-sm"
+                  : "bg-zinc-50 text-zinc-500 border-zinc-100 hover:border-zinc-200"
                   }`}
               >
                 {cat.name}

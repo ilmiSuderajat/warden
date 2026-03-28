@@ -159,7 +159,7 @@ export default function ProductList() {
       </div>
 
       {/* PRODUCT LIST */}
-      <div className={view === "grid" ? "grid grid-cols-2 gap-2" : "flex flex-col gap-2 "}>
+      <div className={view === "grid" ? "grid grid-cols-2 gap-2 m-3" : "flex flex-col gap-2 "}>
         {loading && products.length === 0 ? (
           Array(6).fill(0).map((_, i) => (
             <ProductCardSkeleton key={i} view={view} />
@@ -176,7 +176,7 @@ export default function ProductList() {
                 key={p.id}
                 className="block active:scale-[0.98] transition-transform duration-150"
               >
-                <div className={`bg-white overflow-hidden border border-gray-100 mx-auto h-full w-[90%] ${view === "list" ? "flex flex-row" : "flex flex-col  "
+                <div className={`bg-white overflow-hidden border border-gray-100 mx-auto h-full w-full ${view === "list" ? "flex flex-row" : "flex flex-col  "
                   }`}>
                   {/* IMAGE CONTAINER */}
                   <div className={`relative shrink-0 overflow-hidden ${view === "grid" ? "aspect-square w-full" : "w-28 h-28"
