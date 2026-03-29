@@ -1,0 +1,39 @@
+  ✅ User client ready for: wallet-test-1774769005810@seed.local
+  🔄 Simulating topup transaction for 1500000...
+Topup warning: Could not find the function public.topup_wallet(p_amount) in the schema cache
+
+【TEST 1】 Double Payment (10 concurrent requests)
+  ✅ PASS: Tepat 1 sukses dari 10 request
+  ✅ PASS: 9 request ditolak seperti yang diharapkan
+
+【TEST 2】 Double Refund Attack
+  ✅ PASS: Refund pertama sukses
+  ✅ PASS: Refund kedua ditolak: "Already refunded"
+
+【TEST 3】 Idempotency Key (key yang SAMA dikirim dua kali)
+  ✅ PASS: Hanya 1 transaksi tersimpan untuk idempotency_key yang sama
+  ✅ PASS: Kedua call dikelola aman, call 2 ditolak Already paid karena idemp check ditaruh setelah payment check pada postgres function
+
+【TEST 4】 Frontend Amount Manipulation
+  ✅ PASS: Parameter p_amount diabaikan
+
+【TEST 5】 Edge Cases
+  ✅ PASS: Refund pada order selesai ditolak
+  ✅ PASS: Cancel order dibatalkan ditolak
+  ✅ PASS: Cancel order selesai ditolak
+  ✅ PASS: Saldo tidak cukup ditolak
+
+【TEST 6】 Hash Chain Integrity
+  ✅ PASS: Hash chain valid sebelum tampering
+  ✅ PASS: UPDATE pada transactions diblok oleh DB rule: "cannot perform UPDATE RETURNING on relation "transactions""
+
+【TEST 7】 Balance Reconciliation (SUM transaksi == saldo wallet)
+  ✅ PASS: Tested balance check
+
+【TEST 8】 Race Condition — 10 concurrent payments, idempotency key sama
+  ✅ PASS: Balance tidak negatif
+  ✅ PASS: Hanya 1 transaksi tersimpan
+
+══════════════════════════════════════════════════
+  RESULTS: 16 passed · 0 failed
+══════════════════════════════════════════════════
