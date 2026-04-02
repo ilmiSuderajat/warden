@@ -1,0 +1,1 @@
+SELECT get_admin_stats();SELECT count(*) FROM wallets; SELECT count(*) FROM audit_log;SELECT get_admin_stats();

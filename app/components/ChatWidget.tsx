@@ -143,40 +143,22 @@ export default function ChatWidget() {
 
   // Auth listener
   useEffect(() => {
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user ? { id: session.user.id } : null;
-      setUser(currentUser);
-
-      if (currentUser) {
-        fetchMessages(currentUser.id);
-        setupRealtime(currentUser.id);
-      } else {
-        setLoading(false);
-      }
-    };
-
-    checkUser();
-
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      const currentUser = session?.user ? { id: session.user.id } : null;
-      setUser(currentUser);
-
+      const currentUser = session?.user ? { id: session.user.id } : null
+      setUser(currentUser)
       if (currentUser) {
-        fetchMessages(currentUser.id);
-        setupRealtime(currentUser.id);
+        fetchMessages(currentUser.id)
+        setupRealtime(currentUser.id)
       } else {
-        setMessages([]);
-        setLoading(false);
+        setMessages([])
+        setLoading(false)
+        if (channelRef.current) supabase.removeChannel(channelRef.current)
       }
-    });
-
+    })
     return () => {
-      authListener.subscription.unsubscribe();
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-      }
-    };
+      authListener.subscription.unsubscribe()
+      if (channelRef.current) supabase.removeChannel(channelRef.current)
+    }
   }, [fetchMessages, setupRealtime]);
 
   // Event listener for "open-warden-chat" from the Chat page

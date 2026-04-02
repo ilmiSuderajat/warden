@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/serverAuth"
 import { dispatchOrder } from "@/lib/driverOrders"
+import { PLATFORM_COMMISSION_RATE } from "@/lib/constants"
 import crypto from "crypto"
-
-const COMMISSION_RATE = 0.05
 
 export async function POST(req: Request) {
   try {
@@ -183,7 +182,7 @@ async function creditShopBalance(supabase: any, orderId: string) {
     if (!shop) return
 
     const subtotal = order.subtotal_amount || order.total_amount || 0
-    const commission = Math.round(subtotal * COMMISSION_RATE)
+    const commission = Math.round(subtotal * PLATFORM_COMMISSION_RATE)
     const shopEarnings = subtotal - commission
     const newBalance = (shop.balance || 0) + shopEarnings
 
@@ -194,7 +193,7 @@ async function creditShopBalance(supabase: any, orderId: string) {
       type: "commission",
       amount: shopEarnings,
       balance_after: newBalance,
-      description: `Pembayaran online pesanan #${orderId.slice(0, 8)} (komisi 5% = Rp ${commission.toLocaleString("id-ID")})`,
+      description: `Pembayaran online pesanan #${orderId.slice(0, 8)} (komisi ${PLATFORM_COMMISSION_RATE * 100}% = Rp ${commission.toLocaleString("id-ID")})`,
       order_id: orderId,
     })
 

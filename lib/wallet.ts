@@ -34,7 +34,7 @@ export async function getWalletBalance(): Promise<number> {
 /**
  * Mengambil riwayat transaksi user, terbaru di atas
  */
-export async function getTransactionHistory(): Promise<Transaction[]> {
+export async function getTransactionHistory(limit = 50): Promise<Transaction[]> {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) throw new Error('User not authenticated')
 
@@ -43,6 +43,7 @@ export async function getTransactionHistory(): Promise<Transaction[]> {
     .select('id, seq, type, amount, balance_after, description, created_at')
     .eq('user_id', user.id)
     .order('seq', { ascending: false })
+    .limit(limit)
 
   if (error) {
     throw new Error(`Failed to fetch transaction history: ${error.message}`)

@@ -13,6 +13,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [hasShop, setHasShop] = useState(false)
   const [isDriver, setIsDriver] = useState(false)
+  const [balance, setBalance] = useState(0)
 
   useEffect(() => {
     const getProfile = async () => {
@@ -34,6 +35,14 @@ export default function ProfilePage() {
           .eq("id", user.id)
           .maybeSingle()
         if (userRecord?.role === "driver" || userRecord?.role === "admin") setIsDriver(true)
+
+        // Fetch wallet balance
+        const { data: wallet } = await supabase
+          .from("wallets")
+          .select("balance")
+          .eq("user_id", user.id)
+          .maybeSingle()
+        if (wallet) setBalance(wallet.balance)
       }
       
       setLoading(false)
@@ -49,6 +58,7 @@ export default function ProfilePage() {
 
   const menuItems = [
     { href: "/orders", icon: "ShoppingBag", label: "Pesanan Saya", color: "text-blue-600", bg: "bg-blue-50" },
+    { href: "/wallet", icon: "Wallet", label: "Wallet Saya", color: "text-indigo-600", bg: "bg-indigo-50" },
     { href: "/wishlist", icon: "Heart", label: "Wishlist", color: "text-red-500", bg: "bg-red-50" },
     { href: "/address", icon: "MapPin", label: "Alamat Saya", color: "text-orange-500", bg: "bg-orange-50" },
     { 
@@ -140,7 +150,7 @@ export default function ProfilePage() {
               {[
                 { label: "Poin", val: "1.2k" },
                 { label: "Voucher", val: "5" },
-                { label: "Saldo", val: "Rp 0" }
+                { label: "Saldo", val: `Rp ${balance.toLocaleString("id-ID")}` }
               ].map((stat, i) => (
                 <div key={i} className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm">
                   <p className="text-sm font-bold text-slate-800">{stat.val}</p>

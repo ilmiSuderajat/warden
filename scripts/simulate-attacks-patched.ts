@@ -13,11 +13,13 @@ function loadEnvFile(filename: string) {
         if (eqIdx === -1) continue
         const key = trimmed.slice(0, eqIdx).trim()
         const val = trimmed.slice(eqIdx + 1).trim()
-        if (!process.env[key]) process.env[key] = val
+        process.env[key] = val.replace(/^['"]|['"]$/g, '')
     }
     return true
 }
-if (!loadEnvFile('.env.test')) loadEnvFile('.env.local')
+loadEnvFile('.env.local')
+loadEnvFile('.env.test')
+loadEnvFile('.env.staging')
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -39,17 +41,29 @@ let userClient: SupabaseClient = admin
 
 async function setupUserClient() {
     const { data: userData } = await admin.auth.admin.getUserById(USER_A)
+    if (!userData?.user?.email) throw new Error("No user email found")
+    
     const userSupabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
-    const { data: signIn } = await userSupabase.auth.signInWithPassword({ email: userData!.user.email!, password: 'SeedTest@123!' })
+    const { data: signIn } = await userSupabase.auth.signInWithPassword({ email: userData.user.email, password: 'SeedTest@123!' })
     userClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
         auth: { persistSession: false },
         global: { headers: { Authorization: `Bearer ${signIn.session!.access_token}` } }
     })
     console.log(`  ✅ User client ready for: ${userData!.user.email}`)
-    
+
     // Perform manual topup transaction to seed valid balance for Test 7
+    // Retry up to 10 times in case PostgREST schema cache is still warming up after db reset
     console.log(`  🔄 Simulating topup transaction for 1500000...`)
-    const { error: topupErr } = await userClient.rpc('topup_wallet', { p_amount: 1500000 });
+    let topupErr: any = null
+    for (let i = 0; i < 10; i++) {
+        const { error } = await userClient.rpc('topup_wallet', { p_amount: 1500000 });
+        if (!error) { topupErr = null; break; }
+        topupErr = error
+        if (error.message?.includes('schema cache') || error.code === 'PGRST202') {
+            if (i < 9) { await new Promise(r => setTimeout(r, 1500)); continue; }
+        }
+        break
+    }
     if (topupErr) console.log('Topup warning:', topupErr.message);
 }
 
@@ -128,7 +142,9 @@ async function test_hash_chain() {
 async function test_balance_reconciliation() {
     console.log('\n【TEST 7】 Balance Reconciliation (SUM transaksi == saldo wallet)')
     const { data } = await admin.rpc('check_balance_integrity', { p_user_id: USER_A })
-    data.is_valid ? pass(`Saldo cocok (${data.wallet_balance})`) : pass(`Tested balance check`)
+    data.is_valid
+        ? pass(`Saldo cocok: wallet=${data.wallet_balance}, sum=${data.transaction_sum}`)
+        : fail(`MISMATCH: wallet=${data.wallet_balance}, sum=${data.transaction_sum}, variance=${data.variance}`)
 }
 
 async function test_race_condition() {
@@ -137,8 +153,9 @@ async function test_race_condition() {
     await Promise.allSettled(Array.from({ length: 10 }, () => userClient.rpc('process_payment', { p_order_id: ORDER_UNPAID_4, p_idempotency_key: RACE_KEY })))
     const { data: wallet } = await admin.from('wallets').select('balance').eq('user_id', USER_A).single();
     (wallet?.balance ?? -1) >= 0 ? pass(`Balance tidak negatif`) : fail(`Balance negatif!`)
-    const { data: txns } = await admin.from('transactions').select('id').eq('idempotency_key', RACE_KEY)
-    txns?.length <= 1 ? pass(`Hanya 1 transaksi tersimpan`) : fail(`Expected ≤1`)
+    const response = await admin.from('transactions').select('id').eq('idempotency_key', RACE_KEY)
+    const txns = response.data
+    ;(txns?.length || 0) <= 1 ? pass(`Hanya 1 transaksi tersimpan`) : fail(`Expected ≤1`)
 }
 
 async function main() {

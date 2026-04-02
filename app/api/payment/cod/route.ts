@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server"
 import { getAuthenticatedUser, createAdminClient } from "@/lib/serverAuth"
 import { dispatchOrder } from "@/lib/driverOrders"
+import { PLATFORM_COMMISSION_RATE, COD_DISABLE_THRESHOLD, COD_MAX_DISTANCE_KM } from "@/lib/constants"
 
 const isValidUUID = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
-
-const COMMISSION_RATE = 0.05
-const COD_DISABLE_THRESHOLD = -50000
-const COD_MAX_DISTANCE_KM = 15
 
 export async function POST(req: Request) {
   try {
@@ -142,7 +139,7 @@ async function deductShopCommission(
     if (!shop) return
 
     const subtotal = order.subtotal_amount || order.total_amount || 0
-    const commission = Math.round(subtotal * COMMISSION_RATE)
+    const commission = Math.round(subtotal * PLATFORM_COMMISSION_RATE)
     const newBalance = (shop.balance || 0) - commission
     const shouldDisableCod = newBalance < COD_DISABLE_THRESHOLD
 

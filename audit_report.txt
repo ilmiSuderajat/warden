@@ -1,0 +1,562 @@
+================================================================================
+  WARDEN PROJECT - AUDIT LAPORAN BUG & OPTIMISASI
+  Tanggal: 2026-04-01
+  File yang diaudit: app/, lib/, supabase/, hooks/, types/
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BAGIAN A — BUG KRITIS (HARUS DIPERBAIKI SEGERA)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #1 — RACE CONDITION pada Driver & Shop Withdraw (KRITIS)
+FILE   : app/api/driver/withdraw/route.ts (L34-52)
+       : app/api/shop/withdraw/route.ts (L37-58)
+STATUS : BUG AKTIF
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Kedua endpoint withdraw memeriksa saldo LALU memotongnya dalam dua operasi DB
+  yang terpisah tanpa locking. Jika user mengirim 2 request bersamaan (misalnya
+  double-tap), keduanya bisa lolos cek saldo dan masing-masing memotong saldo
+  penuh, sehingga saldo bisa menjadi negatif atau dikurangi dua kali.
+
+  Kode saat ini (driver/withdraw):
+    const { data: user } = await supabaseAdmin.from("users")
+      .select("saldo").eq("id", ...).single()
+    if (!user || user.saldo < withdrawalAmount) { ... }
+    // ← CELAH: request kedua juga lolos di sini
+    await supabaseAdmin.from("users").update({ saldo: newSaldo }).eq("id", ...)
+
+SOLUSI YANG DISARANKAN:
+  Gunakan Supabase RPC (stored procedure PostgreSQL) yang menjalankan SELECT +
+  UPDATE dalam satu transaksi atomic, atau gunakan UPDATE dengan WHERE condition:
+  
+    .update({ saldo: supabase.raw("saldo - ?", [amount]) })
+    .eq("id", userId)
+    .gte("saldo", amount)   // ← atomic guard
+  
+  Cek `rowCount` dari response. Jika 0 baris terupdate, berarti saldo tidak cukup.
+
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #2 — Shop ID Diekstrak dari product_name (DESAIN BERBAHAYA)
+FILE   : app/api/payment/webhook/route.ts (L207-218)
+       : app/api/payment/cod/route.ts (L116-126)
+       : app/api/driver/my-order/route.ts (L65-72)
+STATUS : BUG LATEN / DESAIN CACAT
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Shop ID di-embed dalam kolom teks `product_name` dengan format "Nama | {uuid}".
+  Lalu di-parse dengan string split. Ini sangat rapuh:
+  - Jika nama produk mengandung " | " → parsing salah
+  - Jika format berubah → seluruh pipeline (komisi, dispatch, dll) gagal silently
+  - Ada 3 implementasi terpisah dengan logika yang sama (duplikasi)
+
+  Contoh kode di webhook:
+    const parts = item.product_name?.split(" | ")
+    const potentialId = parts[parts.length - 1].trim()
+
+SOLUSI YANG DISARANKAN:
+  Tambahkan kolom `shop_id` langsung pada tabel `order_items` (atau `orders`).
+  Isi kolom ini saat order dibuat di checkout. Hapus semua parsing dari product_name.
+
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #3 — Auth Tidak Konsisten: getSession() vs getUser()
+FILE   : app/api/driver/withdraw/route.ts (L13)
+       : app/api/shop/withdraw/route.ts (L16)
+       : app/api/driver/my-order/route.ts (L14)
+       : lib/wallet.ts (L17, L38)
+       : app/components/ChatWidget.tsx (L147)
+STATUS : BUG KEAMANAN
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Beberapa route API dan lib menggunakan `supabase.auth.getSession()` untuk auth.
+  Supabase secara resmi memperingatkan bahwa `getSession()` TIDAK memvalidasi JWT
+  ke server; data session bisa di-spoof dari cookie yang dimanipulasi.
+
+  Route yang AMAN: app/api/payment/route.ts & cod/route.ts → gunakan `getUser()`
+  Route yang TIDAK AMAN:
+    - driver/withdraw/route.ts  → getSession()
+    - shop/withdraw/route.ts    → getSession()
+    - driver/my-order/route.ts  → getSession()
+    - lib/wallet.ts             → getSession() (via supabase.auth.getUser untuk
+                                  client-side tapi dipanggil di lib yang dipakai server)
+    - ChatWidget.tsx            → getSession() (client-side, acceptable tapi inconsisten)
+
+SOLUSI YANG DISARANKAN:
+  Semua server-side API route harus menggunakan pola yang sama dengan payment/route.ts:
+    import { getAuthenticatedUser } from "@/lib/serverAuth"
+    const user = await getAuthenticatedUser() // memanggil getUser() bukan getSession()
+  Fungsi ini sudah ada di lib/serverAuth.ts, tinggal dipakai secara konsisten.
+
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #4 — Rollback Tidak Lengkap pada Webhook creditShopBalance Gagal
+FILE   : app/api/payment/webhook/route.ts (L116-120)
+STATUS : BUG LOGIKA
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Jika `creditShopBalance()` atau `dispatchOrder()` melempar error setelah status
+  order sudah di-update ke "paid", webhook tetap return 200 OK (karena error di-catch
+  di dalam fungsi). Order paid tapi saldo shop tidak bertambah — tidak ada retry mechanism.
+
+  Kode saat ini:
+    if (isPaid) {
+      await creditShopBalance(supabase, realOrderId)  // ← jika ini fail, tidak ada retry
+      await dispatchOrder(realOrderId)
+    }
+    return NextResponse.json({ message: "OK" })  // ← 200 meskipun credit gagal
+
+SOLUSI YANG DISARANKAN:
+  - Pisahkan error handling: jika creditShopBalance gagal, return 500 agar Midtrans retry
+  - Atau: tambahkan flag `shop_credited` pada tabel orders, lalu implementasikan
+    background job untuk retry shop yang belum di-credit
+
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #5 — completeOrder() Tidak Memverifikasi Ownership/Status di Server
+FILE   : app/orders/page.tsx (L200-213)
+STATUS : BUG KEAMANAN
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Fungsi completeOrder() langsung update status pesanan ke "Selesai" menggunakan
+  Supabase client-side (anon key), hanya dengan filter .eq("id", order.id).
+  Tidak ada verifikasi bahwa:
+  - Status pesanan saat ini memang "Dikirim" (bisa di-replay untuk order lain)
+  - Ini seharusnya dilakukan via API route server-side untuk validasi proper
+
+  Kode saat ini:
+    const { error } = await supabase.from("orders")
+      .update({ status: "Selesai" }).eq("id", order.id)  // hanya filter by ID
+
+SOLUSI YANG DISARANKAN:
+  Buat API route POST /api/orders/complete yang memverifikasi:
+  - ownership (user_id = logged-in user)
+  - status saat ini harus "Dikirim"
+  - lalu update status dan trigger komisi jika diperlukan
+
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #6 — addDriverCommission Tidak Atomic, Bisa Double-Credit
+FILE   : lib/driverOrders.ts (L11-64)
+STATUS : BUG KRITIS
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  `addDriverCommission()` melakukan:
+  1. SELECT saldo driver dari tabel users
+  2. Hitung newSaldo
+  3. UPDATE users SET saldo = newSaldo
+  4. INSERT driver_balance_logs
+  
+  Tidak ada cek apakah komisi untuk order ini sudah pernah diberikan.
+  Jika fungsi ini dipanggil 2x untuk order yang sama (bug, retry, atau race),
+  driver mendapat komisi ganda. Tidak ada index/unique constraint pada (driver_id, order_id).
+
+SOLUSI YANG DISARANKAN:
+  - Tambahkan unique constraint pada driver_balance_logs(order_id, type) atau
+  - Pindahkan logika ke stored procedure PostgreSQL yang atomic, atau
+  - Cek terlebih dahulu: if (log exists for this order_id) return
+
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #7 — COMMISSION_RATE Didefinisikan Berbeda di Dua Tempat
+FILE   : lib/driverOrders.ts (L9)     → const COMMISSION_RATE = 0.80 (driver rate)
+       : app/api/payment/webhook/route.ts (L6) → const COMMISSION_RATE = 0.05 (platform rate)
+       : app/api/payment/cod/route.ts (L8)     → const COMMISSION_RATE = 0.05
+STATUS : BUG MAINTENANCE / KEBINGUNGAN
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Konstanta bernama sama tapi nilai berbeda di file berbeda. Jika developer mengubah
+  satu, tidak tahu harus mengubah yang lain juga. Bisa menyebabkan inkonsistensi
+  logika komisi jika refactoring dilakukan dengan tidak hati-hati.
+
+SOLUSI YANG DISARANKAN:
+  Buat file lib/constants.ts dan definisikan semua konstanta bisnis di satu tempat:
+    export const PLATFORM_COMMISSION_RATE = 0.05
+    export const DRIVER_ONLINE_COMMISSION_RATE = 0.80
+    export const DRIVER_COD_PLATFORM_CUT = 0.20
+  Lalu import dari semua file yang memerlukan.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BAGIAN B — BUG SEDANG (PERLU DIPERBAIKI)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #8 — Typo di Pesan Error UI
+FILE   : app/orders/page.tsx (L313)
+STATUS : BUG MINOR
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Error message typo: "Alasan pembatalan wajb diisi" → seharusnya "wajib"
+
+  Kode saat ini:
+    toast.error("Alasan pembatalan wajb diisi")
+
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #9 — fetchOrders Dipanggil Tanpa Debounce pada Tab Switch
+FILE   : app/orders/page.tsx (L97-99)
+STATUS : BUG PERFORMA
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  useEffect memanggil fetchOrders() setiap kali activeTab berubah, tapi tidak ada
+  cancellation jika tab diganti cepat. Request lama bisa selesai setelah request baru,
+  sehingga state terisi data yang salah (stale closure / race condition pada fetch).
+
+SOLUSI YANG DISARANKAN:
+  Gunakan AbortController untuk cancel fetch sebelumnya saat activeTab berubah:
+    useEffect(() => {
+      const controller = new AbortController()
+      fetchOrders(controller.signal)
+      return () => controller.abort()
+    }, [activeTab])
+
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #10 — Dispatch Loop Tidak Ada Batas Waktu (Infinite Retry)
+FILE   : lib/driverOrders.ts (L134-153)
+STATUS : BUG LOGIKA / POTENSI INFINITE LOOP
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Ketika semua driver sudah ditawarkan, sistem mereset round dan mencoba lagi
+  dari awal dengan semua driver. Ini berlanjut tanpa batas waktu, menghabiskan
+  resources jika tidak ada driver yang mau menerima order.
+
+SOLUSI YANG DISARANKAN:
+  Tambahkan batas maksimal jumlah iterasi atau batas waktu total (misal: 30 menit
+  sejak order dibuat). Jika terlampaui, set status order ke "Kurir Tidak Tersedia".
+
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #11 — Driver Withdraw Tidak Cek Role Driver
+FILE   : app/api/driver/withdraw/route.ts
+STATUS : BUG KEAMANAN
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Endpoint driver/withdraw hanya mengecek apakah user login, tidak memverifikasi
+  bahwa user memiliki role "driver". User biasa bisa mencoba memanggil endpoint ini.
+
+SOLUSI YANG DISARANKAN:
+  Tambahkan verifikasi role setelah auth:
+    const { data: userRecord } = await supabaseAdmin.from("users")
+      .select("role").eq("id", session.user.id).single()
+    if (userRecord?.role !== "driver") return 401
+
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #12 — supabaseAdmin Dibuat Berulang di lib/driverOrders.ts (Module Level)
+FILE   : lib/driverOrders.ts (L1-6)
+STATUS : BUG DESAIN / KEAMANAN
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  `supabaseAdmin` dibuat di level modul (bukan dalam fungsi), lalu di-export dan
+  digunakan di berbagai route API (my-order/route.ts). Service role key dengan
+  modul-level client yang di-export meningkatkan risiko kebocoran jika file
+  ini tidak sengaja dipakai di client-side bundle.
+
+SOLUSI YANG DISARANKAN:
+  Gunakan `createAdminClient()` dari lib/serverAuth.ts yang sudah ada, atau
+  setidaknya tandai file ini sebagai server-only dengan:
+    import 'server-only'  // di baris pertama file
+
+
+──────────────────────────────────────────────────────────────────────────────
+BUG #13 — Wallet page: Tombol Withdraw Disabled Permanen
+FILE   : app/wallet/page.tsx (L87-90)
+STATUS : BUG / FITUR BELUM SELESAI
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Tombol Withdraw pada wallet user selalu disabled dengan `cursor-not-allowed`
+  dan `opacity-50`. Ini mungkin fitur yang memang belum diimplementasikan, tapi
+  tidak ada feedback yang jelas kepada user mengapa tidak bisa withdraw.
+
+SOLUSI YANG DISARANKAN:
+  Jika memang belum tersedia, tampilkan tooltip atau modal "Fitur ini segera hadir"
+  saat diklik, bukan hanya disable tanpa penjelasan.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BAGIAN C — OPTIMISASI PERFORMA & KODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+──────────────────────────────────────────────────────────────────────────────
+OPT #1 — N+1 Query pada driver/my-order/route.ts
+FILE   : app/api/driver/my-order/route.ts (L49-72)
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Route ini melakukan 3-4 query DB secara sequential:
+  1. Query driver_orders
+  2. Query orders
+  3. Query order_items
+  4. Query shops (untuk koordinat)
+  
+  Query 3 bisa digabung ke query 2 dengan Supabase select join.
+  Query 4 bisa dihindari jika shop_id disimpan langsung di orders (lihat BUG #2).
+
+SOLUSI YANG DISARANKAN:
+  Gunakan Supabase relational select untuk menggabungkan query:
+    from("driver_orders")
+      .select("*, orders(*, order_items(*), shops(latitude, longitude))")
+  Ini lebih efisien daripada 4 query sequential.
+
+
+──────────────────────────────────────────────────────────────────────────────
+OPT #2 — ChatWidget: fetchMessages Dipanggil Dua Kali (checkUser + onAuthStateChange)
+FILE   : app/components/ChatWidget.tsx (L145-180)
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Saat komponen mount, `checkUser()` dipanggil yang memanggil `fetchMessages()`.
+  Lalu `onAuthStateChange` JUGA terpicu dengan event INITIAL_SESSION, yang memanggil
+  `fetchMessages()` & `setupRealtime()` lagi. Hasilnya: double fetch dan double
+  realtime channel setup saat pertama kali load.
+
+SOLUSI YANG DISARANKAN:
+  Hapus blok `checkUser()` yang manual. Andalkan hanya `onAuthStateChange` yang
+  akan menangani initial session secara konsisten.
+
+
+──────────────────────────────────────────────────────────────────────────────
+OPT #3 — import * as Icons di orders/page.tsx (Bundle Size Besar)
+FILE   : app/orders/page.tsx (L7)
+       : app/wallet/page.tsx (L5)
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  `import * as Icons from "lucide-react"` mengimpor SELURUH library lucide (~1500 icon).
+  Meskipun tree-shaking bisa membantu, wildcard import bisa mengacaukan bundler
+  dan meningkatkan ukuran bundle yang tidak perlu.
+
+SOLUSI YANG DISARANKAN:
+  Import hanya icon yang dibutuhkan:
+    import { ArrowLeft, Star, CheckCircle2, ... } from "lucide-react"
+  Identifikasi semua icon yang dipakai di file tersebut, lalu import spesifik.
+
+
+──────────────────────────────────────────────────────────────────────────────
+OPT #4 — dispatchOrder: Count Query Tambahan yang Tidak Perlu
+FILE   : lib/driverOrders.ts (L172-177)
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Setelah memfilter driver yang sudah dicoba, ada query count terpisah:
+    const { count: attemptCount } = await supabaseAdmin
+      .from("driver_orders").select("*", { count: "exact", head: true })
+      .eq("order_id", orderId)
+  
+  Data ini (triedDrivers) sudah diambil sebelumnya. Cukup pakai `triedDrivers.length`
+  ketimbang melakukan query tambahan ke DB.
+
+SOLUSI YANG DISARANKAN:
+  const attemptIndex = triedDrivers?.length ?? 0
+
+
+──────────────────────────────────────────────────────────────────────────────
+OPT #5 — Tidak Ada Pagination pada getTransactionHistory()
+FILE   : lib/wallet.ts (L37-51)
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  `getTransactionHistory()` mengambil SEMUA transaksi tanpa batas. Jika user
+  punya ratusan/ribuan transaksi, ini akan lambat dan menghabiskan memory.
+
+SOLUSI YANG DISARANKAN:
+  Tambahkan parameter limit dan offset / cursor-based pagination:
+    .limit(50)
+    .range(0, 49)
+  Dan implementasikan "load more" di wallet page.
+
+
+──────────────────────────────────────────────────────────────────────────────
+OPT #6 — Konfigurasi Midtrans isProduction: true Hardcoded
+FILE   : app/api/payment/route.ts (L8-12)
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  `isProduction: true` di-hardcode langsung. Jika developer menjalankan di
+  environment development/staging, ini akan tetap hit Midtrans production API.
+
+SOLUSI YANG DISARANKAN:
+  Gunakan environment variable:
+    isProduction: process.env.NODE_ENV === "production" ||
+                  process.env.MIDTRANS_IS_PRODUCTION === "true"
+
+
+──────────────────────────────────────────────────────────────────────────────
+OPT #7 — Tidak Ada Rate Limiting pada API Routes yang Sensitif
+FILE   : app/api/payment/route.ts
+       : app/api/driver/withdraw/route.ts
+       : app/api/shop/withdraw/route.ts
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Tidak ada rate limiting pada endpoint payment dan withdraw. User bisa mengirim
+  ratusan request per menit, berpotensi menyebabkan:
+  - Spam ke Midtrans API (bisa kena charge)
+  - Beban DB berlebihan
+  - Bypass race condition protection
+
+SOLUSI YANG DISARANKAN:
+  Implementasikan rate limiting menggunakan Vercel Edge Middleware atau library
+  seperti `upstash/ratelimit` atau `next-rate-limit`.
+
+
+──────────────────────────────────────────────────────────────────────────────
+OPT #8 — Tidak Ada Error Boundary pada Halaman Utama
+FILE   : app/orders/page.tsx
+       : app/wallet/page.tsx
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Tidak ada React Error Boundary yang menangkap runtime error di komponen.
+  Jika ada error render, seluruh halaman akan crash tanpa pesan yang user-friendly.
+
+SOLUSI YANG DISARANKAN:
+  Tambahkan `<ErrorBoundary>` wrapper pada komponen halaman utama atau gunakan
+  Next.js `error.tsx` per segment untuk graceful error handling.
+
+
+──────────────────────────────────────────────────────────────────────────────
+OPT #9 — Image Alt Text Tidak Deskriptif di orders/page.tsx
+FILE   : app/orders/page.tsx (L414)
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  `<img alt="product">` dan beberapa gambar lain menggunakan alt text generik.
+  Ini buruk untuk aksesibilitas (a11y) dan SEO.
+
+SOLUSI YANG DISARANKAN:
+  Gunakan nama produk sebagai alt text:
+    alt={order.order_items?.[0]?.product_name?.split(" | ")[0] || "Produk"}
+
+
+──────────────────────────────────────────────────────────────────────────────
+OPT #10 — Nomor WhatsApp Admin Hardcoded di orders/page.tsx
+FILE   : app/orders/page.tsx (L586)
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Nomor WA admin di-hardcode: `wa.me/628123456789`
+  Ini bukan nomor nyata dan akan rusak di production. Nomor seperti ini
+  seharusnya di environment variable atau diambil dari konfigurasi.
+
+SOLUSI YANG DISARANKAN:
+  Pindahkan ke .env:
+    NEXT_PUBLIC_ADMIN_WHATSAPP=628xxxxxxxxxx
+  Lalu gunakan:
+    `https://wa.me/${process.env.NEXT_PUBLIC_ADMIN_WHATSAPP}?text=...`
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BAGIAN D — KUALITAS KODE & MAINTENANCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+──────────────────────────────────────────────────────────────────────────────
+QA #1 — Tipe "any" Digunakan Secara Berlebihan
+FILE   : lib/driverOrders.ts (L16, L44, L82, dll)
+       : app/orders/page.tsx (L65, L67, dll)
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Banyak penggunaan `as { data: any }` dan parameter bertipe `any` di seluruh
+  codebase. Ini menghilangkan manfaat TypeScript dan membuat refactoring berbahaya.
+
+SOLUSI YANG DISARANKAN:
+  Definisikan tipe yang proper berdasarkan `lib/database.types.ts` yang sudah ada.
+  Gunakan `Database["public"]["Tables"]["orders"]["Row"]` sebagai tipe dasar.
+
+
+──────────────────────────────────────────────────────────────────────────────
+QA #2 — File Sementara di Root Project (Perlu Dibersihkan)
+FILE   : /home/ghosts/Dokumen/warden/ (root)
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Banyak file debug/log sementara di root project yang seharusnya tidak ada di
+  repository:
+  - build_log.txt, build_log_2.txt, build_log_3.txt, build_log_final.txt
+  - build_output.txt, final_build_log.txt
+  - server_log.txt, deploy_log.txt, link_log.txt
+  - stderr.txt, stdout.txt, output.txt
+  - test_dummy.js, test-dispatch.ts, test-upload.mjs
+  - check-bucket.mjs, setup-bucket.mjs
+  - dummy.txt, proxy.ts (di root)
+
+SOLUSI YANG DISARANKAN:
+  - Hapus semua file log dan test dari root
+  - Pindahkan file utility (check-bucket, setup-storage) ke folder /scripts/
+  - Pastikan .gitignore meng-cover *.log, *.txt (kecuali README)
+
+
+──────────────────────────────────────────────────────────────────────────────
+QA #3 — SQL File di Folder app/ (chat_plan.sql)
+FILE   : app/chat_plan.sql
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  File SQL `chat_plan.sql` ada di dalam folder `app/` yang merupakan folder
+  Next.js routing. File ini tidak relevan dengan routing dan menyebabkan kebingungan.
+
+SOLUSI YANG DISARANKAN:
+  Pindahkan ke `/supabase/migrations/` atau `/scripts/sql/`.
+
+
+──────────────────────────────────────────────────────────────────────────────
+QA #4 — Multiple SQL Migration Files di Root (Tidak Terstruktur)
+FILE   : /home/ghosts/Dokumen/warden/ (root)
+       : driver_balance_migration.sql
+       : product_stats_migration.sql
+       : shop_balance_migration.sql
+       : user_wallet_migration.sql
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Migration files ada di dua tempat: root project DAN /supabase/migrations/.
+  Ini membingungkan dan sulit tracking urutan migration.
+
+SOLUSI YANG DISARANKAN:
+  Pindahkan semua ke /supabase/migrations/ dengan naming convention timestamp
+  (seperti yang sudah ada di folder supabase/migrations/).
+
+
+──────────────────────────────────────────────────────────────────────────────
+QA #5 — localStorage Tidak Dipakai untuk Menyimpan State Wallet (UX)
+FILE   : app/wallet/page.tsx
+──────────────────────────────────────────────────────────────────────────────
+MASALAH:
+  Setiap kali user membuka halaman wallet, data di-fetch ulang dari Supabase.
+  Tidak ada caching atau SWR (stale-while-revalidate) pattern.
+
+SOLUSI YANG DISARANKAN:
+  Gunakan SWR atau React Query untuk caching data wallet:
+    const { data } = useSWR("wallet-balance", getWalletBalance)
+  Ini akan menampilkan data lama saat loading dan update di background.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  RINGKASAN PRIORITAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  PRIORITAS TINGGI (Perbaiki Segera):
+  ✗ BUG #1  — Race condition pada withdraw (saldo bisa negatif/double-deduct)
+  ✗ BUG #3  — Auth tidak konsisten, getSession() di API routes (keamanan)
+  ✗ BUG #5  — completeOrder tanpa server-side validation (keamanan)
+  ✗ BUG #6  — addDriverCommission bisa double-credit (finansial)
+  ✗ BUG #11 — Driver withdraw tidak cek role (keamanan)
+
+  PRIORITAS SEDANG (Perbaiki dalam Sprint Berikutnya):
+  ✗ BUG #2  — Shop ID dari product_name (desain rapuh)
+  ✗ BUG #4  — Rollback tidak lengkap di webhook
+  ✗ BUG #7  — COMMISSION_RATE terdefinisi di banyak tempat
+  ✗ BUG #10 — Dispatch loop infinite tanpa batas waktu
+  ✗ OPT #7  — Tidak ada rate limiting di endpoint sensitif
+
+  PRIORITAS RENDAH (Optimisasi & Maintenance):
+  ✗ OPT #1  — N+1 query di driver/my-order
+  ✗ OPT #2  — Double fetch di ChatWidget
+  ✗ OPT #3  — Wildcard import lucide-react
+  ✗ OPT #4  — Count query tidak perlu di dispatch
+  ✗ OPT #5  — Tidak ada pagination di transaction history
+  ✗ OPT #6  — isProduction hardcoded
+  ✗ QA #1   — Tipe "any" berlebihan
+  ✗ QA #2   — File sementara di root project
+  ✗ QA #3-4 — SQL files tidak terstruktur
+  ✗ OPT #10 — Nomor WA admin hardcoded
+
+================================================================================
+  Total Bug Kritis    : 7
+  Total Bug Sedang    : 6
+  Total Optimisasi    : 10
+  Total QA/Maintenance: 5
+  TOTAL               : 28 issues ditemukan
+================================================================================

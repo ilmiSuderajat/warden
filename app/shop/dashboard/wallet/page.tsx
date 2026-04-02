@@ -14,7 +14,7 @@ declare global {
 
 type BalanceLog = {
     id: string
-    type: "commission" | "cod_debit" | "topup" | "withdraw"
+    type: string
     amount: number
     balance_after: number
     description: string | null
@@ -31,42 +31,14 @@ type WithdrawRequest = {
     created_at: string | null
 }
 
-const LOG_TYPE_CONFIG = {
-    commission: {
-        label: "Komisi Online",
-        icon: "TrendingUp",
-        color: "text-emerald-600",
-        bg: "bg-emerald-50",
-        dot: "bg-emerald-500",
-        sign: "+",
-    },
-    cod_debit: {
-        label: "Komisi COD",
-        icon: "Bike",
-        color: "text-red-600",
-        bg: "bg-red-50",
-        dot: "bg-red-500",
-        sign: "-",
-    },
-    topup: {
-        label: "Topup Saldo",
-        icon: "PlusCircle",
-        color: "text-blue-600",
-        bg: "bg-blue-50",
-        dot: "bg-blue-500",
-        sign: "+",
-    },
-    withdraw: {
-        label: "Penarikan",
-        icon: "ArrowUpFromLine",
-        color: "text-orange-600",
-        bg: "bg-orange-50",
-        dot: "bg-orange-500",
-        sign: "-",
-    },
+const LOG_TYPE_CONFIG: Record<string, any> = {
+    commission: { label: "Komisi Penjualan", icon: "TrendingUp", color: "text-emerald-600", bg: "bg-emerald-50", sign: "+" },
+    topup: { label: "Topup Saldo", icon: "PlusCircle", color: "text-blue-600", bg: "bg-blue-50", sign: "+" },
+    withdraw: { label: "Penarikan Dana", icon: "ArrowUpFromLine", color: "text-orange-600", bg: "bg-orange-50", sign: "-" },
+    refund: { label: "Refund Pembeli", icon: "RotateCcw", color: "text-red-600", bg: "bg-red-50", sign: "-" },
 }
 
-export default function WalletPage() {
+export default function ShopWalletPage() {
     const router = useRouter()
     const [shop, setShop] = useState<any>(null)
     const [logs, setLogs] = useState<BalanceLog[]>([])
@@ -95,36 +67,40 @@ export default function WalletPage() {
     }
 
     const fetchData = useCallback(async () => {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) { router.push("/login"); return }
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) { router.push("/login"); return }
 
+        // Fetch Shop Data
         const { data: shopData } = await supabase
             .from("shops")
-            .select("id, name, balance, cod_enabled, image_url")
-            .eq("owner_id", user.id)
-            .maybeSingle()
+            .select("id, name, balance, cod_enabled")
+            .eq("owner_id", session.user.id)
+            .single()
 
-        if (!shopData) { router.replace("/shop/create"); return }
-
+        if (!shopData) {
+            router.replace("/shop/create")
+            return
+        }
         setShop(shopData)
 
+        // Fetch Logs
         const { data: logsData } = await supabase
             .from("shop_balance_logs")
             .select("*")
             .eq("shop_id", shopData.id)
             .order("created_at", { ascending: false })
             .limit(50)
-
         setLogs(logsData || [])
 
+        // Fetch Withdraw Requests
         const { data: wdData } = await supabase
             .from("shop_withdraw_requests")
             .select("*")
             .eq("shop_id", shopData.id)
             .order("created_at", { ascending: false })
             .limit(20)
-
         setWithdrawRequests(wdData || [])
+        
         setLoading(false)
     }, [router])
 
@@ -134,20 +110,18 @@ export default function WalletPage() {
 
     // Load Midtrans Snap script
     useEffect(() => {
+        if (document.querySelector('script[src*="snap.js"]')) return
         const script = document.createElement("script")
         script.src = "https://app.midtrans.com/snap/snap.js"
         script.setAttribute("data-client-key", process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || "")
         script.async = true
         document.head.appendChild(script)
-        return () => { document.head.removeChild(script) }
     }, [])
 
     const handleTopup = async () => {
         const amount = parseInt(topupAmount.replace(/\D/g, ""))
-        if (isNaN(amount) || amount < 10000) {
-            showToast("Minimal topup Rp 10.000", "error")
-            return
-        }
+        if (isNaN(amount) || amount < 10000) { showToast("Minimal topup Rp 10.000", "error"); return }
+        
         setTopupLoading(true)
         try {
             const res = await fetch("/api/shop/topup", {
@@ -163,7 +137,7 @@ export default function WalletPage() {
 
             window.snap.pay(data.token, {
                 onSuccess: () => { showToast("Topup berhasil! Saldo akan diperbarui."); fetchData() },
-                onPending: () => { showToast("Menunggu konfirmasi pembayaran...") },
+                onPending: () => { showToast("Menunggu konfirmasi pembayaran..."); fetchData() },
                 onError: () => { showToast("Pembayaran gagal.", "error") },
                 onClose: () => { showToast("Pembayaran dibatalkan.", "error") },
             })
@@ -178,6 +152,7 @@ export default function WalletPage() {
         const amount = parseInt(wdAmount.replace(/\D/g, ""))
         if (isNaN(amount) || amount < 10000) { showToast("Minimal penarikan Rp 10.000", "error"); return }
         if (!wdBank || !wdAccount || !wdName) { showToast("Lengkapi semua data rekening.", "error"); return }
+        
         setWdLoading(true)
         try {
             const res = await fetch("/api/shop/withdraw", {
@@ -187,9 +162,10 @@ export default function WalletPage() {
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error)
+            
             setShowWithdraw(false)
             setWdAmount(""); setWdBank(""); setWdAccount(""); setWdName("")
-            showToast("Permintaan penarikan berhasil dikirim!")
+            showToast("Pengajuan penarikan dana berhasil! Menunggu konfirmasi Admin.")
             fetchData()
         } catch (err: any) {
             showToast(err.message || "Gagal membuat penarikan.", "error")
@@ -206,17 +182,17 @@ export default function WalletPage() {
 
     if (loading) return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-            <Icons.Loader2 className="animate-spin text-[#ee4d2d]" size={32} />
+            <Icons.Loader2 className="animate-spin text-indigo-600" size={32} />
         </div>
     )
     if (!shop) return null
 
     const balance: number = shop.balance || 0
     const isNegative = balance < 0
-    const codEnabled: boolean = shop.cod_enabled !== false
+    const codEnabled: boolean = shop.cod_enabled
 
     return (
-        <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans pb-12">
+        <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans pb-12 relative">
             {/* Toast */}
             {toast && (
                 <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-semibold text-white transition-all ${toast.type === "success" ? "bg-emerald-500" : "bg-red-500"}`}>
@@ -225,45 +201,46 @@ export default function WalletPage() {
             )}
 
             {/* Header */}
-            <div className="bg-[#ee4d2d] text-white pt-12 pb-28 px-5 rounded-b-[40px] shadow-lg relative">
-                <div className="flex items-center gap-3 mb-2">
-                    <Link href="/shop/dashboard">
-                        <Icons.ChevronLeft size={24} className="text-white/80" />
-                    </Link>
-                    <h1 className="text-lg font-black">Dompet Warung</h1>
+            <div className="bg-indigo-600 text-white pt-12 pb-28 px-5 rounded-b-[40px] shadow-lg relative">
+                <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                        <Link href="/shop/dashboard">
+                            <Icons.ChevronLeft size={24} className="text-white/80 hover:text-white transition-colors" />
+                        </Link>
+                        <h1 className="text-lg font-black">Dompet Warung</h1>
+                    </div>
                 </div>
                 <p className="text-white/70 text-xs ml-9">{shop.name}</p>
 
                 {/* Balance Card */}
                 <div className="bg-white rounded-3xl p-5 shadow-xl shadow-black/10 absolute -bottom-16 left-5 right-5 text-slate-900 border border-slate-100">
                     <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Saldo Warung</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${codEnabled ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                            {codEnabled ? "COD Aktif" : "COD Nonaktif"}
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Saldo Toko</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${codEnabled ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                            {codEnabled ? <Icons.Check size={12} /> : <Icons.Lock size={12} />}
+                            {codEnabled ? "COD Aktif" : "COD Diblokir"}
                         </span>
                     </div>
                     <p className={`text-3xl font-black ${isNegative ? "text-red-600" : "text-slate-900"}`}>
                         {isNegative ? "-" : ""}{formatRp(balance)}
                     </p>
                     {isNegative && (
-                        <p className="text-[10px] text-red-500 font-medium mt-1">
-                            {balance <= -50000
-                                ? "❌ Saldo minus > Rp 50.000. Topup untuk aktifkan COD."
-                                : `⚠️ Saldo minus. COD akan dinonaktifkan jika < -Rp 50.000`}
+                        <p className="text-[10px] text-red-500 font-medium mt-1 leading-tight">
+                            ⚠️ Saldo Toko minus akibat pembatalan pesanan / refund. Jika terus dibiarkan, akses toko akan dibatasi.
                         </p>
                     )}
                     <div className="flex gap-3 mt-4">
                         <button
                             onClick={() => setShowTopup(true)}
-                            className="flex-1 bg-[#ee4d2d] text-white rounded-2xl py-3 text-sm font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md shadow-[#ee4d2d]/30"
+                            className="flex-1 bg-indigo-600 text-white rounded-2xl py-3 text-sm font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md shadow-indigo-600/30 hover:bg-indigo-700"
                         >
                             <Icons.PlusCircle size={16} />
-                            Topup
+                            Isi Saldo
                         </button>
                         <button
                             onClick={() => setShowWithdraw(true)}
                             disabled={balance <= 0}
-                            className="flex-1 border-2 border-slate-200 rounded-2xl py-3 text-sm font-bold text-slate-600 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex-1 border-2 border-slate-200 rounded-2xl py-3 text-sm font-bold text-slate-600 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
                         >
                             <Icons.ArrowUpFromLine size={16} />
                             Tarik Dana
@@ -274,64 +251,66 @@ export default function WalletPage() {
 
             {/* COD Warning Banner */}
             {!codEnabled && (
-                <div className="mx-5 mt-24 bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
+                <div className="mx-5 mt-24 bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
                     <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
                         <Icons.AlertTriangle size={20} className="text-red-500" />
                     </div>
                     <div>
-                        <h3 className="text-sm font-bold text-red-800 mb-1">COD Dinonaktifkan</h3>
+                        <h3 className="text-sm font-bold text-red-800 mb-1">Akses COD Toko Diblokir</h3>
                         <p className="text-xs text-red-600/80 leading-relaxed">
-                            Saldo kamu minus lebih dari Rp 50.000. Lakukan topup untuk mengaktifkan kembali pembayaran COD.
+                            Saldo toko minus melampaui batas kewajaran. Segera isi ulang saldo untuk mengaktifkan kembali fitur pemesanan COD bagi pelanggan.
                         </p>
                     </div>
                 </div>
             )}
 
-            <div className={`px-5 ${!codEnabled ? "mt-4" : "mt-24"}`}>
+            <div className={`px-5 relative z-0 ${!codEnabled ? "mt-4" : "mt-24"}`}>
                 {/* Tabs */}
                 <div className="flex bg-slate-100 rounded-2xl p-1 mb-5">
                     <button
                         onClick={() => setActiveTab("log")}
-                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === "log" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === "log" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                     >
-                        Riwayat Saldo
+                        Riwayat Transaksi
                     </button>
                     <button
                         onClick={() => setActiveTab("withdraw")}
-                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === "withdraw" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === "withdraw" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                     >
-                        Penarikan
+                        Penarikan Dana
                     </button>
                 </div>
 
                 {/* Balance Log Tab */}
                 {activeTab === "log" && (
-                    <div className="space-y-3">
+                    <div className="space-y-3 pb-8">
                         {logs.length === 0 && (
                             <div className="text-center py-16 text-slate-400">
                                 <Icons.ReceiptText size={40} className="mx-auto mb-3 opacity-30" />
-                                <p className="text-sm font-medium">Belum ada riwayat transaksi</p>
+                                <p className="text-sm font-medium">Belum ada riwayat pendapatan</p>
                             </div>
                         )}
                         {logs.map((log) => {
                             const cfg = LOG_TYPE_CONFIG[log.type] || LOG_TYPE_CONFIG.commission
-                            const Icon = (Icons as any)[cfg.icon]
+                            const Icon = (Icons as any)[cfg.icon] || Icons.Circle
                             const isPositive = log.amount > 0
                             return (
-                                <div key={log.id} className="bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm border border-slate-50">
+                                <div key={log.id} className="bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm border border-slate-100">
                                     <div className={`w-10 h-10 ${cfg.bg} ${cfg.color} rounded-xl flex items-center justify-center shrink-0`}>
                                         <Icon size={18} />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-bold text-slate-800">{cfg.label}</p>
-                                        <p className="text-[10px] text-slate-400 truncate">{log.description}</p>
-                                        <p className="text-[10px] text-slate-300 mt-0.5">{formatDate(log.created_at)}</p>
+                                        <p className="text-[10px] text-slate-400 truncate mt-0.5">{log.description}</p>
+                                        <p className="text-[10px] text-slate-300 mt-1">{formatDate(log.created_at)}</p>
                                     </div>
-                                    <div className="text-right shrink-0">
-                                        <p className={`text-sm font-black ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
-                                            {isPositive ? "+" : "-"}{formatRp(log.amount)}
+                                    <div className="text-right shrink-0 flex flex-col justify-between items-end h-[42px]">
+                                        <p className={`text-sm font-black ${isPositive ? "text-emerald-600" : "text-slate-700"}`}>
+                                            {isPositive ? "+" : " "}{formatRp(log.amount)}
                                         </p>
-                                        <p className="text-[10px] text-slate-400">saldo {formatRp(log.balance_after)}</p>
+                                        <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wide">
+                                            Sisa: {formatRp(log.balance_after)}
+                                        </p>
                                     </div>
                                 </div>
                             )
@@ -341,36 +320,40 @@ export default function WalletPage() {
 
                 {/* Withdraw History Tab */}
                 {activeTab === "withdraw" && (
-                    <div className="space-y-3">
+                    <div className="space-y-3 pb-8">
                         {withdrawRequests.length === 0 && (
                             <div className="text-center py-16 text-slate-400">
                                 <Icons.ArrowUpFromLine size={40} className="mx-auto mb-3 opacity-30" />
-                                <p className="text-sm font-medium">Belum ada permintaan penarikan</p>
+                                <p className="text-sm font-medium">Belum ada pengajuan pencairan dana</p>
                             </div>
                         )}
                         {withdrawRequests.map((wd) => {
                             const statusColors: Record<string, string> = {
-                                pending: "bg-amber-50 text-amber-700 border border-amber-200",
-                                approved: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-                                rejected: "bg-red-50 text-red-700 border border-red-200",
+                                pending: "bg-amber-50 text-amber-700 border-amber-200",
+                                approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                rejected: "bg-red-50 text-red-700 border-red-200",
                             }
                             const statusLabel: Record<string, string> = {
-                                pending: "Diproses",
-                                approved: "Disetujui",
-                                rejected: "Ditolak",
+                                pending: "Menunggu Persetujuan",
+                                approved: "Pencairan Berhasil",
+                                rejected: "Ditolak & Direfund",
                             }
                             return (
-                                <div key={wd.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-50">
+                                <div key={wd.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
                                             <p className="text-sm font-black text-slate-800">{formatRp(wd.amount)}</p>
-                                            <p className="text-[10px] text-slate-400">{wd.bank_name} · {wd.account_number} · {wd.account_name}</p>
+                                            <p className="text-[10px] text-slate-500 font-medium mt-1">{wd.bank_name} · {wd.account_number}</p>
+                                            <p className="text-[10px] text-slate-400">{wd.account_name}</p>
                                         </div>
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${statusColors[wd.status || "pending"]}`}>
+                                        <span className={`text-[9px] font-bold px-2 py-1.5 rounded-lg border ${statusColors[wd.status || "pending"]}`}>
                                             {statusLabel[wd.status || "pending"]}
                                         </span>
                                     </div>
-                                    <p className="text-[10px] text-slate-300">{formatDate(wd.created_at)}</p>
+                                    <div className="mt-3 pt-3 border-t border-slate-50 flex justify-between items-center text-[10px]">
+                                        <span className="text-slate-400">{formatDate(wd.created_at)}</span>
+                                        <span className="font-mono text-slate-300">#{wd.id.split('-')[0]}</span>
+                                    </div>
                                 </div>
                             )
                         })}
@@ -380,33 +363,33 @@ export default function WalletPage() {
 
             {/* Topup Modal */}
             {showTopup && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setShowTopup(false)}>
-                    <div className="bg-white rounded-t-3xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-end justify-center backdrop-blur-sm transition-opacity" onClick={() => setShowTopup(false)}>
+                    <div className="bg-white rounded-t-3xl p-6 w-full max-w-md shadow-2xl animate-in slide-in-from-bottom" onClick={e => e.stopPropagation()}>
                         <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6" />
-                        <h2 className="text-lg font-black text-slate-900 mb-1">Topup Saldo</h2>
-                        <p className="text-xs text-slate-400 mb-5">Saldo akan masuk setelah pembayaran dikonfirmasi</p>
+                        <h2 className="text-lg font-black text-slate-900 mb-1">Isi Saldo Warung</h2>
+                        <p className="text-xs text-slate-500 mb-5">Untuk keamanan toko & buka blokir COD</p>
                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nominal Topup</label>
                         <div className="relative mb-3">
                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">Rp</span>
                             <input
                                 type="number"
-                                placeholder="50000"
+                                placeholder="Min. 50.000"
                                 value={topupAmount}
                                 onChange={e => setTopupAmount(e.target.value)}
-                                className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-slate-100 focus:border-[#ee4d2d] outline-none text-slate-900 font-bold text-lg bg-slate-50 transition-colors"
+                                className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-600 outline-none text-slate-900 font-bold text-lg bg-slate-50 transition-colors focus:ring-4 focus:ring-indigo-600/10"
                             />
                         </div>
-                        <div className="flex gap-2 mb-5">
-                            {[20000, 50000, 100000, 200000].map(v => (
-                                <button key={v} onClick={() => setTopupAmount(v.toString())} className="flex-1 py-2 rounded-xl bg-slate-100 text-xs font-bold text-slate-600 active:bg-[#ee4d2d]/10 active:text-[#ee4d2d] transition-all">
-                                    {(v / 1000)}rb
+                        <div className="grid grid-cols-3 gap-2 mb-6">
+                            {[50000, 100000, 200000, 500000, 1000000, 2000000].map(v => (
+                                <button key={v} onClick={() => setTopupAmount(v.toString())} className="py-2.5 rounded-xl bg-slate-100 text-xs font-bold text-slate-600 hover:bg-slate-200 active:bg-indigo-600/10 active:text-indigo-600 transition-all border border-transparent">
+                                    {v >= 1000000 ? `${v/1000000}jt` : `${v/1000}k`}
                                 </button>
                             ))}
                         </div>
                         <button
                             onClick={handleTopup}
-                            disabled={topupLoading}
-                            className="w-full bg-[#ee4d2d] text-white rounded-2xl py-4 font-black text-sm flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98] transition-all shadow-lg shadow-[#ee4d2d]/30"
+                            disabled={topupLoading || !topupAmount}
+                            className="w-full bg-indigo-600 text-white rounded-2xl py-4 font-black text-sm flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98] transition-all shadow-lg shadow-indigo-600/30 hover:bg-indigo-700"
                         >
                             {topupLoading ? <Icons.Loader2 className="animate-spin" size={18} /> : <Icons.CreditCard size={18} />}
                             {topupLoading ? "Memproses..." : "Bayar via Midtrans"}
@@ -417,43 +400,49 @@ export default function WalletPage() {
 
             {/* Withdraw Modal */}
             {showWithdraw && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setShowWithdraw(false)}>
-                    <div className="bg-white rounded-t-3xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-end justify-center backdrop-blur-sm transition-opacity" onClick={() => setShowWithdraw(false)}>
+                    <div className="bg-white rounded-t-[32px] p-6 w-full max-w-md shadow-2xl animate-in slide-in-from-bottom" onClick={e => e.stopPropagation()}>
                         <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6" />
-                        <h2 className="text-lg font-black text-slate-900 mb-1">Tarik Dana</h2>
-                        <p className="text-xs text-slate-400 mb-5">Saldo saat ini: <span className="font-bold text-slate-700">{formatRp(balance)}</span></p>
-                        <div className="space-y-3 mb-5">
+                        <h2 className="text-xl font-black text-slate-900 mb-1">Tarik Omzet Toko</h2>
+                        <p className="text-xs text-slate-500 mb-5">Maksimal penarikan: <span className="font-bold text-slate-800">{formatRp(balance)}</span></p>
+                        
+                        <div className="space-y-4 mb-8">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nominal</label>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1.5">Nominal Pencairan</label>
                                 <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">Rp</span>
-                                    <input type="number" placeholder="10000" value={wdAmount} onChange={e => setWdAmount(e.target.value)}
-                                        className="w-full pl-12 pr-4 py-3.5 rounded-2xl border-2 border-slate-100 focus:border-[#ee4d2d] outline-none text-slate-900 font-bold bg-slate-50 transition-colors" />
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">Rp</span>
+                                    <input type="number" placeholder="Min. 20000" value={wdAmount} onChange={e => setWdAmount(e.target.value)} max={balance}
+                                        className="w-full pl-12 pr-4 py-3.5 rounded-2xl border-2 border-slate-100 focus:border-slate-400 outline-none text-slate-900 font-bold bg-slate-50 transition-colors" />
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nama Bank</label>
-                                <input type="text" placeholder="BCA / BRI / Mandiri / GoPay / dll" value={wdBank} onChange={e => setWdBank(e.target.value)}
-                                    className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 focus:border-[#ee4d2d] outline-none text-slate-900 font-medium bg-slate-50 transition-colors" />
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1.5">Bank Tujuan</label>
+                                    <input type="text" placeholder="BCA / Mandiri / Dana" value={wdBank} onChange={e => setWdBank(e.target.value)}
+                                        className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 focus:border-slate-400 outline-none text-slate-900 font-semibold bg-slate-50 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1.5">Nomor Rekening / HP</label>
+                                    <input type="text" placeholder="No. Rek / HP" value={wdAccount} onChange={e => setWdAccount(e.target.value)}
+                                        className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 focus:border-slate-400 outline-none text-slate-900 font-semibold bg-slate-50 transition-colors" />
+                                </div>
                             </div>
+                            
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nomor Rekening / HP</label>
-                                <input type="text" placeholder="08xxxxxxxxxx" value={wdAccount} onChange={e => setWdAccount(e.target.value)}
-                                    className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 focus:border-[#ee4d2d] outline-none text-slate-900 font-medium bg-slate-50 transition-colors" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nama Pemilik Rekening</label>
-                                <input type="text" placeholder="Nama lengkap sesuai rekening" value={wdName} onChange={e => setWdName(e.target.value)}
-                                    className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 focus:border-[#ee4d2d] outline-none text-slate-900 font-medium bg-slate-50 transition-colors" />
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1.5">Nama Pemilik Rekening</label>
+                                <input type="text" placeholder="Atas Nama" value={wdName} onChange={e => setWdName(e.target.value)}
+                                    className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 focus:border-slate-400 outline-none text-slate-900 font-semibold bg-slate-50 transition-colors" />
                             </div>
                         </div>
+                        
                         <button
                             onClick={handleWithdraw}
-                            disabled={wdLoading}
-                            className="w-full bg-slate-900 text-white rounded-2xl py-4 font-black text-sm flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98] transition-all"
+                            disabled={wdLoading || !wdAmount || !wdBank || !wdAccount || !wdName}
+                            className="w-full bg-slate-900 text-white rounded-2xl py-4 font-black text-sm flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98] transition-all hover:bg-slate-800"
                         >
                             {wdLoading ? <Icons.Loader2 className="animate-spin" size={18} /> : <Icons.ArrowUpFromLine size={18} />}
-                            {wdLoading ? "Memproses..." : "Ajukan Penarikan"}
+                            {wdLoading ? "Memproses Pengajuan..." : "Ajukan Pencairan Dana"}
                         </button>
                     </div>
                 </div>

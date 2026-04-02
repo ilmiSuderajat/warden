@@ -16,11 +16,15 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSess
 
 async function main() {
   const { data: userData } = await admin.auth.admin.getUserById(USER_A);
+  if (!userData?.user?.email) throw new Error("No user email found")
+  
   const userSupabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: signIn } = await userSupabase.auth.signInWithPassword({
       email: userData.user.email,
       password: 'SeedTest@123!',
   });
+  
+  if (!signIn?.session?.access_token) throw new Error("SignIn failed, no session token")
   
   const userClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: { persistSession: false },

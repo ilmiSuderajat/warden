@@ -454,6 +454,102 @@ export interface Database {
               created_at?: string | null
           }
       }
+      driver_balance_logs: {
+        Row: {
+          id: string
+          driver_id: string | null
+          type: string
+          amount: number
+          balance_after: number
+          description: string | null
+          order_id: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          driver_id?: string | null
+          type: string
+          amount: number
+          balance_after: number
+          description?: string | null
+          order_id?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          driver_id?: string | null
+          type?: string
+          amount?: number
+          balance_after?: number
+          description?: string | null
+          order_id?: string | null
+          created_at?: string | null
+        }
+      }
+      driver_topup_requests: {
+        Row: {
+          id: string
+          driver_id: string | null
+          amount: number
+          midtrans_order_id: string | null
+          status: string | null
+          snap_token: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          driver_id?: string | null
+          amount: number
+          midtrans_order_id?: string | null
+          status?: string | null
+          snap_token?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          driver_id?: string | null
+          amount?: number
+          midtrans_order_id?: string | null
+          status?: string | null
+          snap_token?: string | null
+          created_at?: string | null
+        }
+      }
+      driver_withdraw_requests: {
+        Row: {
+          id: string
+          driver_id: string | null
+          amount: number
+          bank_name: string | null
+          account_number: string | null
+          account_name: string | null
+          status: string | null
+          notes: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          driver_id?: string | null
+          amount: number
+          bank_name?: string | null
+          account_number?: string | null
+          account_name?: string | null
+          status?: string | null
+          notes?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          driver_id?: string | null
+          amount?: number
+          bank_name?: string | null
+          account_number?: string | null
+          account_name?: string | null
+          status?: string | null
+          notes?: string | null
+          created_at?: string | null
+        }
+      }
       shops: {
         Row: {
           id: string

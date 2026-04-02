@@ -1,65 +1,53 @@
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-
-const MIN_WITHDRAW = 10000
+import { getAuthenticatedUser, createAdminClient } from "@/lib/serverAuth"
+import { MIN_WITHDRAW_AMOUNT } from "@/lib/constants"
 
 export async function POST(req: Request) {
     try {
-        const cookieStore = await cookies()
-        const supabaseAuth = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-        )
-
-        const { data: { session } } = await supabaseAuth.auth.getSession()
-        if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        const user = await getAuthenticatedUser()
+        if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
         const body = await req.json()
         const { amount, bank_name, account_number, account_name } = body
 
         const withdrawAmount = parseInt(amount)
-        if (isNaN(withdrawAmount) || withdrawAmount < MIN_WITHDRAW) {
-            return NextResponse.json({ error: `Minimal penarikan Rp ${MIN_WITHDRAW.toLocaleString("id-ID")}` }, { status: 400 })
+        if (isNaN(withdrawAmount) || withdrawAmount < MIN_WITHDRAW_AMOUNT) {
+            return NextResponse.json({ error: `Minimal penarikan Rp ${MIN_WITHDRAW_AMOUNT.toLocaleString("id-ID")}` }, { status: 400 })
         }
 
         if (!bank_name || !account_number || !account_name) {
             return NextResponse.json({ error: "Semua data rekening harus diisi." }, { status: 400 })
         }
 
-        const supabaseAdmin = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            { cookies: { getAll: () => [], setAll: () => {} } }
-        )
+        const supabaseAdmin = createAdminClient()
 
-        // Ambil shop owner
+        // 1. Ambil info toko dan validasi ownership
         const { data: shop, error: shopErr } = await supabaseAdmin
             .from("shops")
-            .select("id, balance")
-            .eq("owner_id", session.user.id)
+            .select("id")
+            .eq("owner_id", user.id)
             .maybeSingle()
 
         if (shopErr || !shop) {
             return NextResponse.json({ error: "Warung tidak ditemukan." }, { status: 404 })
         }
 
-        if ((shop.balance || 0) < withdrawAmount) {
-            return NextResponse.json({ error: "Saldo tidak mencukupi untuk penarikan ini." }, { status: 400 })
+        // 2. Potong saldo secara atomic (Race Condition Fix)
+        const { data: newBalance, error: rpcError } = await supabaseAdmin
+            .rpc("decrement_shop_balance", { 
+                p_shop_id: shop.id, 
+                p_amount: withdrawAmount 
+            })
+
+        if (rpcError) {
+            console.error("[Shop Withdraw RPC Error]", rpcError.message)
+            const isBalanceErr = rpcError.message.includes("Saldo tidak mencukupi")
+            return NextResponse.json({ 
+                error: isBalanceErr ? "Saldo tidak mencukupi" : "Gagal memproses penarikan" 
+            }, { status: isBalanceErr ? 400 : 500 })
         }
 
-        const newBalance = (shop.balance || 0) - withdrawAmount
-
-        // Kurangi saldo (hold langsung)
-        const { error: updateErr } = await supabaseAdmin
-            .from("shops")
-            .update({ balance: newBalance })
-            .eq("id", shop.id)
-
-        if (updateErr) throw updateErr
-
-        // Insert withdraw request
+        // 3. Insert withdraw request
         await supabaseAdmin.from("shop_withdraw_requests").insert({
             shop_id: shop.id,
             amount: withdrawAmount,
@@ -69,7 +57,7 @@ export async function POST(req: Request) {
             status: "pending",
         })
 
-        // Insert log
+        // 4. Insert log riwayat saldo
         await supabaseAdmin.from("shop_balance_logs").insert({
             shop_id: shop.id,
             type: "withdraw",

@@ -1,20 +1,13 @@
 import { NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { getAuthenticatedUser } from "@/lib/serverAuth"
 import { supabaseAdmin } from "@/lib/driverOrders"
 
 export async function GET() {
     try {
-        const cookieStore = await cookies()
-        const supabase = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-        )
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        const user = await getAuthenticatedUser()
+        if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-        const driverId = session.user.id
+        const driverId = user.id
 
         // Use service role to bypass RLS on driver_orders table
         // Get active order (accepted or picked_up)

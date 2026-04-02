@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import {
   MapPin, Power, ShieldCheck, Clock, Loader2, Navigation,
   CheckCircle2, Package, Camera, X, Wallet, ChevronLeft
@@ -131,9 +132,6 @@ export default function DriverDashboard() {
   const [statusLoading, setStatusLoading] = useState(false)
   const [pickupModal, setPickupModal] = useState(false)
   const [deliveryModal, setDeliveryModal] = useState(false)
-  const [withdrawModal, setWithdrawModal] = useState(false)
-  const [withdrawForm, setWithdrawForm] = useState({ bank: '', account: '', name: '', amount: '' })
-  const [withdrawLoading, setWithdrawLoading] = useState(false)
 
   const watchId = useRef<number | null>(null)
 
@@ -309,46 +307,6 @@ export default function DriverDashboard() {
     } catch { toast.error("Terjadi error") } finally { setStatusLoading(false) }
   }
 
-  const handleWithdraw = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!withdrawForm.bank || !withdrawForm.account || !withdrawForm.name || !withdrawForm.amount) {
-      return toast.error("Semua field harus diisi")
-    }
-    const amountNum = parseInt(withdrawForm.amount)
-    if (isNaN(amountNum) || amountNum < 10000) {
-      return toast.error("Minimal penarikan Rp 10.000")
-    }
-    if (amountNum > (user?.saldo || 0)) {
-      return toast.error("Saldo tidak mencukupi")
-    }
-
-    setWithdrawLoading(true)
-    try {
-      const res = await fetch("/api/driver/withdraw", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bank_name: withdrawForm.bank,
-          account_number: withdrawForm.account,
-          account_name: withdrawForm.name,
-          amount: amountNum
-        })
-      })
-      const data = await res.json()
-      if (data.success) {
-        toast.success("Permintaan penarikan berhasil dikirim!")
-        setWithdrawModal(false)
-        setWithdrawForm({ bank: '', account: '', name: '', amount: '' })
-        await refreshUser()
-      } else {
-        toast.error(data.error || "Gagal mengajukan penarikan")
-      }
-    } catch {
-      toast.error("Terjadi error pada server")
-    } finally {
-      setWithdrawLoading(false)
-    }
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
@@ -382,16 +340,12 @@ export default function DriverDashboard() {
         </div>
         {/* Saldo Badge */}
         <div className="flex flex-col items-end gap-2">
-          <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl px-4 py-2 text-right">
-            <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Saldo Komisi</p>
+          <Link href="/driver/wallet" className="bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl px-4 py-2 text-right block active:scale-95 transition-transform hover:bg-white/30">
+            <p className="text-[10px] font-bold text-white/90 uppercase tracking-widest flex items-center justify-end gap-1">
+              <Wallet size={12} /> Dompet Komisi
+            </p>
             <p className="text-base font-extrabold text-white">Rp {(user?.saldo || 0).toLocaleString('id-ID')}</p>
-          </div>
-          <button 
-            onClick={() => setWithdrawModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-600 rounded-xl text-xs font-bold hover:bg-emerald-50 transition-colors shadow-sm"
-          >
-            <Wallet size={14} /> Tarik Komisi
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -578,58 +532,6 @@ export default function DriverDashboard() {
           requireGps={true}
           loading={statusLoading}
         />
-      )}
-
-      {/* WITHDRAW MODAL */}
-      {withdrawModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !withdrawLoading && setWithdrawModal(false)} />
-          <div className="relative w-full max-w-sm bg-white rounded-[32px] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-bold text-slate-900">Tarik Komisi</h2>
-              <button onClick={() => !withdrawLoading && setWithdrawModal(false)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"><X size={18} /></button>
-            </div>
-            <p className="text-xs text-slate-500 mb-6">Uang akan dikirim ke rekening atau e-wallet yang Anda daftarkan di bawah ini.</p>
-            
-            <form onSubmit={handleWithdraw} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Metode (Bank / E-Wallet)</label>
-                <input type="text" placeholder="Contoh: BCA, GoPay, Dana" required
-                  value={withdrawForm.bank} onChange={e => setWithdrawForm({ ...withdrawForm, bank: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 placeholder:text-slate-400 placeholder:font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Nomor Rekening / HP</label>
-                <input type="text" placeholder="Masukkan nomor akun" required
-                  value={withdrawForm.account} onChange={e => setWithdrawForm({ ...withdrawForm, account: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 placeholder:text-slate-400 placeholder:font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Nama Pemilik Akun</label>
-                <input type="text" placeholder="Sesuai nama di rekening" required
-                  value={withdrawForm.name} onChange={e => setWithdrawForm({ ...withdrawForm, name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 placeholder:text-slate-400 placeholder:font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Saldo yang ditarik</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold">Rp</span>
-                  <input type="number" placeholder="Min. 10000" min="10000" max={user?.saldo || 0} required
-                    value={withdrawForm.amount} onChange={e => setWithdrawForm({ ...withdrawForm, amount: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold text-slate-800 placeholder:text-slate-400 placeholder:font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all" />
-                </div>
-              </div>
-              
-              <button 
-                type="submit" disabled={withdrawLoading}
-                className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm py-3.5 rounded-xl shadow-lg shadow-indigo-600/20 active:scale-[0.98] transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {withdrawLoading ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
-                Tarik Saldo Sekarang
-              </button>
-            </form>
-          </div>
-        </div>
       )}
     </div>
   )

@@ -280,6 +280,20 @@ export default function AdminDashboard() {
                     <Link href="/admin/orders/selesai">
                       <StatCard label="Selesai" value={stats.done} icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 border-emerald-100" />
                     </Link>
+                    <Link href="/admin/withdrawals">
+                      <div className="col-span-2 p-5 rounded-xl border border-orange-100 bg-orange-50/50 text-slate-900 flex items-center justify-between transition-all hover:bg-orange-50 active:scale-[0.98] shadow-sm mb-3">
+                        <div className="flex items-center gap-4">
+                          <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
+                            <CreditCard size={20} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900 leading-tight">Kelola Penarikan Dana</p>
+                            <p className="text-[10px] text-slate-500 font-medium">Persetujuan pencairan saldo driver, toko & user</p>
+                          </div>
+                        </div>
+                        <ChevronRight size={16} className="text-orange-400" />
+                      </div>
+                    </Link>
                     <Link href="/admin/customers">
                       <div className="col-span-2 p-5 rounded-xl border border-blue-100 bg-white text-slate-900 flex items-center justify-between transition-all hover:bg-blue-50 active:scale-[0.98] shadow-sm">
                         <div className="flex items-center gap-4">

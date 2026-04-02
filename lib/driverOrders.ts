@@ -1,4 +1,6 @@
+import 'server-only'
 import { createClient } from "@supabase/supabase-js"
+import { DRIVER_ONLINE_COMMISSION_RATE, DRIVER_COD_PLATFORM_CUT } from "./constants"
 
 export const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -6,19 +8,35 @@ export const supabaseAdmin = createClient(
 )
 
 const OFFER_DURATION_SECONDS = 20
-const COMMISSION_RATE = 0.80 // 80% of shipping_amount
 
 export async function addDriverCommission(driverId: string, orderId: string) {
     const { data: order } = await supabaseAdmin
         .from("orders")
-        .select("shipping_amount")
+        .select("shipping_amount, payment_method")
         .eq("id", orderId)
         .maybeSingle() as { data: any }
 
     if (!order?.shipping_amount) return
 
-    const commission = Math.floor(order.shipping_amount * COMMISSION_RATE)
-    if (commission <= 0) return
+    const shipping = order.shipping_amount
+    let balanceChange = 0
+    let logType = ""
+    let logDesc = ""
+
+    if (order.payment_method === "online") {
+        balanceChange = Math.floor(shipping * DRIVER_ONLINE_COMMISSION_RATE)
+        logType = "commission_online"
+        logDesc = `Komisi (${DRIVER_ONLINE_COMMISSION_RATE * 100}% ongkir) pesanan #${orderId.substring(0, 8)}`
+    } else if (order.payment_method === "cod") {
+        // Driver retains cash, platform extracts 20% commission digitally
+        balanceChange = -Math.round(shipping * DRIVER_COD_PLATFORM_CUT)
+        logType = "commission_cod_debit"
+        logDesc = `Potongan platform (${DRIVER_COD_PLATFORM_CUT * 100}% ongkir) pesanan COD #${orderId.substring(0, 8)}`
+    } else {
+        return 0
+    }
+
+    if (balanceChange === 0) return 0
 
     const { data: userRow } = await supabaseAdmin
         .from("users")
@@ -27,12 +45,23 @@ export async function addDriverCommission(driverId: string, orderId: string) {
         .maybeSingle() as { data: any }
 
     const currentSaldo = userRow?.saldo || 0
+    const newSaldo = currentSaldo + balanceChange
+
     await supabaseAdmin
         .from("users")
-        .update({ saldo: currentSaldo + commission } as any)
+        .update({ saldo: newSaldo } as any)
         .eq("id", driverId)
 
-    return commission
+    await supabaseAdmin.from("driver_balance_logs").insert({
+        driver_id: driverId,
+        type: logType,
+        amount: balanceChange,
+        balance_after: newSaldo,
+        description: logDesc,
+        order_id: orderId
+    } as any)
+
+    return balanceChange
 }
 
 // Haversine distance in km
@@ -49,7 +78,7 @@ export async function dispatchOrder(orderId: string) {
     // 1. Get the order
     const { data: order } = await supabaseAdmin
         .from("orders")
-        .select("id, latitude, longitude, status, created_at")
+        .select("id, latitude, longitude, status, created_at, payment_method")
         .eq("id", orderId)
         .maybeSingle() as { data: any }
 
@@ -75,14 +104,22 @@ export async function dispatchOrder(orderId: string) {
     const storeLng = order.longitude || 0
 
     // 3. Fetch online drivers
-    const { data: drivers } = await supabaseAdmin
+    let { data: drivers } = await supabaseAdmin
         .from("users")
-        .select("id, is_auto_accept, last_lat, last_lng")
+        .select("id, is_auto_accept, last_lat, last_lng, saldo")
         .eq("role", "driver")
         .eq("is_online", true) as { data: any[] }
 
     if (!drivers || drivers.length === 0) {
         return { success: false, error: "No drivers available" }
+    }
+
+    // Protect COD operations: skip drivers with balance < -50000
+    if (order.payment_method === "cod") {
+        drivers = drivers.filter(d => (d.saldo || 0) >= -50000)
+        if (drivers.length === 0) {
+            return { success: false, error: "No drivers eligible for COD" }
+        }
     }
 
     // 4. Filter out drivers already tried in the current round

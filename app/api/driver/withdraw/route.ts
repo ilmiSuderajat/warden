@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { getAuthenticatedUser, createAdminClient } from "@/lib/serverAuth"
+import { MIN_WITHDRAW_AMOUNT } from "@/lib/constants"
 
 export async function POST(req: Request) {
     try {
-        const cookieStore = await cookies()
-        const supabase = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
-        )
-        const { data: { session }, error: authError } = await supabase.auth.getSession()
-        if (authError || !session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        const user = await getAuthenticatedUser()
+        if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
         const body = await req.json()
         const { bank_name, account_number, account_name, amount } = body
@@ -21,48 +15,58 @@ export async function POST(req: Request) {
         }
 
         const withdrawalAmount = parseInt(amount)
-        if (isNaN(withdrawalAmount) || withdrawalAmount < 10000) {
-            return NextResponse.json({ error: "Minimal penarikan Rp 10.000" }, { status: 400 })
+        if (isNaN(withdrawalAmount) || withdrawalAmount < MIN_WITHDRAW_AMOUNT) {
+            return NextResponse.json({ error: `Minimal penarikan Rp ${MIN_WITHDRAW_AMOUNT.toLocaleString("id-ID")}` }, { status: 400 })
         }
 
-        const supabaseAdmin = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            { cookies: { getAll: () => [], setAll: () => {} } }
-        )
+        const supabaseAdmin = createAdminClient()
 
-        // Verifikasi saldo
-        const { data: user } = await supabaseAdmin
+        // 1. Verifikasi role driver (Security Fix)
+        const { data: userRecord, error: roleError } = await supabaseAdmin
             .from("users")
-            .select("saldo")
-            .eq("id", session.user.id)
+            .select("role")
+            .eq("id", user.id)
             .single()
 
-        if (!user || user.saldo < withdrawalAmount) {
-            return NextResponse.json({ error: "Saldo tidak mencukupi" }, { status: 400 })
+        if (roleError || userRecord?.role !== "driver") {
+            return NextResponse.json({ error: "Akses ditolak. Hanya untuk driver." }, { status: 403 })
         }
 
-        // Potong saldo
-        const { error: updateError } = await supabaseAdmin
-            .from("users")
-            .update({ saldo: user.saldo - withdrawalAmount })
-            .eq("id", session.user.id)
-
-        if (updateError) throw updateError
-
-        // Catat request penarikan (jika tabel withdrawals ada, kita ignore error jika tabel belum dibuat)
-        try {
-            await supabaseAdmin.from("withdrawals").insert({
-                user_id: session.user.id,
-                amount: withdrawalAmount,
-                bank_name,
-                account_number,
-                account_name,
-                status: "pending"
+        // 2. Potong saldo secara atomic (Race Condition Fix)
+        const { data: newSaldo, error: rpcError } = await supabaseAdmin
+            .rpc("decrement_saldo", { 
+                p_user_id: user.id, 
+                p_amount: withdrawalAmount 
             })
-        } catch (_) { /* Abaikan jika tabel withdrawals belum ada, saldo sudah dipotong */ }
 
-        return NextResponse.json({ success: true, newSaldo: user.saldo - withdrawalAmount })
+        if (rpcError) {
+            console.error("[Withdraw RPC Error]", rpcError.message)
+            const isBalanceErr = rpcError.message.includes("Saldo tidak mencukupi")
+            return NextResponse.json({ 
+                error: isBalanceErr ? "Saldo tidak mencukupi" : "Gagal memproses penarikan" 
+            }, { status: isBalanceErr ? 400 : 500 })
+        }
+
+        // 3. Catat riwayat log saldo
+        await supabaseAdmin.from("driver_balance_logs").insert({
+            driver_id: user.id,
+            type: "withdraw",
+            amount: -withdrawalAmount,
+            balance_after: newSaldo,
+            description: `Penarikan ke ${bank_name} - ${account_number}`
+        })
+
+        // 4. Catat request penarikan
+        await supabaseAdmin.from("driver_withdraw_requests").insert({
+            driver_id: user.id,
+            amount: withdrawalAmount,
+            bank_name,
+            account_number,
+            account_name,
+            status: "pending"
+        })
+
+        return NextResponse.json({ success: true, newSaldo })
     } catch (e: any) {
         console.error("Withdraw Error:", e)
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

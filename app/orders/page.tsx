@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
+import { cancelOrder } from "@/lib/wallet"
 import * as Icons from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Skeleton from "@/app/components/Skeleton"
@@ -67,6 +68,11 @@ function OrdersContent() {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false)
   const [reviewsState, setReviewsState] = useState<Record<string, { rating: number, comment: string, photoFile?: File | null, photoPreview?: string }>>({} )
   const [reviewerName, setReviewerName] = useState<string>("")
+
+  // Cancel order state
+  const [cancelOrderObj, setCancelOrderObj] = useState<any>(null)
+  const [cancelReason, setCancelReason] = useState("")
+  const [isCanceling, setIsCanceling] = useState(false)
 
   // State untuk menyimpan ID order yang sedang di-expand
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null)
@@ -192,18 +198,18 @@ function OrdersContent() {
   }
 
   const completeOrder = async (order: any) => {
-    const { error } = await supabase
-      .from("orders")
-      .update({ status: "Selesai" })
-      .eq("id", order.id)
-
-    if (error) {
+    const res = await fetch("/api/orders/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: order.id }),
+    })
+    if (!res.ok) {
       toast.error("Gagal menyelesaikan pesanan")
-    } else {
-      toast.success("Pesanan telah selesai! Terima kasih.")
-      fetchOrders()
-      openReviewModal(order)
+      return
     }
+    toast.success("Pesanan telah selesai! Terima kasih.")
+    fetchOrders()
+    openReviewModal(order)
   }
 
   const submitReviews = async () => {
@@ -299,6 +305,26 @@ function OrdersContent() {
       toast.error("Gagal mengecek status. Silakan coba lagi nanti.")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleCancelOrder = async () => {
+    if (!cancelReason.trim()) {
+      toast.error("Alasan pembatalan wajib diisi")
+      return
+    }
+    
+    setIsCanceling(true)
+    try {
+      await cancelOrder(cancelOrderObj.id, cancelReason)
+      toast.success("Pesanan berhasil dibatalkan")
+      setCancelOrderObj(null)
+      setCancelReason("")
+      fetchOrders()
+    } catch (err: any) {
+      toast.error(err.message || "Gagal membatalkan pesanan")
+    } finally {
+      setIsCanceling(false)
     }
   }
 
@@ -546,8 +572,18 @@ function OrdersContent() {
                         </button>
                       )}
 
+                      {order.status !== "Selesai" && order.status !== "Dibatalkan" && (
+                        <button
+                          onClick={() => setCancelOrderObj(order)}
+                          className="w-full py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 bg-rose-50 hover:bg-rose-100 text-rose-600 active:scale-[0.98]"
+                        >
+                          <Icons.XCircle size={18} />
+                          Batalkan Pesanan
+                        </button>
+                      )}
+
                       <button
-                        onClick={() => window.open(`https://wa.me/628123456789?text=Halo Admin, saya mau konfirmasi pesanan #${order.id.slice(0, 8)}`)}
+                        onClick={() => window.open(`https://wa.me/${process.env.NEXT_PUBLIC_ADMIN_WHATSAPP}?text=Halo Admin, saya mau konfirmasi pesanan #${order.id.slice(0, 8)}`)}
                         className={`w-full py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 ${order.payment_status === "pending"
                           ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
                           : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-100"
@@ -698,6 +734,57 @@ function OrdersContent() {
                </div>
             </div>
          </div>
+      )}
+
+      {/* CANCEL MODAL */}
+      {cancelOrderObj && (
+         <div className="fixed inset-0 z-[100] flex items-end justify-center px-4 pb-10 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300 relative">
+            <button
+              onClick={() => {
+                setCancelOrderObj(null)
+                setCancelReason("")
+              }}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"
+              disabled={isCanceling}
+            >
+              <Icons.X size={20} />
+            </button>
+            <div className="mb-4 text-center mt-2">
+              <div className="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-3 text-rose-600">
+                <Icons.AlertTriangle size={24} />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">Batalkan Pesanan?</h3>
+              <p className="text-xs text-slate-500 mt-1">Pesanan #{cancelOrderObj.id.slice(0, 8)}</p>
+            </div>
+            {cancelOrderObj.payment_status !== "pending" && cancelOrderObj.payment_status !== "waiting_payment" && (
+              <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl mb-4 flex items-start gap-2">
+                <Icons.Info size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-700 font-medium leading-relaxed">Pesanan ini sudah dibayar. Saldo akan dikembalikan otomatis ke Wallet Anda setelah dibatalkan.</p>
+              </div>
+            )}
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Alasan Pembatalan</label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Ceritakan alasan Anda..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all resize-none h-24 placeholder:font-normal placeholder:text-slate-300"
+                  disabled={isCanceling}
+                ></textarea>
+              </div>
+              <button
+                onClick={handleCancelOrder}
+                disabled={isCanceling || !cancelReason.trim()}
+                className="w-full bg-rose-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-rose-200 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-2"
+              >
+                {isCanceling ? <Icons.Loader2 className="animate-spin" size={18} /> : null}
+                {isCanceling ? "Membatalkan..." : "Ya, Batalkan"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

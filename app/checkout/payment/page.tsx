@@ -8,6 +8,8 @@ import {
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
+import { getWalletBalance, processPayment } from "@/lib/wallet"
+import Link from "next/link"
 
 const isValidUUID = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
@@ -46,11 +48,12 @@ function PaymentContent() {
   const searchParams = useSearchParams()
   const orderId = searchParams.get("order_id")
 
-  const [selectedMethod, setSelectedMethod] = useState<"online" | "cod">("online")
+  const [selectedMethod, setSelectedMethod] = useState<"online" | "cod" | "wallet">("online")
   const [loading, setLoading] = useState(false)
   const [fetchingData, setFetchingData] = useState(true)
   const [orderInfo, setOrderInfo] = useState<OrderInfo | null>(null)
   const [codError, setCodError] = useState<string | null>(null)
+  const [walletBalance, setWalletBalance] = useState<number>(0)
 
   // ✅ Ref guard: prevents concurrent payment requests entirely
   const isProcessingRef = useRef(false)
@@ -86,6 +89,14 @@ function PaymentContent() {
 
         setOrderInfo(order)
 
+        // Fetch user wallet balance
+        const balance = await getWalletBalance()
+        setWalletBalance(balance)
+        // Auto-select wallet if enough balance
+        if (balance >= order.total_amount) {
+          setSelectedMethod("wallet")
+        }
+
         // Preemptively warn if COD won't be available
         const dist = Number(order.distance_km ?? 0)
         if (dist > COD_MAX_KM) {
@@ -106,7 +117,7 @@ function PaymentContent() {
 
   // Reset COD error when switching methods
   useEffect(() => {
-    if (selectedMethod === "online") setCodError(null)
+    if (selectedMethod === "online" || selectedMethod === "wallet") setCodError(null)
   }, [selectedMethod])
 
   const handleProcessPayment = async () => {
@@ -118,6 +129,27 @@ function PaymentContent() {
     setLoading(true)
 
     try {
+      if (selectedMethod === "wallet") {
+        if (walletBalance < orderInfo.total_amount) {
+          toast.error("Saldo Wallet tidak mencukupi.")
+          isProcessingRef.current = false
+          setLoading(false)
+          return
+        }
+
+        try {
+          const idempotencyKey = crypto.randomUUID()
+          await processPayment(orderInfo.id, idempotencyKey)
+          router.push(`/checkout/success?method=wallet&order_id=${orderInfo.id}`)
+          return
+        } catch (walletErr: any) {
+          toast.error(walletErr.message || "Gagal memproses pembayaran Wallet.")
+          isProcessingRef.current = false
+          setLoading(false)
+          return
+        }
+      }
+
       if (selectedMethod === "cod") {
         const response = await fetch("/api/payment/cod", {
           method: "POST",
@@ -260,6 +292,45 @@ function PaymentContent() {
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">
             Metode Pembayaran
           </p>
+
+          {/* Wallet */}
+          <button
+            onClick={() => setSelectedMethod("wallet")}
+            className={`w-full p-3.5 rounded-xl flex items-center gap-3.5 transition-all border-2 active:scale-[0.99]
+              ${selectedMethod === "wallet"
+                ? "bg-indigo-50 border-indigo-400 shadow-sm"
+                : "bg-slate-50 border-transparent hover:border-slate-200"
+              }`}
+          >
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors
+              ${selectedMethod === "wallet" ? "bg-indigo-600 text-white shadow-sm shadow-indigo-300/40" : "bg-white text-slate-400 border border-slate-200"}`}
+            >
+              <Wallet size={20} />
+            </div>
+            <div className="flex-1 text-left">
+              <div className="flex items-center justify-between">
+                <p className="text-[13px] font-bold text-slate-800">Saldo Wallet</p>
+                <p className={`text-[12px] font-black ${walletBalance < (orderInfo?.total_amount || 0) ? 'text-red-500' : 'text-indigo-600'}`}>
+                  Rp {walletBalance.toLocaleString("id-ID")}
+                </p>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">
+                {walletBalance < (orderInfo?.total_amount || 0)
+                  ? (
+                    <span className="flex items-center gap-1 flex-wrap">
+                      Saldo tidak mencukupi untuk pesanan ini.
+                      <Link href="/wallet" className="text-indigo-600 font-bold hover:underline">
+                        Top Up sekarang
+                      </Link>
+                    </span>
+                  )
+                  : "Bayar instan menggunakan saldo Anda"}
+              </div>
+            </div>
+            {selectedMethod === "wallet" && (
+              <CheckCircle2 size={18} className="text-indigo-600 shrink-0" />
+            )}
+          </button>
 
           {/* Online */}
           <button

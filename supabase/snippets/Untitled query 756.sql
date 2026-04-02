@@ -1,0 +1,1 @@
+SELECT action, target_id, payload FROM audit_log WHERE action = 'pending_refund_warning' LIMIT 1;
