@@ -149,8 +149,8 @@ export default function DriverDashboard() {
   const refreshUser = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const { data } = await supabase.from("users").select("saldo").eq("id", session.user.id).single()
-    if (data) setUser((prev: any) => ({ ...prev, saldo: data.saldo }))
+    const { data: walletData } = await supabase.from("wallets").select("balance").eq("user_id", session.user.id).maybeSingle()
+    if (walletData) setUser((prev: any) => ({ ...prev, saldo: walletData.balance }))
   }
 
   useEffect(() => {
@@ -163,7 +163,9 @@ export default function DriverDashboard() {
       if (!session) return router.replace("/login")
       const { data: userData } = await supabase.from("users").select("*").eq("id", session.user.id).single()
       if (mounted && userData) {
-        setUser(userData)
+        // Fetch wallet balance separately
+        const { data: walletData } = await supabase.from("wallets").select("balance").eq("user_id", userData.id).maybeSingle()
+        setUser({ ...userData, saldo: walletData?.balance || 0 })
         setIsOnline(userData.is_online || false)
         setIsAutoAccept(userData.is_auto_accept || false)
       }

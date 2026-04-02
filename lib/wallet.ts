@@ -7,6 +7,7 @@ export interface Transaction {
   amount: number
   balance_after: number
   description: string
+  order_id?: string
   created_at: string
 }
 
@@ -40,7 +41,7 @@ export async function getTransactionHistory(limit = 50): Promise<Transaction[]> 
 
   const { data, error } = await supabase
     .from('transactions')
-    .select('id, seq, type, amount, balance_after, description, created_at')
+    .select('id, seq, type, amount, balance_after, description, order_id, created_at')
     .eq('user_id', user.id)
     .order('seq', { ascending: false })
     .limit(limit)

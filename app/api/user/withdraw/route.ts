@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getAuthenticatedUser, createAdminClient } from "@/lib/serverAuth"
+import { getAuthenticatedUser, createAuthClient } from "@/lib/serverAuth"
 
 const MIN_WITHDRAW = 10000
 
@@ -20,56 +20,28 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Semua data rekening harus diisi." }, { status: 400 })
         }
 
-        const supabaseAdmin = createAdminClient()
+        const supabaseAuth = await createAuthClient()
 
-        // 1. Cek saldo wallet user
-        const { data: wallet, error: walletErr } = await supabaseAdmin
-            .from("wallets")
-            .select("balance")
-            .eq("user_id", user.id)
-            .single()
-
-        if (walletErr || !wallet) {
-            return NextResponse.json({ error: "Wallet tidak ditemukan." }, { status: 404 })
-        }
-
-        if ((wallet.balance || 0) < withdrawAmount) {
-            return NextResponse.json({ error: "Saldo tidak mencukupi." }, { status: 400 })
-        }
-
-        // 2. Potong saldo wallet secara atomic
-        const newBalance = wallet.balance - withdrawAmount
-        const { error: updateErr } = await supabaseAdmin
-            .from("wallets")
-            .update({ balance: newBalance })
-            .eq("user_id", user.id)
-
-        if (updateErr) throw updateErr
-
-        // 3. Catat transaksi withdraw
-        await supabaseAdmin.rpc("create_wallet_transaction", {
-            p_user_id: user.id,
-            p_order_id: null,
-            p_type: "withdraw",
-            p_amount: -withdrawAmount,
-            p_desc: `Penarikan ke ${bank_name} - ${account_number} a/n ${account_name}`,
+        // 1. Eksekusi RPC request_withdraw untuk memotong saldo secara atomic dan mencatat request
+        const { data: requestId, error: rpcErr } = await supabaseAuth.rpc("request_withdraw", {
+            p_amount: withdrawAmount,
+            p_bank_name: bank_name,
+            p_bank_account: account_number,
+            p_bank_holder: account_name
         })
 
-        // 4. Simpan withdraw request
-        const { error: insertErr } = await supabaseAdmin
-            .from("user_withdraw_requests")
-            .insert({
-                user_id: user.id,
-                amount: withdrawAmount,
-                bank_name,
-                account_number,
-                account_name,
-                status: "pending",
-            })
+        if (rpcErr) {
+            console.error("[User Withdraw RPC Error]", rpcErr)
+            if (rpcErr.message?.includes("Insufficient balance")) {
+                return NextResponse.json({ error: "Saldo tidak mencukupi." }, { status: 400 })
+            }
+            if (rpcErr.message?.includes("Amount must be greater")) {
+                return NextResponse.json({ error: "Jumlah penarikan tidak valid." }, { status: 400 })
+            }
+            return NextResponse.json({ error: "Gagal memproses penarikan." }, { status: 500 })
+        }
 
-        if (insertErr) throw insertErr
-
-        return NextResponse.json({ success: true, newBalance })
+        return NextResponse.json({ success: true, requestId })
     } catch (err: any) {
         console.error("[User Withdraw Error]", err)
         return NextResponse.json({ error: "Terjadi kesalahan internal." }, { status: 500 })

@@ -32,41 +32,25 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Akses ditolak. Hanya untuk driver." }, { status: 403 })
         }
 
-        // 2. Potong saldo secara atomic (Race Condition Fix)
-        const { data: newSaldo, error: rpcError } = await supabaseAdmin
-            .rpc("decrement_saldo", { 
-                p_user_id: user.id, 
-                p_amount: withdrawalAmount 
+        // 2. Gunakan RPC request_withdraw (Unified for all roles)
+        // RPC ini menangani: locking, balance validation, deduction, transaction logging, dan request entry.
+        const { data: requestId, error: rpcError } = await supabaseAdmin
+            .rpc("request_withdraw", { 
+                p_amount: withdrawalAmount, 
+                p_bank_name: bank_name,
+                p_bank_account: account_number,
+                p_bank_holder: account_name
             })
 
         if (rpcError) {
             console.error("[Withdraw RPC Error]", rpcError.message)
-            const isBalanceErr = rpcError.message.includes("Saldo tidak mencukupi")
+            const isBalanceErr = rpcError.message.toLowerCase().includes("insufficient")
             return NextResponse.json({ 
                 error: isBalanceErr ? "Saldo tidak mencukupi" : "Gagal memproses penarikan" 
             }, { status: isBalanceErr ? 400 : 500 })
         }
 
-        // 3. Catat riwayat log saldo
-        await supabaseAdmin.from("driver_balance_logs").insert({
-            driver_id: user.id,
-            type: "withdraw",
-            amount: -withdrawalAmount,
-            balance_after: newSaldo,
-            description: `Penarikan ke ${bank_name} - ${account_number}`
-        })
-
-        // 4. Catat request penarikan
-        await supabaseAdmin.from("driver_withdraw_requests").insert({
-            driver_id: user.id,
-            amount: withdrawalAmount,
-            bank_name,
-            account_number,
-            account_name,
-            status: "pending"
-        })
-
-        return NextResponse.json({ success: true, newSaldo })
+        return NextResponse.json({ success: true, requestId })
     } catch (e: any) {
         console.error("Withdraw Error:", e)
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

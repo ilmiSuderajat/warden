@@ -85,6 +85,11 @@ export default function DriverWalletPage() {
 
     const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
 
+    // Transaction Detail Modal
+    const [selectedTx, setSelectedTx] = useState<BalanceLog | null>(null)
+    const [orderDetail, setOrderDetail] = useState<any | null>(null)
+    const [loadingDetail, setLoadingDetail] = useState(false)
+
     const showToast = (msg: string, type: "success" | "error" = "success") => {
         setToast({ msg, type })
         setTimeout(() => setToast(null), 3500)
@@ -96,28 +101,37 @@ export default function DriverWalletPage() {
 
         const { data: userData } = await supabase
             .from("users")
-            .select("id, full_name, saldo, role")
+            .select("id, full_name, role")
             .eq("id", session.user.id)
             .single()
 
         if (!userData || userData.role !== "driver") { router.replace("/"); return }
 
-        setUser(userData)
+        // Fetch unified wallet balance
+        const { data: walletData } = await supabase
+            .from("wallets")
+            .select("balance")
+            .eq("user_id", userData.id)
+            .maybeSingle()
 
+        setUser({ ...userData, saldo: walletData?.balance || 0 })
+
+        // Fetch unified transactions
         const { data: logsData } = await supabase
-            .from("driver_balance_logs")
+            .from("transactions")
             .select("*")
-            .eq("driver_id", userData.id)
-            .order("created_at", { ascending: false })
+            .eq("user_id", userData.id)
+            .order("seq", { ascending: false })
             .limit(50)
 
         setLogs(logsData || [])
 
+        // Fetch unified withdraw requests
         const { data: wdData } = await supabase
-            .from("driver_withdraw_requests")
+            .from("withdraw_requests")
             .select("*")
-            .eq("driver_id", userData.id)
-            .order("created_at", { ascending: false })
+            .eq("user_id", userData.id)
+            .order("requested_at", { ascending: false })
             .limit(20)
 
         setWithdrawRequests(wdData || [])
@@ -195,10 +209,34 @@ export default function DriverWalletPage() {
     }
 
     const formatRp = (v: number) => `Rp ${Math.abs(v).toLocaleString("id-ID")}`
-    const formatDate = (s: string | null) => {
+    const formatDate = (s: string | null, full = false) => {
         if (!s) return "-"
-        return new Date(s).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+        const opts: Intl.DateTimeFormatOptions = full 
+            ? { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }
+            : { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }
+        return new Date(s).toLocaleDateString("id-ID", opts)
     }
+
+    const fetchOrderDetail = useCallback(async (orderId: string) => {
+        setLoadingDetail(true)
+        try {
+            const { data: order } = await supabase.from("orders").select("*").eq("id", orderId).single()
+            const { data: items } = await supabase.from("order_items").select("*").eq("order_id", orderId)
+            setOrderDetail({ ...order, items: items || [] })
+        } catch (err) {
+            console.error("Error fetching order detail:", err)
+        } finally {
+            setLoadingDetail(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (selectedTx?.order_id) {
+            fetchOrderDetail(selectedTx.order_id)
+        } else {
+            setOrderDetail(null)
+        }
+    }, [selectedTx, fetchOrderDetail])
 
     if (loading) return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -314,7 +352,11 @@ export default function DriverWalletPage() {
                             const Icon = (Icons as any)[cfg.icon] || Icons.Circle
                             const isPositive = log.amount > 0
                             return (
-                                <div key={log.id} className="bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm border border-slate-100">
+                                <div 
+                                    key={log.id} 
+                                    onClick={() => setSelectedTx(log)}
+                                    className="bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm border border-slate-100 hover:border-indigo-200 active:scale-[0.98] transition-all cursor-pointer group"
+                                >
                                     <div className={`w-10 h-10 ${cfg.bg} ${cfg.color} rounded-xl flex items-center justify-center shrink-0`}>
                                         <Icon size={18} />
                                     </div>
@@ -344,7 +386,7 @@ export default function DriverWalletPage() {
                                 <p className="text-sm font-medium">Belum ada pengajuan pencairan</p>
                             </div>
                         )}
-                        {withdrawRequests.map((wd) => {
+                        {withdrawRequests.map((wd: any) => {
                             const statusColors: Record<string, string> = {
                                 pending: "bg-amber-50 text-amber-700 border border-amber-200",
                                 approved: "bg-emerald-50 text-emerald-700 border border-emerald-200",
@@ -360,14 +402,14 @@ export default function DriverWalletPage() {
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
                                             <p className="text-sm font-black text-slate-800">{formatRp(wd.amount)}</p>
-                                            <p className="text-[10px] text-slate-400 mt-0.5">{wd.bank_name} · {wd.account_number}</p>
-                                            <p className="text-[10px] text-slate-500 font-medium">{wd.account_name}</p>
+                                            <p className="text-[10px] text-slate-400 mt-0.5">{wd.bank_name} · {wd.bank_account}</p>
+                                            <p className="text-[10px] text-slate-500 font-medium">{wd.bank_holder}</p>
                                         </div>
                                         <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${statusColors[wd.status || "pending"]}`}>
                                             {statusLabel[wd.status || "pending"]}
                                         </span>
                                     </div>
-                                    <p className="text-[10px] text-slate-300 mt-2 border-t border-slate-50 pt-2">{formatDate(wd.created_at)}</p>
+                                    <p className="text-[10px] text-slate-300 mt-2 border-t border-slate-50 pt-2">{formatDate(wd.requested_at || wd.created_at)}</p>
                                 </div>
                             )
                         })}
@@ -454,6 +496,127 @@ export default function DriverWalletPage() {
                             {wdLoading ? <Icons.Loader2 className="animate-spin" size={18} /> : <Icons.ArrowUpFromLine size={18} />}
                             {wdLoading ? "Memproses..." : "Ajukan Pencairan Dana"}
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Transaction Detail Bottom Sheet */}
+            {selectedTx && (
+                <div 
+                    className="fixed inset-0 bg-slate-900/60 z-[60] flex items-end justify-center backdrop-blur-sm transition-opacity"
+                    onClick={() => setSelectedTx(null)}
+                >
+                    <div 
+                        className="bg-white rounded-t-[32px] w-full max-w-md shadow-2xl animate-in slide-in-from-bottom max-h-[85vh] overflow-y-auto"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="sticky top-0 bg-white pt-4 pb-2 px-6 z-10">
+                            <div className="w-12 h-1.5 bg-slate-100 rounded-full mx-auto mb-4" />
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-xl font-black text-slate-900">Detail Transaksi</h2>
+                                <button onClick={() => setSelectedTx(null)} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+                                    <Icons.X size={20} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="px-6 pb-12">
+                            {/* Amount Highlight */}
+                            <div className="text-center py-6 mb-6 bg-slate-50/50 rounded-3xl border border-slate-100">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Mutasi</p>
+                                <p className={`text-3xl font-black ${selectedTx.amount > 0 ? "text-emerald-600" : "text-slate-800"}`}>
+                                    {selectedTx.amount > 0 ? "+" : ""}{formatRp(selectedTx.amount)}
+                                </p>
+                            </div>
+
+                            <div className="space-y-6">
+                                {/* Core Info Section */}
+                                <div className="bg-white border border-slate-100 rounded-2xl p-4 space-y-3 shadow-sm">
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-slate-400 font-medium tracking-tight">Jenis Transaksi</span>
+                                        <span className="text-slate-800 font-black uppercase">{LOG_TYPE_CONFIG[selectedTx.type]?.label || selectedTx.type}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-slate-400 font-medium tracking-tight">Waktu Kejadian</span>
+                                        <span className="text-slate-700 font-bold">{formatDate(selectedTx.created_at, true)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-slate-400 font-medium tracking-tight">ID Referensi</span>
+                                        <span className="text-slate-500 font-mono font-bold uppercase">{selectedTx.id.split('-')[0]}</span>
+                                    </div>
+                                </div>
+
+                                {/* Order specific breakdown */}
+                                {selectedTx.order_id && (
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-3 ml-1">
+                                            <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
+                                            <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">Rincian Pekerjaan</h3>
+                                        </div>
+                                        {loadingDetail ? (
+                                            <div className="flex justify-center py-10 bg-slate-50 rounded-2xl animate-pulse">
+                                                <Icons.Loader2 size={24} className="text-indigo-400 animate-spin" />
+                                            </div>
+                                        ) : orderDetail ? (
+                                            <div className="space-y-4">
+                                                {/* Delivery Items */}
+                                                <div className="bg-white border border-slate-100 rounded-2xl p-4 space-y-3">
+                                                    {orderDetail.items.map((item: any) => (
+                                                        <div key={item.id} className="flex justify-between items-center">
+                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center font-bold text-[10px] shrink-0">{item.quantity}x</div>
+                                                                <span className="text-xs font-bold text-slate-700 truncate">{item.product_name.split(' | ')[0]}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    <div className="pt-3 border-t border-slate-50 flex justify-between items-center">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Metode Bayar</span>
+                                                        <span className="text-xs text-indigo-600 font-black uppercase tracking-tight">{orderDetail.payment_method}</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Earnings Breakdown */}
+                                                <div className="bg-slate-900 rounded-2xl p-4 space-y-3 text-white">
+                                                    <div className="flex justify-between items-center text-[11px]">
+                                                        <span className="text-slate-400 font-medium tracking-tight">Ongkos Kirim</span>
+                                                        <span className="text-white font-bold">{formatRp(orderDetail.shipping_amount)}</span>
+                                                    </div>
+                                                    {selectedTx.type === 'commission_cod_debit' && (
+                                                        <div className="flex justify-between items-center text-[11px]">
+                                                            <span className="text-red-400 font-medium tracking-tight">Potongan COD (20%)</span>
+                                                            <span className="text-red-400 font-bold">-{formatRp(orderDetail.shipping_amount * 0.2)}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="pt-3 border-t border-slate-800 flex justify-between items-center">
+                                                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Net Komisi</span>
+                                                        <span className="text-lg font-black text-emerald-400">{formatRp(selectedTx.amount)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl text-[10px] font-bold text-center italic">
+                                                Data rincian pesanan tidak tersedia.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Generic description for topup/withdraw */}
+                                {(!selectedTx.order_id || selectedTx.type === 'topup' || selectedTx.type === 'withdraw') && (
+                                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                                        <p className="text-xs text-slate-500 font-medium leading-relaxed italic">
+                                            "{selectedTx.description || 'Tidak ada keterangan tambahan.'}"
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Audit */}
+                                <div className="text-center pt-2">
+                                    <p className="text-[9px] text-slate-300 font-bold uppercase tracking-[0.2em]">Sequence Audit: #{selectedTx.seq}</p>
+                                    <p className="text-[9px] text-slate-300 font-medium mt-1">Saldo Akhir: {formatRp(selectedTx.balance_after)}</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

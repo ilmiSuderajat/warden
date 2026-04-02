@@ -27,6 +27,11 @@ export default function WalletPage() {
   const [withdrawRequests, setWithdrawRequests] = useState<WithdrawRequest[]>([])
   const [activeTab, setActiveTab] = useState<"transactions" | "withdrawals">("transactions")
 
+  // Transaction Detail Modal
+  const [selectedTrx, setSelectedTrx] = useState<Transaction | null>(null)
+  const [orderDetail, setOrderDetail] = useState<any | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+
   // Topup
   const [showTopupModal, setShowTopupModal] = useState(false)
 
@@ -68,6 +73,27 @@ export default function WalletPage() {
       setLoading(false)
     }
   }
+
+  const fetchOrderDetail = async (orderId: string) => {
+    setLoadingDetail(true)
+    try {
+      const { data: order } = await supabase.from("orders").select("*").eq("id", orderId).single()
+      const { data: items } = await supabase.from("order_items").select("*").eq("order_id", orderId)
+      setOrderDetail({ ...order, items: items || [] })
+    } catch (err) {
+      console.error("Error fetching order detail:", err)
+    } finally {
+      setLoadingDetail(false)
+    }
+  }
+
+  useEffect(() => {
+    if (selectedTrx?.order_id) {
+      fetchOrderDetail(selectedTrx.order_id)
+    } else {
+      setOrderDetail(null)
+    }
+  }, [selectedTrx])
 
   useEffect(() => {
     fetchData()
@@ -200,7 +226,11 @@ export default function WalletPage() {
                 ) : (
                   <div className="divide-y divide-slate-50">
                     {transactions.map((trx) => (
-                      <div key={trx.id} className="p-4 flex items-center justify-between active:bg-slate-50 transition-colors">
+                      <div 
+                        key={trx.id} 
+                        onClick={() => setSelectedTrx(trx)}
+                        className="p-4 flex items-center justify-between active:bg-slate-50 hover:bg-slate-50 transition-all cursor-pointer group border-b border-slate-50 last:border-0"
+                      >
                         <div className="flex items-center gap-3">
                           <div className={`p-2 rounded-xl ${trx.amount > 0 ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-600"}`}>
                             {trx.type === "topup" && <Icons.Plus size={18} />}
@@ -314,6 +344,124 @@ export default function WalletPage() {
               {wdLoading ? "Memproses..." : "Ajukan Penarikan"}
             </button>
             <p className="text-[10px] text-slate-400 text-center mt-3">Penarikan akan diproses dalam 1×24 jam kerja</p>
+          </div>
+        </div>
+      )}
+      {/* TRANSACTION DETAIL MODAL */}
+      {selectedTrx && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 z-[60] flex items-end justify-center backdrop-blur-sm transition-opacity"
+          onClick={() => setSelectedTrx(null)}
+        >
+          <div 
+            className="bg-white rounded-t-[32px] w-full max-w-md shadow-2xl animate-in slide-in-from-bottom max-h-[85vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-white pt-5 pb-3 px-6 z-10">
+              <div className="w-12 h-1 bg-slate-100 rounded-full mx-auto mb-4" />
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-black text-slate-900">Rincian Transaksi</h2>
+                <button onClick={() => setSelectedTrx(null)} className="p-2 bg-slate-100 text-slate-400 rounded-full hover:text-slate-600 transition-colors">
+                  <Icons.X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-6 pb-12">
+              {/* Amount Area */}
+              <div className="text-center py-8 mb-6 bg-slate-50/50 rounded-3xl border border-slate-100/80">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Jumlah Mutasi</p>
+                <p className={`text-3xl font-black ${selectedTrx.amount > 0 ? "text-emerald-600" : "text-slate-900"}`}>
+                  {selectedTrx.amount > 0 ? "+" : ""}{formatCurrency(selectedTrx.amount)}
+                </p>
+                <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-slate-100 rounded-lg shadow-sm">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Status: Berhasil</span>
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {/* Meta Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-3 px-1">
+                    <div className="w-1 h-3 bg-indigo-500 rounded-full" />
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Informasi Umum</h3>
+                  </div>
+                  <div className="bg-white border border-slate-100 rounded-2xl p-4 space-y-3.5 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-slate-400 font-bold uppercase tracking-tight">Kategori</span>
+                      <span className="text-[11px] text-slate-800 font-black uppercase tracking-tight">{selectedTrx.type}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-slate-400 font-bold uppercase tracking-tight">Waktu Transaksi</span>
+                      <span className="text-[11px] text-slate-700 font-bold tracking-tight">{formatDate(selectedTrx.created_at)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-slate-400 font-bold uppercase tracking-tight">ID Referensi</span>
+                      <span className="text-[11px] text-slate-500 font-mono font-bold uppercase">{selectedTrx.id.split('-')[0]}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Items Section (For Payments/Refunds) */}
+                {selectedTrx.order_id && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 mb-3 px-1">
+                      <div className="w-1 h-3 bg-indigo-500 rounded-full" />
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Item Pesanan</h3>
+                    </div>
+                    {loadingDetail ? (
+                      <div className="flex justify-center py-10 bg-slate-50 rounded-2xl animate-pulse">
+                        <Icons.Loader2 size={24} className="text-indigo-400 animate-spin" />
+                      </div>
+                    ) : orderDetail ? (
+                      <div className="space-y-4">
+                        <div className="bg-white border border-slate-100 rounded-2xl p-4 space-y-3.5 shadow-sm">
+                          {orderDetail.items.map((item: any) => (
+                            <div key={item.id} className="flex justify-between items-center">
+                              <div className="flex items-center gap-3">
+                                <span className="text-[11px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-md">{item.quantity}x</span>
+                                <span className="text-[11px] font-black text-slate-700">{item.product_name.split(' | ')[0]}</span>
+                              </div>
+                              <span className="text-[11px] font-bold text-slate-600">{formatCurrency(item.price * item.quantity)}</span>
+                            </div>
+                          ))}
+                          <div className="pt-3 border-t border-slate-50 flex justify-between items-center">
+                            <span className="text-[10px] text-slate-400 font-black uppercase tracking-tight">Subtotal Order</span>
+                            <span className="text-[11px] text-slate-800 font-black tracking-tight">{formatCurrency(orderDetail.subtotal_amount)}</span>
+                          </div>
+                   {orderDetail.shipping_amount > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-slate-400 font-black uppercase tracking-tight">Ongkos Kirim</span>
+                            <span className="text-[11px] text-slate-800 font-black tracking-tight">{formatCurrency(orderDetail.shipping_amount)}</span>
+                          </div>
+                      )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-5 bg-amber-50 text-amber-600 rounded-2xl text-[10px] font-bold text-center border border-amber-100">
+                         Rincian item tidak tersedia untuk transaksi ini.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Description logic for generic logs */}
+                {(!selectedTrx.order_id) && (
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 border-dashed">
+                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed italic">
+                      "{selectedTrx.description || 'Tidak ada catatan tambahan.'}"
+                    </p>
+                  </div>
+                )}
+
+                {/* Ledger info */}
+                <div className="bg-slate-900 rounded-2xl p-4 text-center">
+                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em] mb-1">Buku Besar Transaksi Verifikasi</p>
+                  <p className="text-white text-xs font-bold font-mono">Saldo Sesudah: {formatCurrency(selectedTrx.balance_after)}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

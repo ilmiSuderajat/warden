@@ -47,10 +47,13 @@ export async function POST(req: Request) {
                 .update({ status: "accepted", accepted_at: new Date().toISOString() } as any)
                 .eq("id", driverOrderId)
 
-            // Auto-update order status
+            // Auto-update order status and assign driver_id
             await supabaseAdmin
                 .from("orders")
-                .update({ status: "Kurir Menuju Lokasi" } as any)
+                .update({ 
+                    status: "Kurir Menuju Lokasi",
+                    driver_id: driverId
+                } as any)
                 .eq("id", driverOrder.order_id)
 
             return NextResponse.json({ success: true, message: "Accepted", orderId: driverOrder.order_id })

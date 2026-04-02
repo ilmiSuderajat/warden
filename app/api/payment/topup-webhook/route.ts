@@ -67,36 +67,34 @@ async function handleDriverTopup(order_id: string, transaction_status: string) {
     }
 
     if (transaction_status === "settlement" || transaction_status === "capture") {
-        const { data: user, error: userErr } = await supabase
-            .from("users")
-            .select("id, saldo")
-            .eq("id", topupReq.driver_id)
-            .single()
-
-        if (userErr || !user) throw new Error("Driver not found")
-
-        const newBalance = (user.saldo || 0) + topupReq.amount
-
-        const { error: updateErr } = await supabase
-            .from("users")
-            .update({ saldo: newBalance })
-            .eq("id", topupReq.driver_id)
-
-        if (updateErr) throw updateErr
-
-        await supabase.from("driver_balance_logs").insert({
-            driver_id: topupReq.driver_id,
-            type: "topup",
-            amount: topupReq.amount,
-            balance_after: newBalance,
-            description: `Topup Saldo Driver via Midtrans (${order_id})`,
+        // 1. Update wallet balance via RPC (Unified)
+        const { error: updateErr } = await supabase.rpc('increment_wallet_balance', {
+            p_user_id: topupReq.driver_id,
+            p_amount: topupReq.amount
         })
 
+        if (updateErr) {
+            console.error("⚠️ RPC increment_wallet_balance failed:", updateErr.message)
+            // Manual fallback if RPC fails
+            const { data: wallet } = await supabase.from("wallets").select("balance").eq("user_id", topupReq.driver_id).single()
+            await supabase.from("wallets").update({ balance: (wallet?.balance || 0) + topupReq.amount }).eq("user_id", topupReq.driver_id)
+        }
+
+        // 2. Insert secure transaction via RPC (Unified Ledger)
+        await supabase.rpc('create_wallet_transaction', {
+            p_user_id: topupReq.driver_id,
+            p_order_id: null,
+            p_type: 'topup',
+            p_amount: topupReq.amount,
+            p_desc: `Topup Saldo Driver via Midtrans (${order_id})`
+        })
+
+        // 3. Mark request as paid
         await supabase.from("driver_topup_requests")
             .update({ status: "paid" })
             .eq("id", topupReq.id)
 
-        console.log(`✅ [Topup Webhook DRV] Driver ${topupReq.driver_id} balance += ${topupReq.amount} → ${newBalance}`)
+        console.log(`✅ [Topup Webhook DRV] Driver ${topupReq.driver_id} wallet topped up by ${topupReq.amount}`)
     } else if (["cancel", "deny", "expire"].includes(transaction_status)) {
         await supabase.from("driver_topup_requests")
             .update({ status: "cancelled" })
@@ -124,40 +122,49 @@ async function handleShopTopup(order_id: string, transaction_status: string) {
     }
 
     if (transaction_status === "settlement" || transaction_status === "capture") {
-        const { data: shop, error: shopErr } = await supabase
-            .from("shops")
-            .select("id, balance, cod_enabled")
-            .eq("id", topupReq.shop_id)
-            .single()
+        // 1. Get owner_id for the shop to update the unified wallet
+        const { data: shop } = await supabase.from("shops").select("owner_id, balance").eq("id", topupReq.shop_id).single()
+        if (!shop) throw new Error("Shop not found")
 
-        if (shopErr || !shop) throw new Error("Shop not found")
+        // 2. Update wallet balance via RPC (Unified)
+        const { error: updateErr } = await supabase.rpc('increment_wallet_balance', {
+            p_user_id: shop.owner_id,
+            p_amount: topupReq.amount
+        })
 
-        const newBalance = (shop.balance || 0) + topupReq.amount
-        const shouldEnableCod = newBalance >= 0
+        if (updateErr) {
+            console.error("⚠️ RPC increment_wallet_balance (Shop) failed:", updateErr.message)
+            // Manual fallback to wallets table
+            const { data: wallet } = await supabase.from("wallets").select("balance").eq("user_id", shop.owner_id).single()
+            await supabase.from("wallets").update({ balance: (wallet?.balance || 0) + topupReq.amount }).eq("user_id", shop.owner_id)
+        }
 
-        const { error: updateErr } = await supabase
-            .from("shops")
-            .update({
-                balance: newBalance,
-                ...(shouldEnableCod ? { cod_enabled: true } : {}),
-            })
-            .eq("id", topupReq.shop_id)
+        // 3. Update shop COD status based on new theoretical balance
+        // Note: In long term, shops.balance column should be deprecated.
+        const newShopBalance = (shop.balance || 0) + topupReq.amount
+        await supabase.from("shops").update({ 
+            balance: newShopBalance,
+            cod_enabled: newShopBalance >= 0 
+        }).eq("id", topupReq.shop_id)
 
-        if (updateErr) throw updateErr
-
-        await supabase.from("shop_balance_logs").insert({
-            shop_id: topupReq.shop_id,
-            type: "topup",
-            amount: topupReq.amount,
-            balance_after: newBalance,
-            description: `Topup Saldo Warung via Midtrans (${order_id})`,
+        // 4. Insert secure transaction via RPC (Unified Ledger)
+        await supabase.rpc('create_wallet_transaction', {
+            p_user_id: shop.owner_id,
+            p_order_id: null,
+            p_type: 'topup',
+            p_amount: topupReq.amount,
+            p_desc: `Topup Saldo Warung via Midtrans (${order_id})`
         })
 
         await supabase.from("shop_topup_requests")
             .update({ status: "paid" })
             .eq("id", topupReq.id)
 
-        console.log(`✅ [Topup Webhook SHP] Shop ${topupReq.shop_id} balance += ${topupReq.amount} → ${newBalance}, COD: ${shouldEnableCod ? "ON" : "still OFF"}`)
+        console.log(`✅ [Topup Webhook SHP] Shop owner ${shop.owner_id} wallet topped up by ${topupReq.amount}`)
+    } else if (["cancel", "deny", "expire"].includes(transaction_status)) {
+        await supabase.from("shop_topup_requests")
+            .update({ status: "cancelled" })
+            .eq("id", topupReq.id)
         console.log(`⚠️ [Topup Webhook SHP] Topup ${order_id} dibatalkan/expired`)
     }
 

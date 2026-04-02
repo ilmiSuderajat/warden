@@ -1,4 +1,3 @@
-import 'server-only'
 import { createClient } from "@supabase/supabase-js"
 import { DRIVER_ONLINE_COMMISSION_RATE, DRIVER_COD_PLATFORM_CUT } from "./constants"
 
@@ -188,7 +187,13 @@ export async function dispatchOrder(orderId: string) {
             dispatch_attempt: attemptIndex + 1
         } as any)
 
-        await supabaseAdmin.from("orders").update({ status: "Kurir Menuju Lokasi" } as any).eq("id", orderId)
+        // Update order status and assign driver_id immediately
+        await supabaseAdmin.from("orders")
+            .update({ 
+                status: "Kurir Menuju Lokasi",
+                driver_id: selected.id
+            } as any)
+            .eq("id", orderId)
 
         return { success: true, message: "Auto-accepted", assigned: true }
     }

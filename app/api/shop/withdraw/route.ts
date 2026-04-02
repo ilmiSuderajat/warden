@@ -32,41 +32,26 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Warung tidak ditemukan." }, { status: 404 })
         }
 
-        // 2. Potong saldo secara atomic (Race Condition Fix)
-        const { data: newBalance, error: rpcError } = await supabaseAdmin
-            .rpc("decrement_shop_balance", { 
-                p_shop_id: shop.id, 
-                p_amount: withdrawAmount 
+        // 2. Gunakan RPC request_withdraw (Unified for all roles)
+        // RPC ini menangani: locking, balance validation, deduction, transaction logging, dan request entry.
+        // Penting: user_id dari auth digunakan sebagai kunci di tabel wallets.
+        const { data: requestId, error: rpcError } = await supabaseAdmin
+            .rpc("request_withdraw", { 
+                p_amount: withdrawAmount, 
+                p_bank_name: bank_name,
+                p_bank_account: account_number,
+                p_bank_holder: account_name
             })
 
         if (rpcError) {
             console.error("[Shop Withdraw RPC Error]", rpcError.message)
-            const isBalanceErr = rpcError.message.includes("Saldo tidak mencukupi")
+            const isBalanceErr = rpcError.message.toLowerCase().includes("insufficient")
             return NextResponse.json({ 
                 error: isBalanceErr ? "Saldo tidak mencukupi" : "Gagal memproses penarikan" 
             }, { status: isBalanceErr ? 400 : 500 })
         }
 
-        // 3. Insert withdraw request
-        await supabaseAdmin.from("shop_withdraw_requests").insert({
-            shop_id: shop.id,
-            amount: withdrawAmount,
-            bank_name,
-            account_number,
-            account_name,
-            status: "pending",
-        })
-
-        // 4. Insert log riwayat saldo
-        await supabaseAdmin.from("shop_balance_logs").insert({
-            shop_id: shop.id,
-            type: "withdraw",
-            amount: -withdrawAmount,
-            balance_after: newBalance,
-            description: `Penarikan ke ${bank_name} ${account_number} a/n ${account_name}`,
-        })
-
-        return NextResponse.json({ success: true, newBalance })
+        return NextResponse.json({ success: true, requestId })
     } catch (err: any) {
         console.error("[Shop Withdraw Error]", err)
         return NextResponse.json({ error: "Terjadi kesalahan internal." }, { status: 500 })

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
-import { supabaseAdmin, addDriverCommission } from "@/lib/driverOrders"
+import { supabaseAdmin } from "@/lib/driverOrders"
 
 const STATUS_MAP: Record<string, string> = {
     arrived_at_store: "Kurir di Toko",
@@ -73,10 +73,16 @@ export async function POST(req: Request) {
         const orderUpdatePayload: any = { status: STATUS_MAP[status] }
         await supabaseAdmin.from("orders").update(orderUpdatePayload).eq("id", orderId)
 
-        // Commission: credit driver saldo on delivery
+        // Commission: credit wallets automatically via RPC
         let commission = 0
         if (status === "delivered") {
-            commission = (await addDriverCommission(driverId, orderId)) || 0
+            const { error: rpcErr } = await supabaseAdmin.rpc("distribute_commission", { p_order_id: orderId })
+            if (rpcErr) {
+                console.error("[Commission RPC Error]", rpcErr)
+                // Fallback or handle accordingly. For now, we log it.
+            } else {
+                console.log(`✅ [Commission] Admin RPC distribute_commission success for order ${orderId}`)
+            }
 
             // Increment sold_count for each product in the order
             try {

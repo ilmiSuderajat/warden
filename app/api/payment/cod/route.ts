@@ -132,7 +132,7 @@ async function deductShopCommission(
   try {
     const { data: shop } = await supabase
       .from("shops")
-      .select("id, balance, cod_enabled")
+      .select("id, owner_id, balance")
       .eq("id", shopId)
       .single()
 
@@ -140,28 +140,41 @@ async function deductShopCommission(
 
     const subtotal = order.subtotal_amount || order.total_amount || 0
     const commission = Math.round(subtotal * PLATFORM_COMMISSION_RATE)
-    const newBalance = (shop.balance || 0) - commission
-    const shouldDisableCod = newBalance < COD_DISABLE_THRESHOLD
+    
+    // 1. Update unified wallet (Source of Truth)
+    const { data: wallet } = await supabase
+      .from("wallets")
+      .select("balance")
+      .eq("user_id", shop.owner_id)
+      .single()
 
+    const newWalletBalance = (wallet?.balance || 0) - commission
+    const shouldDisableCod = newWalletBalance < COD_DISABLE_THRESHOLD
+
+    // a. Update wallet table
+    await supabase.from("wallets").update({ balance: newWalletBalance }).eq("user_id", shop.owner_id)
+
+    // b. Create unified transaction record
+    await supabase.rpc('create_wallet_transaction', {
+      p_user_id: shop.owner_id,
+      p_order_id: orderId,
+      p_type: 'refund', // or 'commission_debit' if it exists, using 'refund' as a generic debit type for now or 'withdraw'
+      p_amount: -commission,
+      p_desc: `Debit Komisi COD 5% Order #${orderId.slice(0, 8)}`
+    })
+
+    // 2. Sync to legacy shops table and status (backward compatibility)
+    const newShopBalance = (shop.balance || 0) - commission
     await supabase
       .from("shops")
       .update({
-        balance: newBalance,
-        ...(shouldDisableCod ? { cod_enabled: false } : {}),
+        balance: newShopBalance,
+        cod_enabled: !shouldDisableCod,
       })
       .eq("id", shopId)
 
-    await supabase.from("shop_balance_logs").insert({
-      shop_id: shopId,
-      type: "cod_debit",
-      amount: -commission,
-      balance_after: newBalance,
-      description: `Komisi COD 5% dari pesanan #${orderId.slice(0, 8)}`,
-      order_id: orderId,
-    })
-
     if (shouldDisableCod) {
-      console.warn(`⚠️ [COD] Shop ${shopId} saldo ${newBalance} < ${COD_DISABLE_THRESHOLD} → COD dinonaktifkan`)
+      console.warn(`⚠️ [COD] Shop ${shopId} wallet balance ${newWalletBalance} < ${COD_DISABLE_THRESHOLD} → COD disabled`)
     }
   } catch (err) {
     console.error("[deductShopCommission] Error:", err)
