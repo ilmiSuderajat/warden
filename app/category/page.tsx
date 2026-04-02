@@ -1,14 +1,15 @@
 "use client"
 
-import { useEffect, useState, useRef, Suspense } from "react"
+import { useEffect, useState, useRef, Suspense, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import * as Icons from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Loader2, Package, MapPin } from "lucide-react"
+import { ArrowLeft, Loader2, Package, MapPin, Star } from "lucide-react"
 import ProductCardSkeleton from "../components/ProductCardSkeleton"
 import { calculateDistance, formatDistance } from "@/lib/geo"
 import { useUserLocation } from "@/hooks/useUserLocation"
+import ErrorBoundary from "../components/ErrorBoundary"
 
 function CategoryContent() {
   const router = useRouter()
@@ -91,10 +92,15 @@ function CategoryContent() {
     fetchProducts(selectedCat, 0)
     
     // Sinkronkan URL agar bisa dibagikan (ubah ?id=xxx tanpa refresh)
-    const newUrl = new URL(window.location.href)
-    newUrl.searchParams.set("id", selectedCat)
-    window.history.replaceState({}, '', newUrl.toString())
-    
+    try {
+      const newUrl = new URL(window.location.href)
+      if (selectedCat) {
+        newUrl.searchParams.set("id", selectedCat)
+        window.history.replaceState({}, '', newUrl.toString())
+      }
+    } catch (e) {
+      console.warn("Failed to sync URL:", e)
+    }
   }, [selectedCat])
 
   // 3. Infinite Scroll Observer
@@ -119,8 +125,18 @@ function CategoryContent() {
 
   const currentCategoryName = categories.find(c => c.id === selectedCat)?.name || "Produk"
 
+  // Safe Icon Resolver to prevent crashes from invalid icon_name
+  const getCategoryIcon = (iconName: string) => {
+    try {
+      const IconComp = (Icons as any)[iconName]
+      return typeof IconComp === 'function' ? IconComp : Package
+    } catch (e) {
+      return Package
+    }
+  }
+
   return (
-    <div className="bg-zinc-50 max-w-md mx-auto font-sans text-zinc-900 h-screen overflow-hidden flex flex-col">
+    <div className="bg-zinc-50 max-w-md mx-auto font-sans text-zinc-900 h-[100dvh] overflow-hidden flex flex-col">
       {/* FLOATING HEADER */}
       <header className="flex-none bg-white/80 backdrop-blur-lg border-b border-zinc-100/80 z-50">
         <div className="w-full h-14 flex items-center px-4">
@@ -145,7 +161,7 @@ function CategoryContent() {
         <aside className="w-[85px] bg-white border-r border-zinc-100/80 overflow-y-auto no-scrollbar py-3 z-40 shrink-0 shadow-[2px_0_8px_rgba(0,0,0,0.02)]">
           <div className="flex flex-col gap-1.5 px-2">
             {categories.map((cat) => {
-              const Icon = (Icons as any)[cat.icon_name] || Package
+              const Icon = getCategoryIcon(cat.icon_name)
               const isActive = selectedCat === cat.id
 
               return (
@@ -223,7 +239,7 @@ function CategoryContent() {
                       
                       {/* Bintang & Terjual */}
                       <div className="flex items-center gap-1 mt-1">
-                        <Icons.Star size={10} className="text-orange-400 fill-orange-400" />
+                        <Star size={10} className="text-orange-400 fill-orange-400" />
                         <span className="text-[10px] font-bold text-zinc-600">{(p.rating || 5.0).toFixed(1)}</span>
                         <span className="text-[9px] text-zinc-400 ml-1 truncate">{p.sold_count || 0} terjual</span>
                       </div>
@@ -275,7 +291,8 @@ function CategoryContent() {
 
 export default function CategoryPage() {
   return (
-    <Suspense fallback={
+    <ErrorBoundary>
+      <Suspense fallback={
       <div className="bg-zinc-50 min-h-screen max-w-md mx-auto flex flex-col items-center justify-center">
         <Loader2 className="animate-spin text-zinc-400 mb-2" size={24} />
         <span className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">Memuat Kategori...</span>
@@ -283,5 +300,6 @@ export default function CategoryPage() {
     }>
       <CategoryContent />
     </Suspense>
+    </ErrorBoundary>
   )
 }

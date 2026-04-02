@@ -27,7 +27,11 @@ export function useUserLocation() {
             (err) => {
                 setError(err.message)
             },
-            { enableHighAccuracy: true }
+            { 
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 60000
+            }
         )
     }, [])
 

@@ -14,10 +14,12 @@ declare global {
 
 type BalanceLog = {
     id: string
+    seq: number
     type: "commission_online" | "commission_cod_debit" | "topup" | "withdraw"
     amount: number
     balance_after: number
     description: string | null
+    order_id: string | null
     created_at: string | null
 }
 

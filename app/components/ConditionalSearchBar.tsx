@@ -22,7 +22,8 @@ export default function ConditionalSearchBar() {
   const isChat = pathname.startsWith('/chat');
   const isShopPage = pathname.startsWith('/shop');
   const isDriverPage = pathname.startsWith('/driver');
-  if (isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isProductDetailPage || isAdressPage || isFlashSale || isReady || isWishlist || isPromo || isChat || isShopPage || isDriverPage) return null;
+  const isWalletPage = pathname.startsWith('/wallet');
+  if (isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isProductDetailPage || isAdressPage || isFlashSale || isReady || isWishlist || isPromo || isChat || isShopPage || isDriverPage || isWalletPage) return null;
 
   return (
     <Suspense fallback={<div className="h-16 bg-white animate-pulse" />}>
