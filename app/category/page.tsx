@@ -36,37 +36,58 @@ function CategoryContent() {
   const [isFetchingMore, setIsFetchingMore] = useState(false)
   const [sortBy, setSortBy] = useState("newest")
   const [showSort, setShowSort] = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const { location: userLoc } = useUserLocation()
 
   const loaderRef = useRef<HTMLDivElement>(null)
   const PAGE_SIZE = 8
 
+  // PERBAIKAN 1: Mount component dan fetch categories dengan error handling yang lebih baik
   useEffect(() => {
     setIsMounted(true)
     const fetchCats = async () => {
       try {
         setIsCatsLoading(true)
-        const { data, error } = await supabase.from("categories").select("*").order("name")
-        if (error) throw error
+        setFetchError(null)
+        const { data, error } = await supabase
+          .from("categories")
+          .select("*")
+          .order("name")
+
+        if (error) {
+          console.error("Category fetch error:", error)
+          setFetchError("Gagal memuat kategori")
+          return
+        }
+
         if (data && data.length > 0) {
           setCategories(data)
-          // If no selected category from URL, default to the first one
-          if (!selectedCat) setSelectedCat(data[0].id)
+          // Jika tidak ada kategori yang dipilih dari URL, gunakan kategori pertama
+          if (!selectedCat) {
+            setSelectedCat(data[0].id)
+          }
+        } else {
+          setFetchError("Tidak ada kategori tersedia")
         }
       } catch (err) {
         console.error("Error fetching categories:", err)
+        setFetchError("Error mengambil kategori")
       } finally {
         setIsCatsLoading(false)
       }
     }
-    fetchCats()
-  }, [])
 
+    fetchCats()
+  }, [selectedCat])
+
+  // PERBAIKAN 2: Fetch products dengan timeout dan better error handling
   const fetchProducts = async (catId: string, pageNum: number, sort = sortBy) => {
     if (pageNum === 0) setLoading(true)
     else setIsFetchingMore(true)
+
     const from = pageNum * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
+
     try {
       let query = supabase
         .from("products")
@@ -80,14 +101,23 @@ function CategoryContent() {
       else if (sort === "best_selling") query = query.order("sold_count", { ascending: false })
 
       const { data, error } = await query.range(from, to)
-      if (error) throw error
+
+      if (error) {
+        console.error("Products fetch error:", error)
+        setFetchError("Gagal memuat produk")
+        if (pageNum === 0) setProducts([])
+        return
+      }
+
       if (data) {
         if (pageNum === 0) setProducts(data)
         else setProducts(prev => [...prev, ...data])
         setHasMore(data.length === PAGE_SIZE)
+        setFetchError(null)
       }
     } catch (err) {
       console.error("Error fetching products:", err)
+      setFetchError("Error mengambil produk")
       if (pageNum === 0) setProducts([])
     } finally {
       setLoading(false)
@@ -95,14 +125,16 @@ function CategoryContent() {
     }
   }
 
+  // PERBAIKAN 3: Dependency array yang lebih akurat
   useEffect(() => {
-    if (!selectedCat) return
+    if (!selectedCat || !isMounted) return
+
     setPage(0)
     setHasMore(true)
     fetchProducts(selectedCat, 0, sortBy)
 
-    // Sync URL without full refresh, safely
-    if (isMounted) {
+    // Sinkronisasi URL tanpa full refresh
+    if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search)
       if (params.get("id") !== selectedCat) {
         params.set("id", selectedCat)
@@ -111,20 +143,24 @@ function CategoryContent() {
     }
   }, [selectedCat, sortBy, isMounted])
 
+  // PERBAIKAN 4: Infinite scroll observer dengan dependency yang lebih baik
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loading && !isFetchingMore && selectedCat) {
           const nextPage = page + 1
           setPage(nextPage)
-          fetchProducts(selectedCat, nextPage)
+          fetchProducts(selectedCat, nextPage, sortBy)
         }
       },
       { threshold: 1.0 }
     )
+
     if (loaderRef.current) observer.observe(loaderRef.current)
-    return () => observer.disconnect()
-  }, [hasMore, loading, isFetchingMore, page, selectedCat])
+    return () => {
+      if (loaderRef.current) observer.unobserve(loaderRef.current)
+    }
+  }, [hasMore, loading, isFetchingMore, page, selectedCat, sortBy])
 
   const currentCategory = categories.find(c => c.id === selectedCat)
   const currentCategoryName = currentCategory?.name || "Produk"
@@ -133,19 +169,42 @@ function CategoryContent() {
     try {
       const IconComp = (Icons as any)[iconName]
       return typeof IconComp === "function" ? IconComp : Package
-    } catch { return Package }
+    } catch {
+      return Package
+    }
   }
 
-  if (!isMounted) {
+  // PERBAIKAN 5: Loading state dengan timeout
+  if (!isMounted || (isCatsLoading && categories.length === 0)) {
     return (
       <div className="bg-[#F5F5F5] h-screen max-w-md mx-auto flex flex-col items-center justify-center gap-3">
         <Loader2 className="animate-spin text-[#EE4D2D]" size={24} />
+        <span className="text-[10px] text-gray-400">Memuat kategori...</span>
+      </div>
+    )
+  }
+
+  // PERBAIKAN 6: Error state display
+  if (fetchError && categories.length === 0) {
+    return (
+      <div className="bg-[#F5F5F5] h-screen max-w-md mx-auto flex flex-col items-center justify-center gap-4 px-4">
+        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
+          <Package size={32} className="text-red-400" />
+        </div>
+        <h3 className="text-sm font-bold text-gray-800">Terjadi Kesalahan</h3>
+        <p className="text-[11px] text-gray-500 text-center">{fetchError}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-6 py-2.5 bg-[#EE4D2D] text-white text-[11px] font-bold rounded-full shadow-md active:scale-95 transition-transform"
+        >
+          Coba Lagi
+        </button>
       </div>
     )
   }
 
   return (
-    <div className="bg-[#F5F5F5] max-w-md mx-auto font-sans text-gray-900 h-screen overflow-hidden flex flex-col">
+    <div className="bg-[#F5F5F5] max-w-md mx-auto font-sans text-gray-900 min-h-screen overflow-hidden flex flex-col">
       {/* ── TOP HEADER ── */}
       <header className="flex-none bg-[#EE4D2D] z-50 shadow-sm">
         {/* Search Bar Row */}
@@ -153,6 +212,7 @@ function CategoryContent() {
           <button
             onClick={() => router.push("/")}
             className="text-white p-1 rounded-full hover:bg-white/10 transition-colors shrink-0"
+            aria-label="Kembali"
           >
             <ArrowLeft size={20} strokeWidth={2.5} />
           </button>
@@ -160,11 +220,15 @@ function CategoryContent() {
             <Search size={14} className="text-gray-400 shrink-0" />
             <span className="text-[12px] text-gray-400 truncate">Cari di {currentCategoryName}</span>
           </div>
-          <button className="relative text-white p-1 shrink-0 active:scale-90 transition-transform">
+          <button
+            className="relative text-white p-1 shrink-0 active:scale-90 transition-transform"
+            aria-label="Keranjang belanja"
+          >
             <ShoppingBag size={20} />
             <span className="absolute -top-0.5 -right-0.5 bg-yellow-400 text-[#EE4D2D] text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center border border-[#EE4D2D]">2</span>
           </button>
         </div>
+
         {/* Category scrollable tabs */}
         <div className="overflow-x-auto no-scrollbar px-3 pb-2.5 pt-0.5">
           <div className="flex gap-1.5">
@@ -178,6 +242,7 @@ function CategoryContent() {
                     ? "bg-white text-[#EE4D2D] shadow-sm"
                     : "bg-white/20 text-white"
                     }`}
+                  aria-current={isActive ? "page" : undefined}
                 >
                   {cat.name}
                 </button>
@@ -200,9 +265,10 @@ function CategoryContent() {
                 onClick={() => setSelectedCat(cat.id)}
                 className={`w-full py-2.5 px-1 flex flex-col items-center gap-1 relative transition-all active:scale-95 ${isActive ? "bg-orange-50" : "hover:bg-gray-50"
                   }`}
+                aria-current={isActive ? "page" : undefined}
               >
                 {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-8 bg-[#EE4D2D] rounded-r-full" />
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-8 bg-[#EE4D2D] rounded-r-full" aria-hidden="true" />
                 )}
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${isActive
                   ? "bg-[#EE4D2D] shadow-md shadow-[#EE4D2D]/30"
@@ -212,6 +278,7 @@ function CategoryContent() {
                     size={17}
                     className={isActive ? "text-white" : "text-gray-500"}
                     strokeWidth={isActive ? 2.5 : 2}
+                    aria-hidden="true"
                   />
                 </div>
                 <span className={`text-[9.5px] font-bold leading-tight line-clamp-2 text-center w-full px-0.5 ${isActive ? "text-[#EE4D2D]" : "text-gray-500"
@@ -224,20 +291,22 @@ function CategoryContent() {
         </aside>
 
         {/* MAIN CONTENT */}
-        <main className="flex-1 overflow-y-auto bg-[#F5F5F5]">
+        <main className="flex-1 overflow-y-auto bg-[#F5F5F5] w-full">
           {/* Filter/Sort Bar */}
-          <div className="top-0 z-30 bg-white border-b border-gray-100 shadow-sm">
+          <div className="sticky top-0 z-30 bg-white border-b border-gray-100 shadow-sm w-full">
             <div className="flex items-center px-2 py-1.5 gap-1 overflow-x-auto no-scrollbar">
               {/* Sort dropdown */}
               <div className="relative shrink-0">
                 <button
                   onClick={() => setShowSort(!showSort)}
                   className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border border-gray-200 text-[10px] font-bold text-gray-700 bg-white whitespace-nowrap hover:border-[#EE4D2D] transition-colors"
+                  aria-label="Urutkan produk"
                 >
                   <SlidersHorizontal size={10} />
                   {SORT_OPTIONS.find(s => s.value === sortBy)?.label}
                   <ChevronDown size={9} className={`transition-transform ${showSort ? "rotate-180" : ""}`} />
                 </button>
+
                 {showSort && (
                   <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden min-w-[120px]">
                     {SORT_OPTIONS.map(opt => (
@@ -266,8 +335,9 @@ function CategoryContent() {
                 <button
                   key={label}
                   className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-[10px] font-bold whitespace-nowrap shrink-0 ${color}`}
+                  aria-label={label}
                 >
-                  <Icon size={9} />
+                  <Icon size={9} aria-hidden="true" />
                   {label}
                 </button>
               ))}
@@ -275,7 +345,7 @@ function CategoryContent() {
           </div>
 
           {/* Products Grid */}
-          <div className="p-1.5 pt-2">
+          <div className="p-1.5 pt-2 w-full">
             {loading && products.length === 0 ? (
               <div className="grid grid-cols-2 gap-1.5">
                 {Array(6).fill(0).map((_, i) => (
@@ -283,7 +353,7 @@ function CategoryContent() {
                 ))}
               </div>
             ) : products.length > 0 ? (
-              <div className="grid grid-cols-2 gap-1.5 pb-20">
+              <div className="grid grid-cols-2 gap-1.5 pb-20 w-full">
                 {products.map((p) => {
                   const img = Array.isArray(p.image_url) ? p.image_url[0] : p.image_url
                   const discount = p.original_price > p.price
@@ -294,15 +364,18 @@ function CategoryContent() {
                     <Link
                       href={`/product/${p.id}`}
                       key={p.id}
-                      className="bg-white rounded-lg overflow-hidden shadow-sm active:scale-[0.98] transition-transform flex flex-col"
+                      className="bg-white rounded-lg overflow-hidden shadow-sm active:scale-[0.98] transition-transform flex flex-col h-full"
                     >
                       {/* Product Image */}
-                      <div className="aspect-square bg-gray-100 relative overflow-hidden">
+                      <div className="aspect-square bg-gray-100 relative overflow-hidden flex-shrink-0">
                         <img
                           src={img || "/placeholder.png"}
                           className="w-full h-full object-cover"
                           alt={p.name}
                           loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.src = "/placeholder.png"
+                          }}
                         />
                         {discount > 0 && (
                           <div className="absolute top-0 left-0 bg-[#EE4D2D] text-white text-[9px] font-black px-1.5 py-0.5 rounded-br-md">
@@ -311,7 +384,7 @@ function CategoryContent() {
                         )}
                         {p.is_featured && (
                           <div className="absolute bottom-1.5 left-1.5 bg-yellow-400 text-[8px] font-black text-yellow-900 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                            <Star size={7} className="fill-yellow-900" />
+                            <Star size={7} className="fill-yellow-900" aria-hidden="true" />
                             PILIHAN
                           </div>
                         )}
@@ -326,11 +399,11 @@ function CategoryContent() {
                         {/* Price */}
                         <div className="mt-0.5">
                           <p className="text-[13px] font-black text-[#EE4D2D] leading-none">
-                            Rp{p.price?.toLocaleString("id-ID")}
+                            Rp{p.price?.toLocaleString("id-ID") || "0"}
                           </p>
                           {discount > 0 && (
                             <p className="text-[9px] text-gray-400 line-through mt-0.5">
-                              Rp{p.original_price?.toLocaleString("id-ID")}
+                              Rp{p.original_price?.toLocaleString("id-ID") || "0"}
                             </p>
                           )}
                         </div>
@@ -338,12 +411,12 @@ function CategoryContent() {
                         {/* Rating + sold */}
                         <div className="flex items-center gap-1 mt-1">
                           <div className="flex items-center gap-0.5">
-                            <Star size={9} className="text-yellow-400 fill-yellow-400" />
+                            <Star size={9} className="text-yellow-400 fill-yellow-400" aria-hidden="true" />
                             <span className="text-[9px] font-bold text-gray-600">
                               {(p.rating || 5.0).toFixed(1)}
                             </span>
                           </div>
-                          <span className="text-[8px] text-gray-300">|</span>
+                          <span className="text-[8px] text-gray-300" aria-hidden="true">|</span>
                           <span className="text-[9px] text-gray-500">
                             {p.sold_count > 999
                               ? `${(p.sold_count / 1000).toFixed(1)}rb`
@@ -353,11 +426,12 @@ function CategoryContent() {
 
                         {/* Location */}
                         <div className="flex items-center gap-1 mt-0.5">
-                          <MapPin size={9} className="text-gray-400 shrink-0" />
+                          <MapPin size={9} className="text-gray-400 shrink-0" aria-hidden="true" />
                           <span className="text-[9px] text-gray-400 truncate">
                             {p.shops?.address || p.location || "Lokasi"}
                           </span>
                         </div>
+
                         {userLoc && (p.shops?.latitude || p.latitude) && (p.shops?.longitude || p.longitude) && (
                           <span className="text-[9px] text-[#EE4D2D] font-bold">
                             📍 {formatDistance(calculateDistance(
@@ -424,7 +498,11 @@ function CategoryContent() {
 
       {/* Overlay dismiss for sort dropdown */}
       {showSort && (
-        <div className="fixed inset-0 z-20" onClick={() => setShowSort(false)} />
+        <div
+          className="fixed inset-0 z-20"
+          onClick={() => setShowSort(false)}
+          aria-hidden="true"
+        />
       )}
     </div>
   )
