@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { ArrowLeft, Loader2, Zap, Clock, ToggleLeft, ToggleRight, CheckCircle, Search, Hash } from "lucide-react"
+import { 
+  ArrowLeft, Loader2, Zap, Clock, ToggleLeft, ToggleRight, 
+  CheckCircle, Search, Hash, ImagePlus, ChevronRight, Check, 
+  Link as LinkIcon, Tag, Info
+} from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import imageCompression from "browser-image-compression"
-import { ImagePlus } from "lucide-react"
 
 export default function ManageFlashSalePage() {
   const router = useRouter()
@@ -19,26 +22,25 @@ export default function ManageFlashSalePage() {
   const [editingSoldCount, setEditingSoldCount] = useState<{ id: string; value: string } | null>(null)
   const [savingSoldCount, setSavingSoldCount] = useState(false)
   const [endDate, setEndDate] = useState("")
-  const [savingDate, setSavingDate] = useState(false)
-   const [activeBanner, setActiveBanner] = useState<any>(null)
+  const [activeBanner, setActiveBanner] = useState<any>(null)
  
-   const [bannerTitle, setBannerTitle] = useState("")
-   const [imageFile, setImageFile] = useState<File | null>(null)
-   const [imagePreview, setImagePreview] = useState("")
-   const [savingBanner, setSavingBanner] = useState(false)
+  const [bannerTitle, setBannerTitle] = useState("")
+  const [discountText, setDiscountText] = useState("")
+  const [linkUrl, setLinkUrl] = useState("")
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState("")
+  const [savingBanner, setSavingBanner] = useState(false)
 
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true)
 
-      // Semua produk + status flash sale
       const { data: pData } = await supabase
         .from("products")
         .select("id, name, price, original_price, image_url, is_flash_sale, sold_count")
         .order("name")
       if (pData) setProducts(pData)
 
-      // Banner aktif untuk end_date
       const { data: bData } = await supabase
         .from("flash_sale_banners")
         .select("*")
@@ -51,6 +53,8 @@ export default function ManageFlashSalePage() {
         setActiveBanner(bData)
         setEndDate(bData.end_date ? new Date(bData.end_date).toISOString().slice(0, 16) : "")
         setBannerTitle(bData.title || "")
+        setDiscountText(bData.discount_text || "")
+        setLinkUrl(bData.link_url || "")
         setImagePreview(bData.image_url || "")
       }
 
@@ -66,7 +70,6 @@ export default function ManageFlashSalePage() {
 
   const activeCount = products.filter(p => p.is_flash_sale).length
 
-  // Toggle flash sale produk
   const handleToggle = async (product: any) => {
     setToggling(product.id)
     const newVal = !product.is_flash_sale
@@ -90,7 +93,6 @@ export default function ManageFlashSalePage() {
     setToggling(null)
   }
 
-  // Simpan sold_count
   const handleSaveSoldCount = async () => {
     if (!editingSoldCount) return
     setSavingSoldCount(true)
@@ -115,7 +117,6 @@ export default function ManageFlashSalePage() {
     }
   }
 
-  // Handle Image Change
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -126,7 +127,6 @@ export default function ManageFlashSalePage() {
     }
   }
 
-  // Simpan Banner (Title, Image, Countdown)
   const handleSaveBanner = async () => {
     if (!endDate) return toast.error("Pilih waktu berakhir dulu!")
     setSavingBanner(true)
@@ -134,7 +134,6 @@ export default function ManageFlashSalePage() {
     try {
       let finalImageUrl = activeBanner?.image_url || ""
 
-      // Upload image if changed
       if (imageFile) {
         const options = { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true }
         const compressed = await imageCompression(imageFile, options)
@@ -158,6 +157,8 @@ export default function ManageFlashSalePage() {
       const payload = {
         title: bannerTitle || "Flash Sale",
         image_url: finalImageUrl,
+        discount_text: discountText,
+        link_url: linkUrl,
         end_date: isoDate,
         is_active: true
       }
@@ -188,258 +189,251 @@ export default function ManageFlashSalePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-10">
+    <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-24 selection:bg-orange-100">
 
       {/* HEADER */}
-      <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
-        <div className="flex items-center justify-between px-5 pt-12 pb-4">
+      <div className="bg-white sticky top-0 z-40 border-b border-slate-100/60 backdrop-blur-md bg-white/80">
+        <div className="px-5 pt-12 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => router.back()}
+              onClick={() => router.push('/admin')}
               className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors"
             >
               <ArrowLeft size={20} strokeWidth={2.5} />
             </button>
             <div>
-              <h1 className="text-lg font-bold text-slate-900 tracking-tight">Flash Sale</h1>
-              <p className="text-[10px] font-medium text-slate-400">Kelola produk & countdown</p>
+              <h1 className="text-lg font-extrabold text-slate-900 tracking-tight">Flash Sale</h1>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Atur Countdown & Produk</p>
             </div>
           </div>
-          {activeCount > 0 && (
-            <div className="flex items-center gap-1 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-100">
-              <Zap size={11} className="text-orange-500 fill-orange-500" />
-              <span className="text-[10px] font-bold text-orange-500">{activeCount} Aktif</span>
+          <div className="flex items-center gap-2">
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all ${activeCount > 0 ? 'bg-orange-50 border-orange-100 text-orange-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
+              <Zap size={11} className={activeCount > 0 ? "fill-orange-400" : ""} />
+              <span className="text-[10px] font-black uppercase tracking-tight">{activeCount} Produk</span>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-5">
 
-        {/* ── BANNER & COUNTDOWN ── */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="px-4 pt-4 pb-3 border-b border-slate-50 flex items-center gap-3">
-            <div className="p-2 bg-indigo-50 rounded-xl">
-              <Clock size={16} className="text-indigo-500" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-800">Banner & Countdown</h3>
-              <p className="text-[10px] text-slate-400">Atur tampilan promo di halaman depan</p>
-            </div>
-          </div>
-
-          <div className="p-4 space-y-4">
-            {/* Upload Gambar Banner */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Gambar Banner</label>
-              <label className="block aspect-[21/9] bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 cursor-pointer overflow-hidden hover:border-indigo-300 transition-colors relative">
-                {imagePreview ? (
-                  <img src={imagePreview} className="w-full h-full object-cover" alt="preview" />
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-300">
-                    <ImagePlus size={24} />
-                    <span className="text-[9px] mt-2 font-bold uppercase tracking-tighter">Upload Banner</span>
-                  </div>
-                )}
-                <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-              </label>
+        {/* ── BANNER & COUNTDOWN PREMIUM ── */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden p-6 space-y-5">
+            <div className="flex items-center gap-3 mb-2">
+                <div className="p-2.5 bg-orange-50 text-orange-500 rounded-2xl">
+                    <Clock size={20} strokeWidth={2.5} />
+                </div>
+                <div>
+                   <h3 className="text-base font-black text-slate-800 tracking-tight">Visi & Waktu</h3>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Konfigurasi Banner Utama</p>
+                </div>
             </div>
 
-            {/* Judul Promo */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Judul Promo</label>
-              <input
-                type="text"
-                placeholder="Contoh: Flash Sale Lebaran"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:ring-1 focus:ring-indigo-400 transition-all font-medium"
-                value={bannerTitle}
-                onChange={e => setBannerTitle(e.target.value)}
-              />
-            </div>
-
-            {/* Waktu Berakhir */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Waktu Berakhir</label>
-              <input
-                type="datetime-local"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:ring-1 focus:ring-indigo-400 transition-all font-medium"
-                value={endDate}
-                onChange={e => setEndDate(e.target.value)}
-              />
-            </div>
-
-            {endDate && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 rounded-xl border border-indigo-100">
-                <CheckCircle size={12} className="text-indigo-400 flex-shrink-0" />
-                <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">
-                  Ends: {new Date(endDate).toLocaleString("id-ID", {
-                    weekday: "long", day: "numeric", month: "long",
-                    hour: "2-digit", minute: "2-digit"
-                  })}
-                </span>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={handleSaveBanner}
-              disabled={savingBanner || !endDate}
-              className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-200 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-slate-200"
-            >
-              {savingBanner
-                ? <><Loader2 size={14} className="animate-spin" />Menyimpan...</>
-                : <><Zap size={14} className="fill-white" />Update Banner Flash Sale</>
-              }
-            </button>
-          </div>
-        </div>
-
-        {/* ── PRODUCT LIST ── */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="px-4 pt-4 pb-3 border-b border-slate-50 flex items-center gap-3">
-            <div className="p-2 bg-orange-50 rounded-xl">
-              <Zap size={16} className="text-orange-500" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-800">Produk Flash Sale</h3>
-              <p className="text-[10px] text-slate-400">Toggle untuk aktif/nonaktif</p>
-            </div>
-          </div>
-
-          {/* Search */}
-          <div className="px-4 py-3 border-b border-slate-50">
-            <div className="relative">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Cari produk..."
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-200 transition-all placeholder:text-slate-300"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* List */}
-          {loading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 size={20} className="animate-spin text-slate-300" />
-            </div>
-          ) : filteredProducts.length === 0 ? (
-            <p className="text-center text-sm text-slate-400 py-10">Produk tidak ditemukan</p>
-          ) : (
-            <div className="divide-y divide-slate-50">
-              {filteredProducts.map(p => {
-                const img = Array.isArray(p.image_url) ? p.image_url[0] : p.image_url
-                const isOn = p.is_flash_sale
-                const isToggling = toggling === p.id
-
-                return (
-                  <div
-                    key={p.id}
-                    className={`transition-colors ${isOn ? "bg-orange-50/50" : "bg-white"}`}
-                  >
-                    {/* Row utama */}
-                    <div className="flex items-center gap-3 px-4 py-3">
-                      {/* Thumbnail */}
-                      <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0">
-                        {img
-                          ? <img src={img} alt={p.name} className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center"><Zap size={14} className="text-slate-300" /></div>
-                        }
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-semibold truncate ${isOn ? "text-slate-900" : "text-slate-700"}`}>
-                          {p.name}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className={`text-[10px] font-bold ${isOn ? "text-orange-500" : "text-slate-400"}`}>
-                            Rp {(p.price || 0).toLocaleString("id-ID")}
-                          </span>
-                          {p.original_price && isOn && (
-                            <span className="text-[9px] text-slate-300 line-through">
-                              Rp {p.original_price.toLocaleString("id-ID")}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Toggle */}
-                      <button
-                        type="button"
-                        onClick={() => handleToggle(p)}
-                        disabled={isToggling}
-                        className="flex-shrink-0 transition-transform active:scale-95"
-                      >
-                        {isToggling
-                          ? <Loader2 size={24} className="animate-spin text-slate-300" />
-                          : isOn
-                            ? <ToggleRight size={32} className="text-orange-500" />
-                            : <ToggleLeft size={32} className="text-slate-300" />
-                        }
-                      </button>
-                    </div>
-
-                    {/* Simulasi terjual — hanya muncul kalau flash sale aktif */}
-                    {isOn && (
-                      <div className="px-4 pb-3">
-                        {editingSoldCount?.id === p.id ? (
-                          <div className="flex items-center gap-2">
-                            <div className="relative flex-1">
-                              <Hash size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                              <input
-                                type="number"
-                                min="0"
-                                autoFocus
-                                placeholder="Jumlah terjual"
-                                className="w-full pl-8 pr-3 py-2 bg-white border border-orange-200 rounded-xl text-xs text-slate-700 outline-none focus:ring-1 focus:ring-orange-400 transition-all"
-                                value={editingSoldCount!.value}
-                                onChange={e => setEditingSoldCount({ id: p.id, value: e.target.value })}
-                                onKeyDown={e => {
-                                  if (e.key === "Enter") handleSaveSoldCount()
-                                  if (e.key === "Escape") setEditingSoldCount(null)
-                                }}
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleSaveSoldCount}
-                              disabled={savingSoldCount}
-                              className="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center gap-1"
-                            >
-                              {savingSoldCount ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
-                              Simpan
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingSoldCount(null)}
-                              className="px-2 py-2 text-slate-400 hover:text-slate-600 text-xs rounded-xl transition-all"
-                            >
-                              Batal
-                            </button>
-                          </div>
+            <div className="space-y-4">
+                {/* Upload Gambar Banner Premium Look */}
+                <div className="group">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Hero Image Flash Sale</label>
+                    <label className="block aspect-[21/9] bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 cursor-pointer overflow-hidden hover:border-orange-300 transition-all relative">
+                        {imagePreview ? (
+                            <img src={imagePreview} className="w-full h-full object-cover" alt="preview" />
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => setEditingSoldCount({ id: p.id, value: String(p.sold_count || 0) })}
-                            className="flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-orange-500 transition-colors group/sold"
-                          >
-                            <Hash size={10} className="group-hover/sold:text-orange-500" />
-                            <span>Simulasi terjual: <span className="font-bold text-slate-600">{p.sold_count || 0}</span></span>
-                            <span className="text-indigo-400 font-semibold">· Edit</span>
-                          </button>
+                            <div className="flex flex-col items-center justify-center h-full text-slate-300">
+                                <ImagePlus size={32} strokeWidth={1.5} />
+                                <span className="text-[9px] mt-2 font-black uppercase tracking-tighter">Pilih Visual Banner</span>
+                            </div>
                         )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                        <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                    </label>
+                </div>
+
+                <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                       <Hash size={10} className="text-orange-400" /> Judul Kampanye
+                    </label>
+                    <input
+                        type="text"
+                        placeholder="Flash Sale Lebaran / Akhir Pekan"
+                        value={bannerTitle}
+                        onChange={e => setBannerTitle(e.target.value)}
+                        className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:ring-2 focus:ring-orange-100 transition-all"
+                    />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                         <Tag size={10} className="text-orange-400" /> Label Diskon
+                      </label>
+                      <input
+                          type="text"
+                          placeholder="Diskon s/d 50%"
+                          value={discountText}
+                          onChange={e => setDiscountText(e.target.value)}
+                          className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:ring-2 focus:ring-orange-100 transition-all"
+                      />
+                   </div>
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                         <LinkIcon size={10} className="text-orange-400" /> URL Link
+                      </label>
+                      <input
+                          type="text"
+                          placeholder="/flash-sale"
+                          value={linkUrl}
+                          onChange={e => setLinkUrl(e.target.value)}
+                          className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:ring-2 focus:ring-orange-100 transition-all"
+                      />
+                   </div>
+                </div>
+
+                <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Waktu Berakhir (Countdown)</label>
+                    <div className="relative">
+                        <input
+                            type="datetime-local"
+                            value={endDate}
+                            onChange={e => setEndDate(e.target.value)}
+                            className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:ring-2 focus:ring-orange-100 transition-all appearance-none"
+                        />
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><Clock size={16} /></div>
+                    </div>
+                </div>
+
+                {endDate && (
+                    <div className="p-3 bg-orange-50/50 rounded-2xl border border-orange-100/50 flex items-center gap-3">
+                         <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0"><Check size={14} strokeWidth={3} /></div>
+                         <p className="text-[10px] font-bold text-orange-700 leading-tight">
+                            Akan Berakhir pada:<br/>
+                            <span className="uppercase">{new Date(endDate).toLocaleString("id-ID", { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</span>
+                         </p>
+                    </div>
+                )}
+
+                <button
+                    onClick={handleSaveBanner}
+                    disabled={savingBanner || !endDate}
+                    className="group w-full bg-orange-600 p-4 rounded-2xl flex items-center justify-center gap-3 text-white shadow-xl shadow-orange-100 hover:bg-orange-700 active:scale-[0.98] transition-all disabled:bg-slate-200 disabled:shadow-none"
+                >
+                    {savingBanner ? <Loader2 size={20} className="animate-spin" /> : <Zap size={20} className="fill-white" />}
+                    <span className="font-black text-sm uppercase tracking-widest">{savingBanner ? "Menyimpan..." : "Publish Flash Sale"}</span>
+                </button>
             </div>
-          )}
+        </div>
+
+        {/* ── PRODUCT SELECTION PREMIUM ── */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-indigo-50 text-indigo-500 rounded-2xl">
+                        <Tag size={20} strokeWidth={2.5} />
+                    </div>
+                    <div>
+                        <h3 className="text-base font-black text-slate-800 tracking-tight">Kurasi Produk</h3>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pilih Item Promo</p>
+                    </div>
+                </div>
+                <div className="relative min-w-[140px]">
+                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                   <input
+                    type="text"
+                    placeholder="Search keywords..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-100 rounded-full text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-100 transition-all font-sans"
+                   />
+                </div>
+            </div>
+
+            <div className="p-3 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 flex items-start gap-3">
+               <Info size={14} className="text-indigo-400 mt-0.5 shrink-0" />
+               <p className="text-[9px] font-bold text-indigo-700 leading-tight">
+                  Geser toggle pada produk yang ingin diikutkan dalam kampanye Flash Sale saat ini. Produk akan mendapatkan prioritas di halaman depan.
+               </p>
+            </div>
+
+            {loading ? (
+                [1,2,3].map(i => <div key={i} className="h-24 bg-slate-50 rounded-2xl animate-pulse" />)
+            ) : filteredProducts.length === 0 ? (
+                <div className="py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-center">
+                    <p className="text-xs font-bold text-slate-300">Produk tidak ditemukan</p>
+                </div>
+            ) : (
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {filteredProducts.map(p => {
+                        const img = Array.isArray(p.image_url) ? p.image_url[0] : p.image_url
+                        const isOn = p.is_flash_sale
+                        const isToggling = toggling === p.id
+
+                        return (
+                            <div
+                                key={p.id}
+                                className={`rounded-2xl border p-3 transition-all flex items-center gap-3 ${isOn ? 'border-orange-200 bg-orange-50/20' : 'border-slate-50 bg-slate-50/50 hover:bg-slate-50'}`}
+                            >
+                                <div className={`w-14 h-14 rounded-xl overflow-hidden border p-0.5 shrink-0 ${isOn ? 'border-orange-200 bg-orange-50' : 'border-slate-100 bg-white'}`}>
+                                    {img ? <img src={img} className="w-full h-full object-cover rounded-lg" alt={p.name} /> : <Zap size={20} className="text-slate-200" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="text-xs font-black text-slate-800 truncate tracking-tight">{p.name}</h4>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                        <span className={`text-[10px] font-black ${isOn ? 'text-orange-600' : 'text-slate-400'}`}>Rp {(p.price || 0).toLocaleString("id-ID")}</span>
+                                        {isOn && (
+                                           <div className="flex items-center gap-1">
+                                              {editingSoldCount?.id === p.id ? (
+                                                  <div className="flex items-center gap-1">
+                                                      <input 
+                                                          autoFocus
+                                                          type="number"
+                                                          value={editingSoldCount.value}
+                                                          onChange={e => setEditingSoldCount({...editingSoldCount, value: e.target.value})}
+                                                          className="w-10 px-1 py-0.5 bg-white border border-orange-200 rounded text-[9px] font-black outline-none"
+                                                      />
+                                                      <button onClick={handleSaveSoldCount} className="text-[8px] font-black text-orange-600">YES</button>
+                                                  </div>
+                                              ) : (
+                                                  <button 
+                                                      onClick={() => setEditingSoldCount({ id: p.id, value: String(p.sold_count || 0) })}
+                                                      className="text-[9px] font-bold text-orange-400 lowercase px-1.5 bg-white rounded border border-orange-100"
+                                                  >
+                                                     Sim: {p.sold_count || 0}
+                                                  </button>
+                                              )}
+                                           </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => handleToggle(p)}
+                                    disabled={isToggling}
+                                    className={`shrink-0 transition-transform active:scale-90 ${isToggling ? 'opacity-50' : ''}`}
+                                >
+                                    {isToggling ? (
+                                        <Loader2 size={24} className="animate-spin text-orange-500" />
+                                    ) : isOn ? (
+                                        <ToggleRight size={38} className="text-orange-600" strokeWidth={1} />
+                                    ) : (
+                                        <ToggleLeft size={38} className="text-slate-200" strokeWidth={1} />
+                                    )}
+                                </button>
+                            </div>
+                        )
+                    })}
+                </div>
+            )}
         </div>
       </div>
+      
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+      `}</style>
     </div>
+  )
+}
+
+function X({ size }: { size: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
   )
 }

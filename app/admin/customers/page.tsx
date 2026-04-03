@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import * as Icons from "lucide-react"
+import { ArrowLeft, Search, Loader2, User, UserX, ShieldCheck, ShieldAlert, Trash2, Calendar, CircleDot, Circle, Sparkles, ChevronRight, MoreVertical } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import Skeleton from "@/app/components/Skeleton"
 
 export default function AdminCustomersPage() {
   const [users, setUsers] = useState<any[]>([])
@@ -35,7 +36,7 @@ export default function AdminCustomersPage() {
   }
 
   const handleDeleteUser = async (id: string, name: string) => {
-    if (!confirm(`Hapus user "${name || 'ini'}" secara permanen? Data di public.users akan dihapus.`)) return;
+    if (!confirm(`Hapus user "${name || 'ini'}" secara permanen? Semua data terkait akan terhapus.`)) return;
 
     try {
       const { error } = await supabase.from("users").delete().eq("id", id);
@@ -67,79 +68,24 @@ export default function AdminCustomersPage() {
     }
   }
 
-  const handleUpdateGender = async (id: string, gender: string) => {
+  const handleUpdateRole = async (id: string, currentRole: string) => {
+    const newRole = currentRole === 'admin' ? 'user' : 'admin';
+    if (!confirm(`Ubah role user ini menjadi ${newRole.toUpperCase()}?`)) return;
+
     try {
       const { error } = await supabase
         .from("users")
-        .update({ gender })
+        .update({ role: newRole })
         .eq("id", id);
 
       if (error) throw error;
 
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, gender } : u));
-      toast.success("Gender diperbarui");
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, role: newRole } : u));
+      toast.success(`Role diperbarui ke ${newRole}`);
     } catch (err) {
       console.error(err);
-      toast.error("Gagal memperbarui gender");
+      toast.error("Gagal memperbarui role");
     }
-  }
-
-  const guessGender = (name: string): 'pria' | 'wanita' | null => {
-    if (!name) return null;
-    const n = name.toLowerCase();
-
-    // Keywords for Female (Indonesian context)
-    const femaleKeywords = [
-      'wati', 'putri', 'sari', 'ani', 'ayu', 'lestari', 'uum', 'aminah', 'dinda',
-      'khodijah', 'andini', 'seli', 'siti', 'nur', 'puji', 'endang', 'sri', 'dewi',
-      'rini', 'ratna', 'lita', 'mia', 'ida', 'rahma', 'fitri', 'maya', 'neng',
-      'ayu', 'indah', 'suci', 'kartika', 'mega', 'lia', 'vina', 'eka'
-    ];
-
-    // Keywords for Male (Indonesian context)
-    const maleKeywords = [
-      'budin', 'fajar', 'hapid', 'agus', 'budi', 'eko', 'putra', 'iwan', 'bambang',
-      'slamet', 'mulyadi', 'joko', 'anton', 'andi', 'bayu', 'reza', 'dodi',
-      'heri', 'rudi', 'yanto', 'ujang', 'asep', 'dede', 'cecep', 'adit', 'iqbal',
-      'rifki', 'indra', 'surya', 'deni', 'hendra', 'tomi', 'bagus', 'ari'
-    ];
-
-    if (femaleKeywords.some(key => n.includes(key))) return 'wanita';
-    if (maleKeywords.some(key => n.includes(key))) return 'pria';
-
-    return null;
-  }
-
-  const handleAutoDetectAll = async () => {
-    const updates = users
-      .filter(u => !u.gender)
-      .map(u => ({ id: u.id, gender: guessGender(u.full_name) }))
-      .filter(u => u.gender !== null);
-
-    if (updates.length === 0) {
-      toast.info("Semua user sudah memiliki genre atau tidak terdeteksi");
-      return;
-    }
-
-    setLoading(true);
-    let successCount = 0;
-
-    for (const update of updates) {
-      const { error } = await supabase.from("users").update({ gender: update.gender }).eq("id", update.id);
-      if (!error) successCount++;
-    }
-
-    await fetchUsers();
-    toast.success(`${successCount} user berhasil diupdate otomatis!`);
-    setLoading(false);
-  }
-
-  const getAvatarUrl = (user: any) => {
-    if (user.avatar_url) return user.avatar_url;
-    // Default avatar berdasarkan gender
-    if (user.gender === 'pria') return `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.full_name || user.id}&mood=happy`;
-    if (user.gender === 'wanita') return `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.full_name || user.id}&mood=happy&hairColor=black`;
-    return null; // Pakai icon default
   }
 
   const filteredUsers = users.filter(user =>
@@ -147,136 +93,133 @@ export default function AdminCustomersPage() {
     user.email?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  const getAvatarUrl = (user: any) => {
+    if (user.avatar_url) return user.avatar_url;
+    const seed = user.full_name || user.id || "default";
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}&mood=happy`;
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-24">
+    <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-24 selection:bg-indigo-100">
+      
       {/* HEADER */}
-      <div className="bg-white border-b border-slate-100 sticky top-0 z-40 shadow-sm">
-        <div className="flex items-center justify-between px-5 pt-12 pb-4">
+      <div className="bg-white sticky top-0 z-40 border-b border-slate-100/60 backdrop-blur-md bg-white/80">
+        <div className="px-5 pt-12 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
-              <Icons.ArrowLeft size={20} strokeWidth={2.5} />
+            <button onClick={() => router.push('/admin')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+              <ArrowLeft size={20} strokeWidth={2.5} />
             </button>
             <div>
-              <h1 className="text-lg font-bold text-slate-900 tracking-tight">Daftar Pelanggan</h1>
-              <div className="flex items-center gap-2">
-                <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">{users.length} Total Akun</p>
-                <span className="text-slate-200">|</span>
-                <button
-                  onClick={handleAutoDetectAll}
-                  className="text-[10px] font-bold text-indigo-600 uppercase hover:text-indigo-700 transition-colors flex items-center gap-1"
-                >
-                  <Icons.Sparkles size={10} />
-                  Auto-Detect Genre
-                </button>
-              </div>
+              <h1 className="text-lg font-extrabold text-slate-900 tracking-tight">User & Admin</h1>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Database Pengguna</p>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 bg-slate-100 text-slate-600 text-[10px] font-black rounded-lg border border-slate-200">
+               {users.length} TOTAL
+            </span>
           </div>
         </div>
 
-        {/* SEARCH BAR */}
-        <div className="px-5 pb-4">
-          <div className="relative">
-            <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input
-              type="text"
-              placeholder="Cari nama atau email..."
+        {/* SEARCH BAR REDESIGN */}
+        <div className="px-5 pb-5">
+          <div className="relative group">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+              <Search size={18} />
+            </div>
+            <input 
+              type="text" 
+              placeholder="Cari nama, email, atau ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-100 border-none rounded-xl py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-indigo-100 outline-none text-gray-800 transition-all placeholder:text-slate-400"
+              className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
             />
           </div>
         </div>
       </div>
 
-      {/* CUSTOMER LIST */}
-      <div className="p-5 space-y-4">
+      <div className="p-4 space-y-4">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-            <Icons.Loader2 className="animate-spin mb-2" size={24} />
-            <p className="text-xs font-medium">Sinkronisasi data...</p>
+          [1,2,3,4].map(i => <div key={i} className="h-44 bg-white rounded-3xl border border-slate-100 animate-pulse" />)
+        ) : filteredUsers.length === 0 ? (
+          <div className="py-20 text-center space-y-3 bg-white rounded-3xl border border-dashed border-slate-200">
+            <div className="p-4 bg-slate-50 rounded-full w-fit mx-auto text-slate-300"><User size={32} /></div>
+            <p className="text-sm font-bold text-slate-400 tracking-tight">Tidak ada pengguna ditemukan</p>
           </div>
-        ) : filteredUsers.length > 0 ? (
-          filteredUsers.map((user) => (
-            <div key={user.id} className={`bg-white p-5 rounded-2xl border transition-all shadow-sm flex flex-col gap-4 ${user.is_blocked ? 'border-red-100 opacity-80' : 'border-slate-100'}`}>
-              <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center border-2 overflow-hidden shrink-0 transition-colors ${user.is_blocked ? 'border-red-200' : 'border-slate-100'}`}>
-                  {getAvatarUrl(user) ? (
-                    <img src={getAvatarUrl(user)} alt={user.full_name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className={`w-full h-full flex items-center justify-center ${user.gender === 'wanita' ? 'bg-rose-50' : 'bg-indigo-50'}`}>
-                      <Icons.User size={28} className={user.gender === 'wanita' ? 'text-rose-300' : 'text-indigo-300'} />
+        ) : (
+          filteredUsers.map((u) => (
+            <div key={u.id} className={`bg-white rounded-3xl border shadow-sm p-5 space-y-5 hover:border-indigo-100 transition-all group overflow-hidden relative ${u.is_blocked ? 'bg-red-50/20 border-red-100' : 'border-slate-50'}`}>
+              
+              {/* Background Accent for Role */}
+              <div className={`absolute -right-6 -top-6 w-20 h-20 rounded-full blur-2xl opacity-10 ${u.role === 'admin' ? 'bg-indigo-600' : 'bg-slate-400'}`} />
+
+              <div className="flex items-start justify-between relative z-10">
+                <div className="flex items-center gap-4">
+                  <div className={`w-14 h-14 rounded-full p-1 border-2 shrink-0 ${u.role === 'admin' ? 'border-indigo-200 bg-indigo-50' : 'border-slate-100 bg-slate-50'} ${u.is_blocked ? 'border-red-200 grayscale' : ''}`}>
+                    <img src={getAvatarUrl(u)} className="w-full h-full object-cover rounded-full" alt={u.full_name} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className={`text-sm font-black truncate tracking-tight ${u.is_blocked ? 'text-red-900' : 'text-slate-900'}`}>{u.full_name || "Tanpa Nama"}</h3>
+                      {u.role === 'admin' && (
+                        <div className="px-1.5 py-0.5 rounded-lg bg-indigo-600 text-white text-[7px] font-black uppercase tracking-widest shadow-sm shadow-indigo-200">ADMIN</div>
+                      )}
                     </div>
+                    <p className="text-[11px] font-bold text-slate-400 truncate max-w-[180px]">{u.email || 'Email tidak disetel'}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                       <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400 uppercase">
+                          <Calendar size={10} /> {new Date(u.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                       </div>
+                       {u.gender && (
+                         <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter ${u.gender === 'wanita' ? 'bg-rose-50 text-rose-500' : 'bg-blue-50 text-blue-500'}`}>
+                           {u.gender}
+                         </div>
+                       )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  {u.is_blocked ? (
+                    <span className="ml-auto px-2 py-1 bg-red-100 text-red-600 text-[8px] font-black rounded-lg uppercase tracking-tight">Banned</span>
+                  ) : (
+                    <span className="ml-auto px-2 py-1 bg-emerald-50 text-emerald-600 text-[8px] font-black rounded-lg uppercase tracking-tight">Active</span>
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className={`text-sm font-bold truncate ${user.is_blocked ? 'text-red-900' : 'text-slate-900'}`}>{user.full_name || "Tanpa Nama"}</h3>
-                    {user.is_blocked && (
-                      <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[8px] font-black uppercase tracking-tighter">Terblokir</span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-slate-500 font-medium truncate">{user.email}</p>
-
-                  <div className="flex items-center gap-3 mt-1.5">
-                    <div className="flex items-center gap-1">
-                      <Icons.Calendar size={10} className="text-slate-400" />
-                      <p className="text-[9px] text-slate-400 uppercase font-bold">{new Date(user.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</p>
-                    </div>
-                    {user.gender && (
-                      <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase transition-colors ${user.gender === 'wanita' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'}`}>
-                        {user.gender === 'wanita' ? <Icons.CircleDot size={8} /> : <Icons.Circle size={8} />}
-                        {user.gender}
-                      </div>
-                    )}
-                  </div>
-                </div>
               </div>
 
-              {/* ACTION BUTTONS */}
-              <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-50">
-                {/* Gender Toggle */}
-                <select
-                  value={user.gender || ""}
-                  onChange={(e) => handleUpdateGender(user.id, e.target.value)}
-                  className="bg-slate-50 text-[10px] font-bold text-slate-600 px-2 py-2 rounded-xl outline-none border border-transparent focus:border-indigo-100 transition-all cursor-pointer"
+              {/* ACTION GRID */}
+              <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-50 relative z-10">
+                <button 
+                  onClick={() => handleUpdateRole(u.id, u.role)}
+                  className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl transition-all active:scale-95 border ${u.role === 'admin' ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
                 >
-                  <option value="">Set Genre</option>
-                  <option value="pria">♂ Pria</option>
-                  <option value="wanita">♀ Wanita</option>
-                </select>
-
-                {/* Block Button */}
-                <button
-                  onClick={() => handleToggleBlock(user.id, user.is_blocked)}
-                  className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-bold transition-all ${user.is_blocked ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}
-                >
-                  {user.is_blocked ? <Icons.Unlock size={12} /> : <Icons.ShieldOff size={12} />}
-                  {user.is_blocked ? "Buka" : "Blokir"}
+                  <ShieldCheck size={18} strokeWidth={2.5} />
+                  <span className="text-[9px] font-black uppercase">Role {u.role === 'admin' ? 'User' : 'Admin'}</span>
                 </button>
 
-                {/* Delete Button */}
-                <button
-                  onClick={() => handleDeleteUser(user.id, user.full_name)}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-red-500 transition-all text-[10px] font-bold"
+                <button 
+                  onClick={() => handleToggleBlock(u.id, u.is_blocked)}
+                  className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl transition-all active:scale-95 border ${u.is_blocked ? 'bg-yellow-50 border-yellow-100 text-yellow-600' : 'bg-red-50 border-red-100 text-red-600'}`}
                 >
-                  <Icons.Trash2 size={12} />
-                  Hapus
+                  {u.is_blocked ? <ShieldCheck size={18} strokeWidth={2.5} /> : <ShieldAlert size={18} strokeWidth={2.5} />}
+                  <span className="text-[9px] font-black uppercase">{u.is_blocked ? 'Unblock' : 'Block'}</span>
+                </button>
+
+                <button 
+                  onClick={() => handleDeleteUser(u.id, u.full_name)}
+                  className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-slate-50 border border-slate-100 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-95"
+                >
+                  <Trash2 size={18} strokeWidth={2.5} />
+                  <span className="text-[9px] font-black uppercase">Delete</span>
                 </button>
               </div>
+
             </div>
           ))
-        ) : (
-          <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-200">
-            <Icons.Users className="mx-auto text-slate-200 mb-2" size={40} />
-            <p className="text-xs text-slate-400">Tidak ada pelanggan ditemukan.</p>
-          </div>
         )}
       </div>
 
-      {/* FOOTER VERSION */}
-      <div className="mt-8 text-center opacity-30">
-        <p className="text-[9px] font-bold uppercase tracking-[0.3em]">Admin Panel v1.0.4</p>
-      </div>
     </div>
   )
 }

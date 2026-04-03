@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import {
     ArrowLeft, ImagePlus, Loader2, Navigation,
-    Check, Search, ExternalLink, MapPin
+    Check, Search, ExternalLink, MapPin, X, Info, ChevronDown, Package, ShoppingBag, Globe, Zap, Edit3
 } from "lucide-react";
 import imageCompression from 'browser-image-compression';
 import { useRouter, useParams } from "next/navigation";
@@ -39,11 +39,9 @@ export default function EditProductPage() {
         const fetchData = async () => {
             setLoading(true);
             try {
-                // Fetch Categories
                 const { data: catData } = await supabase.from("categories").select("id, name");
                 if (catData) setCategories(catData);
 
-                // Fetch Product Data
                 const { data: p, error } = await supabase
                     .from("products")
                     .select("*")
@@ -53,11 +51,8 @@ export default function EditProductPage() {
                 if (error) throw error;
 
                 if (p) {
-                    const nameHasReady = p.name.includes("[READY]");
-                    const cleanName = p.name.replace("[READY] ", "").replace("[READY]", "").trim();
-
                     setFormData({
-                        name: cleanName,
+                        name: p.name || "",
                         price: p.price?.toString() || "",
                         original_price: p.original_price?.toString() || "",
                         description: p.description || "",
@@ -67,8 +62,7 @@ export default function EditProductPage() {
                         longitude: p.longitude
                     });
                     setSelectedCategory(p.category_id);
-                    // Use the database field if available, otherwise fallback to the name check for backwards compatibility during transition
-                    setIsReady(p.is_ready === true || nameHasReady);
+                    setIsReady(!!p.is_ready);
 
                     if (p.image_url) {
                         const urls = Array.isArray(p.image_url) ? p.image_url : [p.image_url];
@@ -115,6 +109,33 @@ export default function EditProductPage() {
                 setDetecting(false);
             }
         );
+    };
+
+    const searchLocationByText = async () => {
+        if (!formData.location || formData.location.length < 3) {
+            return toast.error("Masukkan minimal 3 karakter untuk mencari");
+        }
+        setDetecting(true);
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formData.location)}&limit=1`);
+            const data = await res.json();
+            if (data && data.length > 0) {
+                const spot = data[0];
+                setFormData(prev => ({
+                    ...prev,
+                    latitude: parseFloat(spot.lat),
+                    longitude: parseFloat(spot.lon),
+                    location: spot.display_name.split(',')[0]
+                }));
+                toast.success("Lokasi ditemukan!");
+            } else {
+                toast.error("Lokasi tidak ditemukan. Coba kata kunci lain.");
+            }
+        } catch (err) {
+            toast.error("Error saat mencari lokasi.");
+        } finally {
+            setDetecting(false);
+        }
     };
 
     const handleFileChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -196,57 +217,75 @@ export default function EditProductPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <Loader2 className="animate-spin text-indigo-600" size={32} />
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
+                <Loader2 className="animate-spin text-indigo-600 mb-4" size={40} strokeWidth={2.5} />
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Sinkronisasi Data...</p>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-32">
-            <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
-                <div className="flex items-center justify-between px-5 pt-12 pb-4">
+        <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-32 selection:bg-indigo-100">
+
+            {/* HEADER PREMIUM */}
+            <div className="bg-white sticky top-0 z-40 border-b border-slate-100/60 backdrop-blur-md bg-white/80">
+                <div className="px-5 pt-12 pb-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+                        <button onClick={() => router.push('/admin/add-product')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
                             <ArrowLeft size={20} strokeWidth={2.5} />
                         </button>
                         <div>
-                            <h1 className="text-lg font-bold text-slate-900 tracking-tight">Edit Produk</h1>
-                            <p className="text-[10px] font-medium text-slate-400">Update detail produk kamu</p>
+                            <h1 className="text-lg font-extrabold text-slate-900 tracking-tight">Edit Produk</h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Modifikasi Katalog</p>
                         </div>
                     </div>
+                    <Edit3 size={20} className="text-slate-300" />
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-5 space-y-5">
-                {/* Toggle Ready */}
-                <div className="bg-indigo-600 p-4 rounded-xl text-white shadow-lg shadow-indigo-100 flex items-center justify-between">
-                    <div>
-                        <h3 className="text-sm font-bold">Stok Ready?</h3>
-                        <p className="text-[10px] text-white/70">Produk akan muncul di halaman Jajanan Ready</p>
+            <form onSubmit={handleSubmit} className="p-4 space-y-5">
+
+                {/* READY STATUS PREMIUM TOGGLE */}
+                <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between overflow-hidden relative group">
+                    <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-emerald-50/50 to-transparent -z-0 transition-opacity ${isReady ? 'opacity-100' : 'opacity-0'}`}></div>
+                    <div className="flex items-center gap-4 relative z-10">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isReady ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-300'}`}>
+                            <Check size={20} strokeWidth={isReady ? 4 : 2} />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-black text-slate-800 tracking-tight">Stok Ready?</h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">{isReady ? 'Tayang di Jajanan Ready' : 'Tertutup di katalog'}</p>
+                        </div>
                     </div>
                     <button
                         type="button"
                         onClick={() => setIsReady(!isReady)}
-                        className={`w-12 h-6 rounded-full relative transition-colors ${isReady ? 'bg-emerald-400' : 'bg-white/20'}`}
+                        className={`w-14 h-7 rounded-full relative transition-all duration-500 p-1 ${isReady ? 'bg-emerald-500 shadow-lg shadow-emerald-100' : 'bg-slate-200'}`}
                     >
-                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isReady ? 'right-1' : 'left-1'}`}></div>
+                        <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-all duration-500 ${isReady ? 'translate-x-7' : 'translate-x-0'}`}></div>
                     </button>
                 </div>
 
-                {/* UPLOAD FOTO */}
-                <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Foto Produk</label>
+                {/* IMAGE UPLOAD PREMIUM */}
+                <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className="w-1.5 h-4 bg-indigo-500 rounded-full"></div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Galeri Produk</label>
+                    </div>
                     <div className="grid grid-cols-3 gap-3">
                         {previews.map((src, index) => (
                             <label
                                 key={index}
-                                className={`relative aspect-square bg-slate-50 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all hover:border-slate-300 ${src ? 'border-indigo-100' : 'border-slate-200'}`}
+                                className={`relative aspect-square rounded-[1.8rem] border-2 border-dashed flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all duration-300 group ${src ? 'border-indigo-100' : 'border-slate-100 hover:border-indigo-300 hover:bg-slate-50'}`}
                             >
                                 {src ? (
-                                    <img src={src} className="w-full h-full object-cover" alt="preview" />
+                                    <img src={src} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="preview" />
                                 ) : (
-                                    <ImagePlus size={20} className="text-slate-300" />
+                                    <div className="text-center flex flex-col items-center justify-center">
+                                        <div className={`p-2 rounded-xl transition-colors ${index === 0 ? 'bg-indigo-50 text-indigo-400' : 'bg-slate-50 text-slate-300'}`}>
+                                            <ImagePlus size={18} strokeWidth={2.5} />
+                                        </div>
+                                    </div>
                                 )}
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(index, e)} />
                             </label>
@@ -254,104 +293,144 @@ export default function EditProductPage() {
                     </div>
                 </div>
 
-                {/* INFO UTAMA */}
-                <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Nama Produk</label>
-                        <input
-                            type="text"
-                            value={formData.name}
-                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all"
-                            onChange={e => setFormData({ ...formData, name: e.target.value })}
-                            required
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
+                {/* CORE DETAILS PREMIUM */}
+                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-slate-50 text-slate-400 rounded-2xl"><Package size={20} strokeWidth={2.5} /></div>
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Harga (Rp)</label>
-                            <input
-                                type="number"
-                                value={formData.price}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all"
-                                onChange={e => setFormData({ ...formData, price: e.target.value })}
-                                required
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Stok</label>
-                            <input
-                                type="number"
-                                value={formData.stock}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all"
-                                onChange={e => setFormData({ ...formData, stock: e.target.value })}
-                                required
-                            />
+                            <h3 className="text-base font-black text-slate-800 tracking-tight">Detail Utama</h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Update info katalog</p>
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Lokasi</label>
-                        <div className="relative group">
+                    <div className="space-y-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nama Produk</label>
                             <input
                                 type="text"
-                                value={formData.location}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all pr-12"
-                                onChange={e => setFormData({ ...formData, location: e.target.value })}
+                                placeholder="..."
+                                value={formData.name}
+                                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all font-sans"
+                                onChange={e => setFormData({ ...formData, name: e.target.value })}
                                 required
                             />
-                            <button
-                                type="button"
-                                onClick={detectLocation}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-indigo-600 transition-colors"
-                            >
-                                {detecting ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} />}
-                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Harga Jual</label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">Rp</span>
+                                    <input
+                                        type="number"
+                                        value={formData.price}
+                                        className="w-full pl-10 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all"
+                                        onChange={e => setFormData({ ...formData, price: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Stok Inventori</label>
+                                <input
+                                    type="number"
+                                    value={formData.stock}
+                                    className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all"
+                                    onChange={e => setFormData({ ...formData, stock: e.target.value })}
+                                    required
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* KATEGORI */}
-                <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Kategori</label>
-                    <div className="flex flex-wrap gap-2">
-                        {categories.map((cat) => (
-                            <button
-                                key={cat.id}
-                                type="button"
-                                onClick={() => setSelectedCategory(cat.id)}
-                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${selectedCategory === cat.id
-                                    ? "bg-slate-900 text-white border-slate-900"
-                                    : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
-                                    }`}
-                            >
-                                {cat.name}
-                            </button>
-                        ))}
+                {/* LOGISTICS PREMIUM */}
+                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-5">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-slate-50 text-slate-400 rounded-2xl"><Globe size={20} strokeWidth={2.5} /></div>
+                        <div>
+                            <h3 className="text-base font-black text-slate-800 tracking-tight">Logistik & Area</h3>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nama Area / Desa</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={formData.location}
+                                    className="w-full pl-5 pr-24 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all"
+                                    onChange={e => setFormData({ ...formData, location: e.target.value })}
+                                    required
+                                />
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={searchLocationByText}
+                                        className="p-2 bg-white text-slate-400 hover:text-indigo-600 rounded-xl border border-slate-100 hover:border-indigo-100 transition-all"
+                                    >
+                                        {detecting ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} strokeWidth={2.5} />}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={detectLocation}
+                                        className="p-2 bg-white text-slate-400 hover:text-emerald-600 rounded-xl border border-slate-100 hover:border-emerald-100 transition-all"
+                                    >
+                                        {detecting ? <Loader2 size={16} className="animate-spin" /> : <Navigation size={16} strokeWidth={2.5} />}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* DESKRIPSI */}
-                <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Deskripsi</label>
-                    <textarea
-                        value={formData.description}
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl h-28 text-sm outline-none focus:ring-1 focus:ring-slate-900 transition-all resize-none"
-                        onChange={e => setFormData({ ...formData, description: e.target.value })}
-                    />
+                 {/* CLASSIFICATION PREMIUM */}
+                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-1.5 h-4 bg-indigo-500 rounded-full"></div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pilih Klasifikasi</label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {categories.map((cat) => (
+                    <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setSelectedCategory(cat.id)}
+                        className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${selectedCategory === cat.id
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100"
+                        : "bg-slate-50 text-slate-400 border-slate-100 hover:bg-white hover:border-slate-300"
+                        }`}
+                    >
+                        {cat.name}
+                    </button>
+                    ))}
+                </div>
                 </div>
 
-                <div className="mt-8">
+                {/* DESCRIPTION PREMIUM */}
+                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                    <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
+                    Story & Spesifikasi
+                </label>
+                <textarea
+                    placeholder="..."
+                    value={formData.description}
+                    className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-[1.8rem] h-32 text-sm font-bold outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all resize-none placeholder:text-slate-300 leading-relaxed"
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                />
+                </div>
+
+                {/* ACTION PREMIUM */}
+                <div className="pt-2">
                     <button
                         type="submit"
                         disabled={saving}
-                        className="w-full bg-indigo-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-400 flex items-center justify-center gap-2 shadow-lg shadow-indigo-100"
+                        className="w-full bg-indigo-600 p-5 rounded-3xl text-white font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98] disabled:bg-slate-200 disabled:shadow-none flex items-center justify-center gap-3"
                     >
-                        {saving ? (
-                            <><Loader2 size={18} className="animate-spin" /> <span>Menyimpan...</span></>
-                        ) : (
-                            <><Check size={18} /> <span>Simpan Perubahan</span></>
-                        )}
+                        {saving ? <Loader2 size={24} className="animate-spin" /> : <Zap size={24} className="fill-white" />}
+                        {saving ? "Memperbarui..." : "Simpan Perubahan"}
                     </button>
                 </div>
             </form>

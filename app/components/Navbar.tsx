@@ -37,8 +37,6 @@ export default function Navbar() {
   const userMenu: MenuItem[] = [
     { href: "/", label: "Beranda", icon: Home, match: pathname === "/" },
     { href: "/wishlist", label: "Wishlist", icon: Heart, match: pathname === "/wishlist" },
-    { href: "/chat", label: "Chat", icon: MessageCircle, match: pathname === "/chat" },
-    { href: "/cart", label: "Keranjang", icon: ShoppingCart, match: pathname === "/cart" },
   ];
 
   // Menu Admin

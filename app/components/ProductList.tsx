@@ -159,7 +159,7 @@ export default function ProductList({ headerItem }: { headerItem?: React.ReactNo
         key={p.id}
         className="block active:scale-[0.98] transition-transform duration-150"
       >
-        <div className={`bg-white overflow-hidden border border-gray-100 mx-auto h-full w-full ${currentView === "list" ? "flex flex-row" : "flex flex-col"
+        <div className={`bg-white overflow-hidden border rounded-xl border-gray-100 mx-auto h-full w-full ${currentView === "list" ? "flex flex-row" : "flex flex-col"
           }`}>
           {/* IMAGE CONTAINER */}
           <div className={`relative shrink-0 overflow-hidden ${currentView === "grid" ? "aspect-square w-full" : "w-28 h-28"
@@ -221,14 +221,14 @@ export default function ProductList({ headerItem }: { headerItem?: React.ReactNo
   }
 
   return (
-    <div className=" max-w-md mx-auto bg-gray-50/50 ">
+    <div className=" max-w-md mx-auto rounded-xl bg-gray-50/50 ">
       {/* HEADER */}
 
       {/* PRODUCT LIST */}
       {view === "grid" ? (
-        <div className="flex items-start gap-2 p-3">
+        <div className="flex items-start rounded-2xl gap-2 p-3">
           {/* Kolom Kiri */}
-          <div className="flex flex-col gap-2 flex-1 w-1/2 min-w-0">
+          <div className="flex rounded-xl flex-col gap-2 flex-1 w-1/2 min-w-0">
             {headerItem && <div className="w-full">{headerItem}</div>}
             {loading && products.length === 0 ? (
               Array(3).fill(0).map((_, i) => <ProductCardSkeleton key={`l-${i}`} view="grid" />)
@@ -237,7 +237,7 @@ export default function ProductList({ headerItem }: { headerItem?: React.ReactNo
             )}
           </div>
           {/* Kolom Kanan */}
-          <div className="flex flex-col gap-2 flex-1 w-1/2 min-w-0">
+          <div className="flex flex-col rounded-xl gap-2 flex-1 w-1/2 min-w-0">
             {loading && products.length === 0 ? (
               Array(3).fill(0).map((_, i) => <ProductCardSkeleton key={`r-${i}`} view="grid" />)
             ) : (
@@ -246,7 +246,7 @@ export default function ProductList({ headerItem }: { headerItem?: React.ReactNo
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex rounded-xl flex-col gap-2">
           {loading && products.length === 0 ? (
             Array(6).fill(0).map((_, i) => <ProductCardSkeleton key={`list-${i}`} view="list" />)
           ) : (

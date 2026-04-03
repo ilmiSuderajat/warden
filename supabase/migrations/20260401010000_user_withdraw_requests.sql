@@ -1,7 +1,7 @@
 -- Create user_withdraw_requests table
 CREATE TABLE IF NOT EXISTS user_withdraw_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES auth.users(id),
+    user_id UUID NOT NULL REFERENCES public.users(id),
     amount INTEGER NOT NULL CHECK (amount >= 10000),
     bank_name TEXT NOT NULL,
     account_number TEXT NOT NULL,

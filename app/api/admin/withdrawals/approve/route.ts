@@ -8,14 +8,20 @@ export async function POST(req: Request) {
 
         const supabaseAdmin = createAdminClient()
 
-        // 1. Verifikasi role admin
-        const { data: adminRecord, error: roleError } = await supabaseAdmin
+        // 1. Verifikasi role admin (Cek table users DAN table admins)
+        const { data: userRecord } = await supabaseAdmin
             .from("users")
             .select("role")
             .eq("id", admin.id)
             .single()
 
-        if (roleError || adminRecord?.role !== "admin") {
+        const { data: adminRecord } = await supabaseAdmin
+            .from("admins")
+            .select("id")
+            .eq("user_id", admin.id)
+            .maybeSingle()
+
+        if (userRecord?.role !== "admin" && !adminRecord) {
             return NextResponse.json({ error: "Akses ditolak. Fitur ini khusus Admin." }, { status: 403 })
         }
 

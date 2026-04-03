@@ -3,6 +3,7 @@ import "./globals.css";
 import ConditionalSearchBar from "./components/ConditionalSearchBar";
 import ConditionalNavbar from "./components/ConditionalNavbar";
 import DriverModeGuard from "./components/DriverModeGuard";
+import PullToRefresh from "./components/PullToRefresh";
 // merge viewport settings into metadata below
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,8 +41,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Toaster position="top-center" richColors />
-        <DriverModeGuard />
-        {children}
+        <PullToRefresh>
+          <DriverModeGuard />
+          {children}
+        </PullToRefresh>
         <ConditionalSearchBar />
         <ConditionalNavbar />
       </body>

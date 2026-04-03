@@ -1,8 +1,9 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Search, X, Clock, TrendingUp, Sparkles } from "lucide-react"
+import { Search, X, Clock, TrendingUp, Sparkles, MessageCircle, ShoppingCart } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import Link from "next/link"
 
 export default function SearchBar() {
   const router = useRouter()
@@ -10,6 +11,7 @@ export default function SearchBar() {
   const [query, setQuery] = useState(searchParams.get('q') || "")
   const [showSuggest, setShowSuggest] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>([])
+  const [cartCount, setCartCount] = useState(0)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
   // AMBIL DATA SARAN DARI DATABASE
@@ -27,7 +29,36 @@ export default function SearchBar() {
         setSuggestions(productNames)
       }
     }
+
+    const fetchCartCount = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { count } = await supabase
+        .from("cart")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+      
+      setCartCount(count || 0)
+
+      // Realtime subscription
+      const channel = supabase
+        .channel('cart_count_sync')
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'cart',
+          filter: `user_id=eq.${user.id}`
+        }, () => {
+          fetchCartCount()
+        })
+        .subscribe()
+
+      return () => { supabase.removeChannel(channel) }
+    }
+
     fetchSuggestions()
+    fetchCartCount()
   }, [])
 
   useEffect(() => {
@@ -55,59 +86,78 @@ export default function SearchBar() {
   }
 
   return (
-    <main ref={wrapperRef} className="max-w-md h-16 bg-indigo-600 mx-auto fixed top-0 left-0 right-0 flex items-center px-4 z-100 border-b border-gray-100 ">
-      <div className="relative w-full">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+    <main ref={wrapperRef} className="max-w-md h-16 bg-indigo-600 mx-auto fixed top-0 left-0 right-0 flex items-center px-4 z-[100] border-b border-indigo-700/50 shadow-lg">
+      <div className="flex items-center gap-3 w-full">
+        {/* Search Input Container */}
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
 
-        <input
-          type="text"
-          placeholder="Cari Apa Lur?"
-          value={query}
-          onFocus={() => setShowSuggest(true)}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setShowSuggest(true)
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch(query)}
-          className="w-full h-10 rounded-full text-gray-800 bg-white pl-10 pr-24 text-sm focus:outline-none focus:ring-2 focus:ring-white/90 transition-all"
-        />
+          <input
+            type="text"
+            placeholder="Cari Apa Lur?"
+            value={query}
+            onFocus={() => setShowSuggest(true)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setShowSuggest(true)
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch(query)}
+            className="w-full h-10 rounded-full text-gray-800 bg-white pl-10 pr-12 text-sm outline-none focus:ring-2 focus:ring-white/90 transition-all shadow-inner"
+          />
 
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
-          {query && (
-            <button onClick={() => setQuery("")} className="text-gray-400 hover:text-gray-600">
-              <X size={16} />
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+            {query && (
+              <button onClick={() => setQuery("")} className="text-gray-400 hover:text-gray-600 p-1">
+                <X size={14} />
+              </button>
+            )}
+            <button
+              onClick={() => handleSearch(query)}
+              className="bg-indigo-600 text-white text-[10px] px-3 py-1 rounded-full font-black active:scale-95 transition-all uppercase tracking-tighter"
+            >
+              Cari
             </button>
+          </div>
+
+          {/* --- DROPDOWN SARAN DINAMIS --- */}
+          {showSuggest && suggestions.length > 0 && (
+            <div className="absolute top-12 left-0 right-0 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="p-3 border-b border-gray-50 flex items-center gap-2 bg-indigo-50/30">
+                <Sparkles size={14} className="text-indigo-600" />
+                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Saran Produk</span>
+              </div>
+
+              {suggestions
+                .filter(item => item.toLowerCase().includes(query.toLowerCase()))
+                .map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSearch(item)}
+                    className="w-full px-4 py-3 text-left text-[13px] text-gray-700 hover:bg-indigo-50 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-none group"
+                  >
+                    <Search size={14} className="text-gray-300 group-hover:text-indigo-400" />
+                    <span className="truncate">{item}</span>
+                  </button>
+                ))}
+            </div>
           )}
-          <button
-            onClick={() => handleSearch(query)}
-            className="bg-indigo-600 text-white text-xs px-4 py-1.5 rounded-full font-bold active:scale-95 transition-all"
-          >
-            Cari
-          </button>
         </div>
 
-        {/* --- DROPDOWN SARAN DINAMIS --- */}
-        {showSuggest && suggestions.length > 0 && (
-          <div className="absolute top-12 left-0 right-0 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="p-3 border-b border-gray-50 flex items-center gap-2 bg-indigo-50/30">
-              <Sparkles size={14} className="text-indigo-600" />
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Saran Produk</span>
-            </div>
-
-            {suggestions
-              .filter(item => item.toLowerCase().includes(query.toLowerCase()))
-              .map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSearch(item)}
-                  className="w-full px-4 py-3 text-left text-[13px] text-gray-700 hover:bg-indigo-50 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-none group"
-                >
-                  <Search size={14} className="text-gray-300 group-hover:text-indigo-400" />
-                  <span className="truncate">{item}</span>
-                </button>
-              ))}
-          </div>
-        )}
+        {/* Right Action Icons */}
+        <div className="flex items-center gap-2">
+          <Link href="/chat" className="relative text-white hover:bg-white/10 rounded-xl transition-all active:scale-90">
+            <MessageCircle size={26} strokeWidth={2.5} />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 border-2 border-indigo-600 rounded-full animate-pulse"></span>
+          </Link>
+          <Link href="/cart" className="relative p-2 text-white hover:bg-white/10 rounded-xl transition-all active:scale-90">
+            <ShoppingCart size={26} strokeWidth={2.5} />
+            {cartCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-indigo-600 animate-in zoom-in duration-300">
+                {cartCount}
+              </span>
+            )}
+          </Link>
+        </div>
       </div>
     </main>
   )

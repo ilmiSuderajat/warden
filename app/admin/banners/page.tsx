@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { ArrowLeft, Plus, Trash2, Loader2, ImagePlus, GripVertical, Eye, EyeOff, Pencil, X, Check } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, Loader2, ImagePlus, Eye, EyeOff, Pencil, X, Check, ImageIcon, LayoutDashboard, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import imageCompression from "browser-image-compression"
@@ -58,7 +58,6 @@ export default function AdminBannersPage() {
     const openEditForm = (banner: any) => {
         setTitle(banner.title || "")
         setSubtitle(banner.subtitle || "")
-        // Coba extract category id dari link_url format /category/xxx atau /category?id=xxx
         const match = (banner.link_url || "").match(/\/category(?:\?id=|\/)(.+)/)
         setSelectedCategoryId(match ? match[1] : "")
         setImagePreview(banner.image_url || "")
@@ -109,7 +108,6 @@ export default function AdminBannersPage() {
             const finalLinkUrl = selectedCategoryId ? `/category?id=${selectedCategoryId}` : ""
 
             if (editingBanner) {
-                // UPDATE
                 const { error } = await supabase
                     .from("banners")
                     .update({ title, subtitle, link_url: finalLinkUrl, image_url: finalImageUrl })
@@ -118,7 +116,6 @@ export default function AdminBannersPage() {
                 if (error) throw error
                 toast.success("Banner diperbarui!")
             } else {
-                // INSERT
                 const newOrder = banners.length
                 const { error } = await supabase
                     .from("banners")
@@ -168,152 +165,182 @@ export default function AdminBannersPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto pb-10">
+        <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-24 selection:bg-indigo-100">
             {/* HEADER */}
-            <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
-                <div className="flex items-center justify-between px-5 pt-12 pb-4">
+            <div className="bg-white sticky top-0 z-40 border-b border-slate-100/60 backdrop-blur-md bg-white/80">
+                <div className="px-5 pt-12 pb-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => router.back()} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+                        <button onClick={() => router.push('/admin')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
                             <ArrowLeft size={20} strokeWidth={2.5} />
                         </button>
                         <div>
-                            <h1 className="text-lg font-bold text-slate-900 tracking-tight">Banner Promo</h1>
-                            <p className="text-[10px] font-medium text-slate-400">Kelola banner slider</p>
+                            <h1 className="text-lg font-extrabold text-slate-900 tracking-tight">Banner Promo</h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Atur Slider Home</p>
                         </div>
                     </div>
-                    <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded-full border border-indigo-100">
-                        {banners.length} Banner
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-extrabold rounded-lg border border-indigo-100">
+                            {banners.length} AKTIF
+                        </span>
+                    </div>
                 </div>
             </div>
 
-            <div className="p-5 space-y-4">
-                {/* Tombol Tambah */}
+            <div className="p-4 space-y-5">
+                {/* UPGRADE: Floating Add Button Card */}
                 {!showForm && (
                     <button
                         onClick={() => { resetForm(); setShowForm(true); }}
-                        className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold text-sm transition-all active:scale-[0.98] shadow-sm shadow-indigo-100"
+                        className="group w-full bg-indigo-600 p-4 rounded-3xl flex items-center justify-between text-white shadow-xl shadow-indigo-100 active:scale-[0.98] transition-all overflow-hidden relative"
                     >
-                        <Plus size={18} />
-                        <span>Tambah Banner</span>
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12 blur-2xl group-hover:bg-white/20 transition-colors"></div>
+                        <div className="flex items-center gap-4 relative z-10">
+                            <div className="p-2 bg-white/20 rounded-2xl"><Plus size={20} /></div>
+                            <div className="text-left">
+                                <p className="text-sm font-extrabold">Tambah Banner Baru</p>
+                                <p className="text-[10px] text-indigo-100 font-medium">Buat visual promosi di halaman utama</p>
+                            </div>
+                        </div>
+                        <ChevronRight size={18} className="text-indigo-200" />
                     </button>
                 )}
 
-                {/* FORM */}
+                {/* FORM MODAL STYLE */}
                 {showForm && (
-                    <form onSubmit={handleSubmit} className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm space-y-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-bold text-slate-900">{editingBanner ? "Edit Banner" : "Banner Baru"}</h3>
-                            <button type="button" onClick={resetForm} className="p-1 text-slate-400 hover:text-slate-600">
+                    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-xl space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-base font-bold text-slate-800">{editingBanner ? "Edit Banner" : "Banner Visual Baru"}</h3>
+                            <button type="button" onClick={resetForm} className="p-1.5 text-slate-400 hover:text-slate-600 bg-slate-50 rounded-lg">
                                 <X size={18} />
                             </button>
                         </div>
 
-                        {/* Upload Gambar */}
-                        <label className="block aspect-[21/9] bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 cursor-pointer overflow-hidden hover:border-indigo-300 transition-colors relative">
+                        {/* Upload Gambar Premium Look */}
+                        <label className="block aspect-[21/9] bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 cursor-pointer overflow-hidden hover:border-indigo-300 transition-all relative group">
                             {imagePreview ? (
-                                <img src={imagePreview} className="w-full h-full object-cover" alt="preview" />
+                                <img src={imagePreview} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" alt="preview" />
                             ) : (
-                                <div className="flex flex-col items-center justify-center h-full text-slate-300">
-                                    <ImagePlus size={28} />
-                                    <span className="text-[10px] mt-2 font-medium">Klik untuk upload gambar</span>
+                                <div className="flex flex-col items-center justify-center h-full text-slate-300 group-hover:text-indigo-400 transition-colors">
+                                    <ImagePlus size={32} strokeWidth={1.5} />
+                                    <span className="text-[10px] mt-2 font-bold uppercase tracking-widest">Pilih Gambar Banner</span>
                                 </div>
                             )}
                             <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                            <div className="absolute bottom-2 right-2 p-1.5 bg-black/50 backdrop-blur-md rounded-lg text-white pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Pencil size={12} />
+                            </div>
                         </label>
 
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Judul (opsional)</label>
-                            <input
-                                type="text"
-                                value={title}
-                                onChange={e => setTitle(e.target.value)}
-                                placeholder="Promo Spesial Lebaran"
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
-                        </div>
+                        <div className="space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Judul Utama</label>
+                                <input
+                                    type="text"
+                                    value={title}
+                                    onChange={e => setTitle(e.target.value)}
+                                    placeholder="Contoh: Promo Flash Sale!"
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                                />
+                            </div>
 
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Subtitle (opsional)</label>
-                            <input
-                                type="text"
-                                value={subtitle}
-                                onChange={e => setSubtitle(e.target.value)}
-                                placeholder="Diskon hasta 50%"
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
-                        </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Subtitle / Punchline</label>
+                                <input
+                                    type="text"
+                                    value={subtitle}
+                                    onChange={e => setSubtitle(e.target.value)}
+                                    placeholder="Contoh: Diskon Hingga 90%"
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                                />
+                            </div>
 
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Kategori Tujuan (opsional)</label>
-                            <select
-                                value={selectedCategoryId}
-                                onChange={e => setSelectedCategoryId(e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-1 focus:ring-indigo-500 appearance-none"
-                            >
-                                <option value="">Pilih Kategori...</option>
-                                {categories.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                            </select>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tautan Kategori</label>
+                                <div className="relative">
+                                    <select
+                                        value={selectedCategoryId}
+                                        onChange={e => setSelectedCategoryId(e.target.value)}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all appearance-none font-medium"
+                                    >
+                                        <option value="">Tidak ada tautan</option>
+                                        {categories.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><ChevronRight size={16} className="rotate-90" /></div>
+                                </div>
+                            </div>
                         </div>
 
                         <button
                             type="submit"
                             disabled={saving}
-                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 disabled:bg-slate-400 transition-all"
+                            className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:bg-slate-300"
                         >
-                            {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                            <span>{saving ? "Menyimpan..." : editingBanner ? "Simpan Perubahan" : "Tambahkan"}</span>
+                            {saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                            <span>{saving ? "Memproses..." : editingBanner ? "Simpan Perubahan" : "Terbitkan Banner"}</span>
                         </button>
                     </form>
                 )}
 
-                {/* LIST BANNERS */}
+                {/* LIST BANNERS PREMIUM - Grid/Staggered Style */}
                 {loading ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                        <Loader2 className="animate-spin mb-3" size={28} />
-                        <p className="text-xs font-medium">Memuat banner...</p>
+                    <div className="space-y-4">
+                        {[1, 2].map(i => <div key={i} className="aspect-[21/9] bg-white rounded-3xl animate-pulse border border-slate-100" />)}
                     </div>
                 ) : banners.length > 0 ? (
-                    <div className="space-y-3">
+                    <div className="space-y-4 pb-12">
+                        <div className="flex items-center gap-2 ml-1">
+                            <div className="w-1 h-3.5 bg-indigo-500 rounded-full"></div>
+                            <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Daftar Banner Aktif</h3>
+                        </div>
                         {banners.map((b) => (
                             <div
                                 key={b.id}
-                                className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-all ${b.is_active ? 'border-indigo-100' : 'border-slate-100 opacity-60'}`}
+                                className={`bg-white rounded-[2rem] border shadow-sm overflow-hidden transition-all group ${b.is_active ? 'border-slate-100' : 'border-slate-200 opacity-60'}`}
                             >
-                                <div className="aspect-[21/9] bg-slate-100 relative">
-                                    <img src={b.image_url} className="w-full h-full object-cover" alt={b.title || "Banner"} />
+                                <div className="aspect-[21/9] bg-slate-100 relative overflow-hidden">
+                                    <img src={b.image_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={b.title || "Banner"} />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
+                                    
+                                    <div className="absolute bottom-4 left-5 right-5 text-white">
+                                        <h4 className="text-sm font-bold truncate leading-tight">{b.title || "Visual Tanpa Judul"}</h4>
+                                        {b.subtitle && <p className="text-[10px] font-medium text-white/80 line-clamp-1">{b.subtitle}</p>}
+                                    </div>
+
                                     {!b.is_active && (
-                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                            <span className="bg-slate-800 text-white text-[10px] font-bold px-3 py-1 rounded-md">NONAKTIF</span>
+                                        <div className="absolute inset-0 bg-white/20 backdrop-blur-[2px] flex items-center justify-center">
+                                            <span className="bg-slate-900/80 text-white text-[9px] font-extrabold px-3 py-1 rounded-full uppercase tracking-tighter shadow-lg">OFFLINE</span>
                                         </div>
                                     )}
                                 </div>
-                                <div className="p-3 flex items-center justify-between">
+                                <div className="px-5 py-4 flex items-center justify-between bg-white">
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-semibold text-slate-800 truncate">{b.title || "Tanpa Judul"}</p>
-                                        {b.subtitle && <p className="text-[10px] text-slate-400 truncate">{b.subtitle}</p>}
-                                        {b.link_url && <p className="text-[9px] text-indigo-500 truncate mt-0.5">→ {categories.find(c => b.link_url?.includes(c.id))?.name || b.link_url}</p>}
+                                        <div className="flex items-center gap-2">
+                                            <ImageIcon size={12} className="text-slate-300" />
+                                            <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-tighter">
+                                                {b.link_url ? (categories.find(c => b.link_url?.includes(c.id))?.name || "Direct Link") : "Tanpa Tautan"}
+                                            </p>
+                                        </div>
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0 ml-2">
                                         <button
                                             onClick={() => toggleActive(b.id, b.is_active)}
                                             disabled={processingId === b.id}
-                                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                            className={`p-2.5 rounded-xl transition-all ${b.is_active ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100' : 'text-slate-400 bg-slate-50 hover:bg-slate-100'}`}
                                         >
                                             {b.is_active ? <Eye size={16} /> : <EyeOff size={16} />}
                                         </button>
                                         <button
                                             onClick={() => openEditForm(b)}
-                                            className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                            className="p-2.5 text-slate-400 bg-slate-50 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
                                         >
                                             <Pencil size={16} />
                                         </button>
                                         <button
                                             onClick={() => deleteBanner(b.id)}
                                             disabled={processingId === b.id}
-                                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                            className="p-2.5 text-slate-400 bg-slate-50 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                                         >
                                             {processingId === b.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                                         </button>
@@ -323,10 +350,10 @@ export default function AdminBannersPage() {
                         ))}
                     </div>
                 ) : (
-                    <div className="text-center py-16 flex flex-col items-center border-2 border-dashed border-slate-200 rounded-2xl bg-white">
-                        <ImagePlus size={32} className="text-slate-300 mb-3" />
-                        <p className="text-sm font-semibold text-slate-700 mb-1">Belum Ada Banner</p>
-                        <p className="text-xs text-slate-400">Tambahkan banner promo untuk pengguna.</p>
+                    <div className="text-center py-20 bg-white rounded-[2.5rem] border border-dashed border-slate-100 flex flex-col items-center shadow-inner">
+                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-200 mb-4"><ImageIcon size={32} /></div>
+                        <h4 className="text-sm font-bold text-slate-700">Banner Kosong</h4>
+                        <p className="text-[10px] text-slate-400 font-medium px-10 leading-relaxed">Promosi utama belum dikonfigurasi. Tambahkan banner visual sekarang.</p>
                     </div>
                 )}
             </div>

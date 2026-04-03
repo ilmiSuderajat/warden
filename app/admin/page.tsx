@@ -3,42 +3,36 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
-import { ArrowLeft, Plus, Search, Filter, MoreVertical, LayoutDashboard, ShoppingBag, Users, Settings, Package, Truck, CheckCircle2, AlertCircle, Clock, ChevronRight, LogOut, ArrowRight, Tag, Camera, MapPin, Loader2, CreditCard, Image as ImageIcon, TrendingUp, Trash2, MessageCircle, Zap } from "lucide-react"
+import { LayoutDashboard, Users, Settings, Package, Truck, CheckCircle2, Search, Clock, ChevronRight, ArrowRight, Tag, CreditCard, ImageIcon, TrendingUp, XCircle, Store, Zap, MessageCircle, MoreVertical, Star, MapPin, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import Skeleton from "@/app/components/Skeleton"
 
-export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState("dashboard")
+export default function MasterAdminPage() {
   const [timeFilter, setTimeFilter] = useState("all")
-  const [products, setProducts] = useState<any[]>([])
-  const [categories, setCategories] = useState<any[]>([])
-  const [banners, setBanners] = useState<any[]>([])
-  const [categorySales, setCategorySales] = useState<any[]>([])
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    totalSales: 0,
-    pending: 0,
-    process: 0,
-    shipping: 0,
-    done: 0
-  })
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  // Navigation Items
-  const navItems = [
-    { id: "dashboard", label: "Beranda", icon: LayoutDashboard },
-    { id: "inventory", label: "Produk", icon: Package },
-    { id: "banners", label: "Banner", icon: ImageIcon },
-    { id: "orders", label: "Pesanan", icon: Truck },
-    { id: "settings", label: "Pengaturan", icon: Settings },
-  ]
+  // Data States
+  const [stats, setStats] = useState({
+    totalOmzet: 0,
+    shopRevenue: 0,
+    appCommission: 0,
+    ordersPending: 0,
+    ordersPaid: 0,
+    ordersShipping: 0,
+    ordersDone: 0,
+    ordersCanceled: 0,
+    totalUsers: 0,
+    totalProducts: 0,
+  })
+
+  const [topProducts, setTopProducts] = useState<any[]>([])
 
   const fetchData = async () => {
     setLoading(true)
 
-    // 1. Setup Filter Tanggal
-    let dateQuery = supabase.from('orders').select('status, total_amount, created_at, id, payment_status')
-
+    // 1. Setup Time Filter for Orders
+    let dateQuery = supabase.from('orders').select('id, status, payment_status, total_amount, shipping_amount, created_at')
+    
     if (timeFilter !== 'all') {
       const now = new Date()
       let startDate = new Date()
@@ -49,465 +43,293 @@ export default function AdminDashboard() {
     }
 
     const { data: orders } = await dateQuery
-    const { data: prod } = await supabase.from('products').select('*')
-    const { data: cat } = await supabase.from('categories').select('*')
-    const { data: ban } = await supabase.from('flash_sale_banners').select('*').order('created_at', { ascending: false })
-    const { count: userCount } = await supabase.from('users').select('*', { count: 'exact', head: true })
+    const { count: usersCount } = await supabase.from('users').select('*', { count: 'exact', head: true })
+    const { data: productsData } = await supabase.from('products').select(`
+      id, name, price, original_price, image_url, sold_count, category_id,
+      categories (name)
+    `)
 
-    // 2. Ambil Item Terjual (Mapping via Nama Produk)
-    const orderIds = orders?.map(o => o.id) || []
-    let items: any[] = []
-
-    if (orderIds.length > 0) {
-      try {
-        const { data: itemsData, error: itemsError } = await supabase
-          .from('order_items')
-          .select('quantity, product_name')
-          .in('order_id', orderIds)
-
-        if (itemsError) {
-          console.warn("[Admin] Failed to fetch order items for stats:", itemsError.message)
-        } else if (itemsData && prod) {
-          // Mapping manual di sisi klien menggunakan 'product_name'
-          items = itemsData.map(item => {
-            const product = prod.find(p => p.name === item.product_name)
-            return {
-              ...item,
-              products: product ? { category_id: product.category_id } : null
-            }
-          })
-        }
-      } catch (err) {
-        console.error("[Admin] Unexpected error fetching items:", err)
-      }
+    // Calculate Stats
+    let s = {
+      totalOmzet: 0,
+      shopRevenue: 0,
+      appCommission: 0, // Placeholder mapping if app commission exists in future
+      ordersPending: 0,
+      ordersPaid: 0,
+      ordersShipping: 0,
+      ordersDone: 0,
+      ordersCanceled: 0,
+      totalUsers: usersCount || 0,
+      totalProducts: productsData?.length || 0
     }
 
-    if (prod) setProducts(prod)
-    if (cat) setCategories(cat)
-    if (ban) setBanners(ban)
-
-    // 3. Hitung Statistik
     if (orders) {
-      const summary = orders.reduce((acc, curr) => {
-        acc.totalSales += curr.total_amount || 0;
-        // Penjualan yang belum dibayar
-        if (curr.payment_status === 'pending') acc.pending++;
-        // Penjualan yang sudah dibayar atau sedang diproses (COD)
-        if ((curr.payment_status === 'paid' || curr.payment_status === 'processing') && curr.status !== 'Selesai' && curr.status !== 'Dikirim') acc.process++;
-
-        if (curr.status === 'Dikirim') acc.shipping++;
-        if (curr.status === 'Selesai') acc.done++;
-        return acc;
-      }, { totalSales: 0, pending: 0, process: 0, shipping: 0, done: 0 })
-
-      setStats({ ...summary, totalUsers: userCount || 0 })
-    }
-
-    // 4. Hitung Penjualan per Kategori
-    if (items && cat) {
-      const catMap: any = {}
-      cat.forEach(c => catMap[c.id] = { name: c.name, total: 0 })
-
-      items.forEach((item: any) => {
-        const catId = item.products?.category_id
-        if (catId && catMap[catId]) {
-          catMap[catId].total += item.quantity
+      orders.forEach(o => {
+        // Status counts
+        if (o.status === 'Dibatalkan') {
+          s.ordersCanceled++
+        } else {
+          // If not canceled, compute financial metrics (omzet, owner amount)
+          const total = o.total_amount || 0
+          const shipping = o.shipping_amount || 0
+          s.totalOmzet += total
+          s.shopRevenue += Math.max(0, total - shipping) // Shop earnings
+          
+          if (o.status === 'Selesai') s.ordersDone++
+          else if (o.status === 'Dikirim') s.ordersShipping++
+          else if (o.payment_status === 'pending') s.ordersPending++
+          else s.ordersPaid++
         }
       })
-      setCategorySales(Object.values(catMap).sort((a: any, b: any) => b.total - a.total))
+    }
+
+    setStats(s)
+
+    // Top Products Sorting
+    if (productsData) {
+      // Sort by sold_count descending
+      const sorted = [...productsData].sort((a, b) => (b.sold_count || 0) - (a.sold_count || 0)).slice(0, 5)
+      setTopProducts(sorted)
     }
 
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [timeFilter])
+  useEffect(() => {
+    fetchData()
+  }, [timeFilter])
 
   return (
-    <div className="min-h-screen bg-slate-50/80 font-sans max-w-md mx-auto relative pb-24">
+    <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-24 selection:bg-indigo-100">
 
       {/* HEADER */}
-      <div className="bg-white border-b border-slate-100 sticky top-0 z-40">
-        <div className="flex items-center justify-between px-5 pt-12 pb-4">
+      <div className="bg-white sticky top-0 z-40 border-b border-slate-100/60 backdrop-blur-md bg-white/80">
+        <div className="px-5 pt-12 pb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold text-slate-900 tracking-tight">Master Admin</h1>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-              <p className="text-[10px] font-medium text-slate-400 uppercase">Toko Aktif</p>
+            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Master Admin</h1>
+            <div className="flex items-center gap-1.5 mt-0.5 opacity-80">
+              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">System Online</p>
             </div>
           </div>
-
-          {/* Time Filter Dropdown */}
-          <div className="relative">
+          <div className="relative group">
             <select
               value={timeFilter}
               onChange={(e) => setTimeFilter(e.target.value)}
-              className="appearance-none bg-slate-100 text-slate-600 text-xs font-semibold pl-3 pr-8 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer"
+              className="appearance-none bg-slate-100 text-slate-700 text-[11px] font-bold px-3 pr-8 py-2 rounded-xl outline-none border border-slate-200 focus:ring-2 focus:ring-indigo-100 cursor-pointer shadow-sm transition-all"
             >
               <option value="all">Semua Waktu</option>
-              <option value="daily">Hari Ini</option>
-              <option value="weekly">7 Hari Terakhir</option>
-              <option value="monthly">30 Hari Terakhir</option>
+              <option value="daily">Harian</option>
+              <option value="weekly">Mingguan</option>
+              <option value="monthly">Bulanan</option>
             </select>
-            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-indigo-500 transition-colors">
+              <ChevronRight size={14} className="rotate-90" />
             </div>
           </div>
         </div>
       </div>
 
-      <div className="p-5 space-y-5">
+      <div className="p-4 space-y-6">
 
-        {/* --- TAB DASHBOARD --- */}
-        {activeTab === "dashboard" && (
-          <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        {/* --- MAIN FINANCE DASHBOARD --- */}
+        <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
+          {/* Ornaments */}
+          <div className="absolute -top-12 -right-12 w-40 h-40 bg-indigo-500/20 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-purple-500/20 rounded-full blur-2xl"></div>
 
-            {/* Main Stats Card (Dark Mode) */}
-            <div className="bg-slate-900 p-6 rounded-2xl text-white shadow-lg relative overflow-hidden">
-              <div className="relative z-10">
-                {loading ? (
-                  <div className="space-y-6">
-                    <div className="flex justify-between items-start mb-6">
-                      <div className="space-y-2">
-                        <Skeleton className="h-3 w-20 bg-slate-700" />
-                        <Skeleton className="h-8 w-40 bg-slate-700" />
-                      </div>
-                      <Skeleton className="w-10 h-10 rounded-lg bg-slate-700" />
-                    </div>
-                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/10">
-                      {[1, 2, 3].map(i => (
-                        <div key={i} className="space-y-2">
-                          <Skeleton className="h-2 w-10 bg-slate-700" />
-                          <Skeleton className="h-5 w-12 bg-slate-700" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex justify-between items-start mb-6">
-                      <div>
-                        <p className="text-slate-400 text-xs font-medium mb-1">Total Omzet</p>
-                        <h2 className="text-2xl font-bold tracking-tight">Rp {stats.totalSales.toLocaleString('id-ID')}</h2>
-                      </div>
-                      <div className="p-2 bg-white/10 rounded-lg">
-                        <TrendingUp size={20} className="text-emerald-400" />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/10">
-                      <div>
-                        <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Users</p>
-                        <p className="text-lg font-bold">{stats.totalUsers}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Produk</p>
-                        <p className="text-lg font-bold">{products.length}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wide mb-1">Kategori</p>
-                        <p className="text-lg font-bold">{categories.length}</p>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-              {/* Decorative Element */}
-              <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl"></div>
-            </div>
-
-            {/* KATEGORI TERLARIS */}
-            <div>
-              <div className="flex justify-between items-center mb-3 px-1">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide">Kategori Terlaris</h3>
-              </div>
-              <div className="bg-white rounded-xl border border-slate-100 p-5 space-y-4">
-                {loading ? (
-                  Array(3).fill(0).map((_, i) => (
-                    <div key={i} className="space-y-2">
-                      <div className="flex justify-between">
-                        <Skeleton className="h-3 w-20" />
-                        <Skeleton className="h-3 w-10" />
-                      </div>
-                      <Skeleton className="h-1.5 w-full rounded-full" />
-                    </div>
-                  ))
-                ) : categorySales.length > 0 ? categorySales.map((c, i) => (
-                  <div key={i} className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-medium">
-                      <span className="text-slate-600">{c.name}</span>
-                      <span className="text-slate-900">{c.total} <span className="text-slate-400 font-normal">pcs</span></span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-indigo-500 rounded-full transition-all duration-1000"
-                        style={{ width: `${Math.min((c.total / (categorySales[0]?.total || 1)) * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                )) : (
-                  <p className="text-xs text-slate-400 text-center py-4">Belum ada penjualan.</p>
-                )}
+          <div className="relative z-10 space-y-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                  <TrendingUp size={12} className="text-emerald-400" />
+                  Total Omzet Utama
+                </p>
+                <h2 className="text-3xl font-extrabold tracking-tight">
+                  Rp {stats.totalOmzet.toLocaleString('id-ID')}
+                </h2>
               </div>
             </div>
 
-            {/* STATUS GRID */}
-            <div>
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 px-1">Status Pesanan</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {loading ? (
-                  Array(4).fill(0).map((_, i) => (
-                    <div key={i} className="p-5 rounded-xl border border-slate-100 bg-white space-y-3">
-                      <div className="flex justify-between">
-                        <Skeleton className="w-8 h-8 rounded-lg" />
-                        <Skeleton className="w-6 h-6" />
-                      </div>
-                      <Skeleton className="h-3 w-20" />
-                    </div>
-                  ))
-                ) : (
-                  <>
-                    <Link href="/admin/orders/unpaid">
-                      <StatCard label="Belum Bayar" value={stats.pending} icon={CreditCard} color="bg-amber-50 text-amber-600 border-amber-100" />
-                    </Link>
-                    <Link href="/admin/orders/paid">
-                      <StatCard label="Sudah Dibayar" value={stats.process} icon={Clock} color="bg-indigo-50 text-indigo-600 border-indigo-100" />
-                    </Link>
-                    <Link href="/admin/orders/dikirim">
-                      <StatCard label="Dikirim" value={stats.shipping} icon={Truck} color="bg-blue-50 text-blue-600 border-blue-100" />
-                    </Link>
-                    <Link href="/admin/orders/selesai">
-                      <StatCard label="Selesai" value={stats.done} icon={CheckCircle2} color="bg-emerald-50 text-emerald-600 border-emerald-100" />
-                    </Link>
-                    <Link href="/admin/withdrawals">
-                      <div className="col-span-2 p-5 rounded-xl border border-orange-100 bg-orange-50/50 text-slate-900 flex items-center justify-between transition-all hover:bg-orange-50 active:scale-[0.98] shadow-sm mb-3">
-                        <div className="flex items-center gap-4">
-                          <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
-                            <CreditCard size={20} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900 leading-tight">Kelola Penarikan Dana</p>
-                            <p className="text-[10px] text-slate-500 font-medium">Persetujuan pencairan saldo driver, toko & user</p>
-                          </div>
-                        </div>
-                        <ChevronRight size={16} className="text-orange-400" />
-                      </div>
-                    </Link>
-                    <Link href="/admin/customers">
-                      <div className="col-span-2 p-5 rounded-xl border border-blue-100 bg-white text-slate-900 flex items-center justify-between transition-all hover:bg-blue-50 active:scale-[0.98] shadow-sm">
-                        <div className="flex items-center gap-4">
-                          <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                            <Users size={20} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900 leading-tight">Daftar Pelanggan</p>
-                            <p className="text-[10px] text-slate-500 font-medium">Lihat user yang terdaftar</p>
-                          </div>
-                        </div>
-                        <ChevronRight size={16} className="text-slate-300" />
-                      </div>
-                    </Link>
-                    <Link href="/admin/drivers">
-                      <div className="col-span-2 p-5 rounded-xl border border-emerald-100 bg-emerald-50/50 text-slate-900 flex items-center justify-between transition-all hover:bg-emerald-50 active:scale-[0.98] shadow-sm">
-                        <div className="flex items-center gap-4">
-                          <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
-                            <Truck size={20} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900 leading-tight">Manajemen Driver</p>
-                            <p className="text-[10px] text-slate-500 font-medium">Kelola kurir & status dispatch</p>
-                          </div>
-                        </div>
-                        <ChevronRight size={16} className="text-emerald-400" />
-                      </div>
-                    </Link>
-                    <Link href="/admin/chat">
-                      <div className="col-span-2 p-5 rounded-xl border border-indigo-100 bg-indigo-600 text-white flex items-center justify-between transition-all hover:bg-indigo-700 active:scale-[0.98] shadow-lg shadow-indigo-200">
-                        <div className="flex items-center gap-4">
-                          <div className="p-2 bg-white/20 rounded-lg shadow-sm text-white">
-                            <MessageCircle size={20} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-white leading-tight">Live Chat</p>
-                            <p className="text-[10px] text-indigo-100 font-medium">Pusat Bantuan Pelanggan</p>
-                          </div>
-                        </div>
-                        <ChevronRight size={16} className="text-indigo-200" />
-                      </div>
-                    </Link>
-                    <Link href="/admin/vouchers">
-                      <div className="col-span-2 p-5 rounded-xl border border-indigo-100 bg-white text-slate-900 flex items-center justify-between transition-all hover:bg-slate-50 active:scale-[0.98] shadow-sm">
-                        <div className="flex items-center gap-4">
-                          <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
-                            <Tag size={20} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900 leading-tight">Kelola Voucher</p>
-                            <p className="text-[10px] text-slate-500 font-medium">Buat promo diskon & potongan harga</p>
-                          </div>
-                        </div>
-                        <ChevronRight size={16} className="text-slate-300" />
-                      </div>
-                    </Link>
-                    <Link href="/admin/flash-sale">
-                      <div className="col-span-2 p-5 rounded-xl border border-orange-100 bg-orange-50/50 flex items-center justify-between transition-all hover:bg-orange-50 active:scale-[0.98] shadow-sm mb-3">
-                        <div className="flex items-center gap-4">
-                          <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
-                            <Zap size={20} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900 leading-tight">Kelola Flash Sale</p>
-                            <p className="text-[10px] text-slate-500 font-medium">Atur produk diskon kilat & countdown timer</p>
-                          </div>
-                        </div>
-                        <ChevronRight size={16} className="text-orange-400" />
-                      </div>
-                    </Link>
-                    <Link href="/admin/ready">
-                      <div className="col-span-2 p-5 rounded-xl border border-indigo-100 bg-indigo-50/50 flex items-center justify-between transition-all hover:bg-indigo-50 active:scale-[0.98]">
-                        <div className="flex items-center gap-4">
-                          <div className="p-2 bg-white rounded-lg shadow-sm text-indigo-600">
-                            <Package size={20} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900 leading-tight">Kelola Jajanan Ready</p>
-                            <p className="text-[10px] text-slate-500 font-medium">Atur stok yang siap kirim</p>
-                          </div>
-                        </div>
-                        <ArrowRight size={16} className="text-indigo-400" />
-                      </div>
-                    </Link>
-                  </>
-                )}
+            <div className="grid grid-cols-2 gap-4 border-t border-white/10 pt-5">
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                <p className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Total Toko/Warung</p>
+                <p className="text-[15px] font-bold text-emerald-300">Rp {stats.shopRevenue.toLocaleString('id-ID')}</p>
+              </div>
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                <p className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Komisi Aplikasi</p>
+                <p className="text-[15px] font-bold text-indigo-300">Rp {stats.appCommission.toLocaleString('id-ID')}</p>
               </div>
             </div>
           </div>
-        )}
+        </section>
 
-        {/* --- TAB BANNERS --- */}
-        {activeTab === "banners" && (
-          <div className="space-y-4 animate-in fade-in duration-300 pt-2">
-            {/* Link ke Kelola Banner Promo */}
-            <Link
-              href="/admin/banners"
-              className="flex items-center justify-between w-full bg-gradient-to-r from-indigo-600 to-indigo-700 text-white p-4 rounded-xl shadow-sm shadow-indigo-100 active:scale-[0.98] transition-all"
-            >
-              <div>
-                <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Halaman Home</span>
-                <h3 className="text-sm font-bold">Kelola Banner Promo Slider</h3>
-              </div>
-              <ChevronRight size={20} />
+
+        {/* --- ORDER TRACKING WIDGETS --- */}
+        <section>
+          <div className="flex items-center gap-2 mb-3 ml-1">
+            <div className="w-1 h-3.5 bg-indigo-500 rounded-full"></div>
+            <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest">Pelacakan Pesanan</h3>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            <Link href="/admin/orders/unpaid" className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-2 hover:border-indigo-200 transition-all active:scale-95">
+              <div className="p-2 bg-amber-50 text-amber-600 rounded-xl"><Clock size={16} /></div>
+              <p className="text-[9px] font-bold text-slate-500 uppercase text-center leading-tight">Belum<br/>Bayar</p>
+              <span className="text-sm font-bold text-slate-800">{stats.ordersPending}</span>
             </Link>
+            <Link href="/admin/orders/paid" className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-2 hover:border-indigo-200 transition-all active:scale-95">
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><CreditCard size={16} /></div>
+              <p className="text-[9px] font-bold text-slate-500 uppercase text-center leading-tight">Sudah<br/>Dibayar</p>
+              <span className="text-sm font-bold text-slate-800">{stats.ordersPaid}</span>
+            </Link>
+            <Link href="/admin/orders/dikirim" className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-2 hover:border-indigo-200 transition-all active:scale-95">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Truck size={16} /></div>
+              <p className="text-[9px] font-bold text-slate-500 uppercase text-center leading-tight">Sedang<br/>Dikirim</p>
+              <span className="text-sm font-bold text-slate-800">{stats.ordersShipping}</span>
+            </Link>
+            <Link href="/admin/orders/selesai" className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-2 hover:border-indigo-200 transition-all active:scale-95">
+              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><CheckCircle2 size={16} /></div>
+              <p className="text-[9px] font-bold text-slate-500 uppercase text-center leading-tight">Telah<br/>Selesai</p>
+              <span className="text-sm font-bold text-slate-800">{stats.ordersDone}</span>
+            </Link>
+            <Link href="/admin/orders" className="bg-slate-50 p-3 rounded-2xl border border-slate-200 shadow-inner flex flex-col items-center justify-center gap-2 hover:bg-slate-100 transition-all active:scale-95 opacity-80">
+              <div className="p-2 bg-red-100 text-red-600 rounded-xl"><XCircle size={16} /></div>
+              <p className="text-[9px] font-bold text-slate-500 uppercase text-center leading-tight">Pesanan<br/>Batal</p>
+              <span className="text-sm font-bold text-slate-800">{stats.ordersCanceled}</span>
+            </Link>
+          </div>
+        </section>
 
-            <div className="flex justify-between items-center mb-2 px-1">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide">Kelola Banner Flash Sale</h3>
-              <Link
-                href="/admin/flash-sale"
-                className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                title="Kelola Banner & Produk Flash Sale"
-              >
-                <Plus size={16} />
-              </Link>
+
+        {/* --- BEST SELLER PRODUCTS --- */}
+        <section>
+          <div className="flex items-center justify-between mb-3 mx-1">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-3.5 bg-orange-500 rounded-full"></div>
+              <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest">Produk Paling Laris</h3>
             </div>
-
-            {banners.length > 0 ? banners.map((b) => (
-              <div key={b.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
-                <div className="w-20 h-14 rounded-lg bg-slate-100 overflow-hidden shrink-0 border border-slate-50 relative">
-                  <img src={b.image_url} className="w-full h-full object-cover" alt={b.title} />
-                  {!b.is_active && (
-                    <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
-                      <span className="text-[8px] font-bold text-white uppercase tracking-tighter">Nonaktif</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-xs font-semibold text-slate-800 line-clamp-1">{b.title}</h4>
-                  <p className="text-[10px] font-medium text-red-500 mt-0.5">{b.discount_text}</p>
-                  <p className="text-[9px] text-slate-400 mt-0.5 truncate">Exp: {new Date(b.end_date).toLocaleDateString('id-ID')}</p>
-                </div>
-                <button
-                  onClick={async () => {
-                    if (confirm("Hapus banner ini?")) {
-                      const { error } = await supabase.from('flash_sale_banners').delete().eq('id', b.id);
-                      if (!error) fetchData();
-                    }
-                  }}
-                  className="p-2 text-slate-300 hover:text-red-500 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            )) : (
-              <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-200">
-                <p className="text-xs text-slate-400">Belum ada banner.</p>
+            <Link href="/admin/add-product" className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">Semua</Link>
+          </div>
+          
+          <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-1 overflow-hidden">
+            {loading ? (
+              <div className="p-5 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-300" /></div>
+            ) : topProducts.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-400 font-medium">Belum ada produk laris</div>
+            ) : (
+              <div className="divide-y divide-slate-50">
+                {topProducts.map((p, idx) => {
+                  const img = Array.isArray(p.image_url) ? p.image_url[0] : p.image_url
+                  return (
+                    <Link key={p.id} href={`/admin/add-product/${p.id}`} className="flex items-center gap-3 p-3 hover:bg-slate-50 transition-colors group">
+                      <div className="w-14 h-14 rounded-2xl overflow-hidden bg-slate-50 border border-slate-100 shrink-0 relative">
+                        {img ? (
+                           <img src={img} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        ) : (
+                           <div className="w-full h-full flex items-center justify-center text-slate-200"><Package size={20} /></div>
+                        )}
+                        <div className="absolute top-0 left-0 bg-slate-900/60 text-white text-[8px] font-extrabold w-5 h-5 flex items-center justify-center rounded-br-lg z-10 backdrop-blur-sm">
+                          #{idx + 1}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-xs font-bold text-slate-800 truncate mb-1">{p.name}</h4>
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                            {p.categories?.name || 'Kategori Umum'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between mt-auto">
+                          <span className="text-xs font-extrabold text-slate-900">Rp {p.price.toLocaleString('id-ID')}</span>
+                          <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded-md">{p.sold_count} terjual</span>
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
             )}
-
-            <p className="text-[9px] text-slate-400 text-center px-4 italic">
-              Banner ini akan muncul di halaman /flash-sale sebagai header promo.
-            </p>
           </div>
-        )}
+        </section>
 
-        {/* --- TAB ORDERS & SETTINGS (Placeholder) --- */}
-        {activeTab === "orders" && (
-          <div className="text-center py-24 animate-in fade-in duration-300">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Truck size={24} className="text-slate-300" />
+
+        {/* --- MANAGEMENT MENU GRID --- */}
+        <section>
+          <div className="flex items-center gap-2 mb-3 ml-1 mt-6">
+            <div className="w-1 h-3.5 bg-blue-500 rounded-full"></div>
+            <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest">Master Management</h3>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pb-8">
+            {/* Promo & Marketing */}
+            <MenuCard href="/admin/flash-sale" icon={Zap} title="Flash Sale" desc="Kelola antrean produk kilat" color="orange" />
+            <MenuCard href="/admin/vouchers" icon={Tag} title="Voucher" desc="Kelola diskon voucher" color="rose" />
+            <div className="col-span-2">
+              <MenuCard href="/admin/banners" icon={ImageIcon} title="Banner Promo (Grid PromoBanner)" desc="Atur banner slide & visual promosi" color="indigo" layout="horizontal" />
             </div>
-            <p className="text-sm font-semibold text-slate-700">Manajemen Pesanan</p>
-            <p className="text-xs text-slate-400 mt-1">Pantau status pesanan di sini.</p>
-          </div>
-        )}
 
-        {activeTab === "settings" && (
-          <div className="text-center py-24 animate-in fade-in duration-300">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Settings size={24} className="text-slate-300" />
+            {/* Inventory & Shops */}
+            <div className="col-span-2">
+              <MenuCard href="/admin/shop-management" icon={Store} title="Owner & Warung" desc="Kelola profil owner dan kios" color="emerald" layout="horizontal" />
             </div>
-            <p className="text-sm font-semibold text-slate-700">Pengaturan</p>
-            <p className="text-xs text-slate-400 mt-1">Konfigurasi toko Anda.</p>
+            <MenuCard href="/admin/add-product" icon={Package} title="Produk" desc="Database semua barang" color="blue" />
+            <MenuCard href="/admin/ready" icon={Coffee} title="Jajanan Ready" desc="Produk siap saji cepat" color="amber" />
+            
+            {/* Logistics & Finance */}
+            <MenuCard href="/admin/drivers" icon={Truck} title="Manajemen Driver" desc="Aktivitas & kurir aktif" color="teal" />
+            <MenuCard href="/admin/withdrawals" icon={CreditCard} title="Penarikan Saldo" desc="Withdraw user, toko, driver" color="violet" />
+
+            {/* Users & Support */}
+            <div className="col-span-2">
+              <MenuCard href="/admin/chat" icon={MessageCircle} title="Live Chat CS" desc="Layanan support & chat pengguna" color="sky" layout="horizontal" />
+            </div>
+            <div className="col-span-2">
+              <MenuCard href="/admin/customers" icon={Users} title="User & Admin" desc="Database pengguna dan role akses" color="slate" layout="horizontal" />
+            </div>
           </div>
-        )}
-
-      </div>
-
-      {/* BOTTOM NAVIGATION */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 max-w-md mx-auto z-50">
-        <div className="flex justify-around items-center h-16">
-          {navItems.map((item) => {
-            const isActive = activeTab === item.id
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${isActive ? 'text-slate-900' : 'text-slate-400'
-                  }`}
-              >
-                <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                <span className={`text-[10px] font-semibold`}>{item.label}</span>
-                {isActive && (
-                  <div className="absolute bottom-0 h-0.5 w-8 bg-slate-900 rounded-full"></div>
-                )}
-              </button>
-            )
-          })}
-        </div>
+        </section>
       </div>
     </div>
   )
 }
 
-// Sub-component untuk Card Statistik (Clean Style)
-function StatCard({ label, value, icon: Icon, color }: any) {
+// ── CUSTOM COMPONENTS ──
+import { Coffee } from "lucide-react"
+
+function MenuCard({ href, icon: Icon, title, desc, color, layout = "vertical" }: any) {
+  const isHoriz = layout === "horizontal"
+  
+  const colorMap: Record<string, string> = {
+    indigo: "bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100",
+    orange: "bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-100",
+    rose: "bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100",
+    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100",
+    blue: "bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100",
+    amber: "bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100",
+    teal: "bg-teal-50 text-teal-600 border-teal-100 hover:bg-teal-100",
+    violet: "bg-violet-50 text-violet-600 border-violet-100 hover:bg-violet-100",
+    sky: "bg-sky-50 text-sky-600 border-sky-100 hover:bg-sky-100",
+    slate: "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+  }
+  
+  const iconBgMap: Record<string, string> = {
+    indigo: "bg-indigo-100/80", orange: "bg-orange-100/80", rose: "bg-rose-100/80", emerald: "bg-emerald-100/80",
+    blue: "bg-blue-100/80", amber: "bg-amber-100/80", teal: "bg-teal-100/80", violet: "bg-violet-100/80",
+    sky: "bg-sky-100/80", slate: "bg-slate-200/80"
+  }
+
   return (
-    <div className={`p-5 rounded-xl border ${color} transition-all hover:shadow-sm`}>
-      <div className="flex justify-between items-start mb-3">
-        <div className="p-1.5 bg-white rounded-lg shadow-xs"><Icon size={16} /></div>
-        <span className="text-xl font-bold">{value}</span>
+    <Link href={href} className={`flex ${isHoriz ? 'flex-row items-center justify-between' : 'flex-col items-start'} p-4 rounded-3xl border shadow-sm transition-all active:scale-[0.98] ${colorMap[color]}`}>
+      <div className={`flex ${isHoriz ? 'items-center gap-4' : 'flex-col gap-3'}`}>
+        <div className={`p-3 rounded-2xl ${iconBgMap[color]}`}>
+          <Icon size={isHoriz ? 22 : 24} strokeWidth={2.5} />
+        </div>
+        <div>
+          <h4 className="text-sm font-extrabold text-slate-800 leading-tight mb-0.5">{title}</h4>
+          <p className="text-[10px] font-semibold opacity-70 leading-snug pr-2">{desc}</p>
+        </div>
       </div>
-      <p className="text-[10px] font-bold uppercase tracking-wide opacity-80 line-clamp-1">{label}</p>
-    </div>
+      {isHoriz && <ChevronRight size={18} className="opacity-50 shrink-0 ml-2" />}
+    </Link>
   )
 }

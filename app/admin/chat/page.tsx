@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   Search, MessageCircle, Send, Loader2, User,
-  ChevronLeft, CheckCircle2, Sparkles, Clock
+  ChevronLeft, CheckCircle2, Sparkles, Clock, CircleDot, Info, Phone, MoreVertical
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -66,14 +66,12 @@ export default function AdminChatPage() {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior }), 80);
   }, []);
 
-  // Sync visible DOM window from all fetched messages
   const syncVisible = useCallback((focusNewest = false) => {
     const sliced = allMessagesRef.current.slice(-DOM_WINDOW);
     setVisibleMessages([...sliced]);
     if (focusNewest) scrollToBottom("auto");
   }, [scrollToBottom]);
 
-  // ── FETCH USERS ──
   const fetchUsers = useCallback(async (showLoading = true) => {
     if (showLoading) setLoadingUsers(true);
     try {
@@ -144,7 +142,6 @@ export default function AdminChatPage() {
       .eq("is_read", false);
   }, []);
 
-  // ── REALTIME GLOBAL CHANNEL ──
   useEffect(() => {
     fetchUsers();
 
@@ -153,7 +150,6 @@ export default function AdminChatPage() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chats" }, payload => {
         const msg = payload.new as ChatMessage;
 
-        // Sidebar update
         setUsers(prev => {
           const idx = prev.findIndex(u => u.user_id === msg.user_id);
           if (idx === -1) { fetchUsers(false); return prev; }
@@ -173,7 +169,6 @@ export default function AdminChatPage() {
           );
         });
 
-        // Active chat update
         const current = selectedUserRef.current;
         if (current && msg.user_id === current.user_id) {
           const all = allMessagesRef.current;
@@ -214,7 +209,6 @@ export default function AdminChatPage() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchUsers, markAsRead, syncVisible]);
 
-  // ── LOAD CHAT (initial page) ──
   const loadChat = async (chatUser: ChatUser) => {
     setSelectedUser(chatUser);
     setLoadingChat(true);
@@ -251,7 +245,6 @@ export default function AdminChatPage() {
     }
   };
 
-  // ── LOAD OLDER (via IntersectionObserver) ──
   const fetchOlder = useCallback(async () => {
     if (isFetchingOlder || !hasOlderOnServer || !selectedUserRef.current || !oldestCursorRef.current) return;
     setIsFetchingOlder(true);
@@ -276,7 +269,6 @@ export default function AdminChatPage() {
       oldestCursorRef.current = older[0].created_at;
       setHasOlderOnServer(older.length === FETCH_SIZE);
 
-      // Re-window from the top
       const all = allMessagesRef.current;
       setVisibleMessages([...all.slice(0, Math.min(DOM_WINDOW, all.length))]);
 
@@ -290,7 +282,6 @@ export default function AdminChatPage() {
     }
   }, [isFetchingOlder, hasOlderOnServer]);
 
-  // ── INTERSECTION OBSERVER ──
   useEffect(() => {
     const sentinel = topSentinelRef.current;
     if (!sentinel) return;
@@ -304,26 +295,22 @@ export default function AdminChatPage() {
     return () => observer.disconnect();
   }, [fetchOlder]);
 
-  // ── SCROLL TRACKING ──
   const handleScroll = useCallback(() => {
     const el = scrollAreaRef.current;
     if (!el) return;
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     isAtBottomRef.current = distFromBottom < 100;
 
-    // Re-window to newest when user returns to bottom
     if (isAtBottomRef.current && allMessagesRef.current.length > DOM_WINDOW) {
       setVisibleMessages([...allMessagesRef.current.slice(-DOM_WINDOW)]);
     }
   }, []);
 
-  // Auto-scroll for new messages
   useEffect(() => {
     if (visibleMessages.length === 0) return;
     if (isAtBottomRef.current) scrollToBottom("smooth");
   }, [visibleMessages, isTyping, scrollToBottom]);
 
-  // WebView keyboard
   useEffect(() => {
     if (typeof window === "undefined" || !window.visualViewport) return;
     const handleResize = () => {
@@ -335,7 +322,6 @@ export default function AdminChatPage() {
     return () => window.visualViewport?.removeEventListener("resize", handleResize);
   }, [scrollToBottom]);
 
-  // ── SEND MESSAGE ──
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedUser) return;
@@ -417,89 +403,99 @@ export default function AdminChatPage() {
   );
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full bg-slate-50 font-sans text-slate-900 border-x border-slate-200 shadow-xl overflow-hidden">
-      <div className="flex flex-col h-full max-w-5xl mx-auto w-full">
+    <div className="flex flex-col h-[100dvh] w-full bg-[#fdfdff] font-sans text-slate-900 border-x border-slate-100 shadow-2xl overflow-hidden selection:bg-indigo-100">
+      <div className="flex flex-col h-full max-w-5xl mx-auto w-full relative">
 
-        {/* ══ FIXED HEADER ══ */}
-        <div className="flex-none h-16 bg-white border-b border-slate-200 flex items-center px-4 shadow-sm z-20">
-          <button
-            onClick={() => router.push("/admin")}
-            className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-          >
-            <ChevronLeft size={20} strokeWidth={2.5} />
-          </button>
-          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center ml-2 mr-3">
-            <MessageCircle size={20} className="text-indigo-600" />
+        {/* ══ HEADER PREMIUM GLASSMISM ══ */}
+        <div className="flex-none h-20 bg-white/80 border-b border-slate-100/60 flex items-center justify-between px-6 backdrop-blur-xl shadow-sm z-30">
+          <div className="flex items-center gap-4">
+            <button
+                onClick={() => router.push("/admin")}
+                className="p-2.5 -ml-2 text-slate-400 hover:text-slate-900 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all active:scale-95 border border-slate-100/50"
+            >
+                <ChevronLeft size={22} strokeWidth={2.5} />
+            </button>
+            <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-indigo-600 rounded-[1.2rem] flex items-center justify-center shadow-lg shadow-indigo-100 text-white">
+                    <MessageCircle size={22} strokeWidth={2.5} />
+                </div>
+                <div>
+                    <h1 className="text-base font-black text-slate-900 tracking-tight leading-none mb-1">Live Chat</h1>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Support Center</p>
+                </div>
+            </div>
           </div>
-          <div>
-            <h1 className="text-base font-bold text-slate-800 tracking-tight">Live Chat</h1>
-            <p className="text-[11px] font-medium text-slate-500">Pusat Bantuan Pelanggan</p>
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase tracking-tighter border border-emerald-100 flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                System Online
+            </div>
           </div>
         </div>
 
         {/* ══ BODY ══ */}
         <div className="flex flex-1 overflow-hidden">
 
-          {/* ── SIDEBAR ── */}
+          {/* ── SIDEBAR REDESIGN ── */}
           <div
-            className={`w-full md:w-80 bg-white border-r border-slate-100 flex flex-col shrink-0 ${
+            className={`w-full md:w-80 bg-white/50 backdrop-blur-md border-r border-slate-100 flex flex-col shrink-0 transition-transform ${
               selectedUser ? "hidden md:flex" : "flex"
             }`}
           >
-            {/* Search */}
-            <div className="p-3 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
-                <Search size={15} className="text-slate-400" />
+            {/* Search Premium */}
+            <div className="p-4 shrink-0">
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                  <Search size={16} strokeWidth={3} />
+                </div>
                 <input
                   type="text"
-                  placeholder="Cari pembeli..."
+                  placeholder="Cari percakapan..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400 text-gray-800"
+                  className="w-full pl-11 pr-4 py-3 bg-white border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-50 transition-all text-xs font-bold shadow-sm"
                 />
               </div>
             </div>
 
             {/* User list */}
-            <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+            <div className="flex-1 overflow-y-auto space-y-1 p-2">
               {loadingUsers ? (
-                <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-                  <Loader2 size={24} className="animate-spin mb-2" />
-                  <p className="text-xs">Memuat obrolan...</p>
-                </div>
+                 [1,2,3,4,5].map(i => (
+                     <div key={i} className="h-20 bg-white/60 rounded-2xl animate-pulse mx-2" />
+                 ))
               ) : filteredUsers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-10 text-center text-slate-500">
-                  <MessageCircle size={32} className="text-slate-300 mb-3" />
-                  <p className="text-sm font-semibold text-slate-700">Tidak ada chat</p>
-                  <p className="text-xs text-slate-400 mt-1">Belum ada pelanggan yang menghubungi.</p>
+                <div className="flex flex-col items-center justify-center p-12 text-center">
+                  <div className="p-4 bg-slate-50 rounded-full text-slate-200 mb-4"><MessageCircle size={32} /></div>
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Chat Kosong</p>
                 </div>
               ) : (
                 filteredUsers.map(u => (
                   <button
                     key={u.user_id}
                     onClick={() => loadChat(u)}
-                    className={`w-full p-4 flex gap-3 text-left transition-colors hover:bg-slate-50 active:bg-indigo-50/60 ${
-                      selectedUser?.user_id === u.user_id ? "bg-indigo-50/50" : ""
+                    className={`w-full p-4 flex gap-4 text-left transition-all rounded-[1.8rem] mb-1 group relative ${
+                      selectedUser?.user_id === u.user_id ? "bg-indigo-600 text-white shadow-xl shadow-indigo-100 scale-[1.02] z-10" : "hover:bg-white hover:shadow-sm"
                     }`}
                   >
                     <div className="relative shrink-0">
-                      <div className="w-11 h-11 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200">
-                        <User size={20} className="text-slate-400" />
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border font-black text-lg transition-colors ${selectedUser?.user_id === u.user_id ? 'bg-indigo-500 border-indigo-400 text-white' : 'bg-slate-50 border-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500 group-hover:border-indigo-100'}`}>
+                        {u.name.charAt(0).toUpperCase()}
                       </div>
                       {u.unread_count > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                        <span className={`absolute -top-1 -right-1 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-lg shadow-lg ${selectedUser?.user_id === u.user_id ? 'bg-rose-500' : 'bg-indigo-600'}`}>
                           {u.unread_count > 9 ? "9+" : u.unread_count}
                         </span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center mb-0.5">
-                        <h3 className={`text-sm font-bold truncate ${u.unread_count > 0 ? "text-slate-900" : "text-slate-700"}`}>{u.name}</h3>
-                        <span className="text-[10px] text-slate-400 ml-2 whitespace-nowrap">
-                          {new Date(u.last_message_time).toLocaleDateString("id-ID", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
+                        <h3 className={`text-sm font-black truncate tracking-tight ${selectedUser?.user_id === u.user_id ? "text-white" : "text-slate-800"}`}>{u.name}</h3>
+                        <span className={`text-[8px] font-black uppercase tracking-tighter ml-2 whitespace-nowrap ${selectedUser?.user_id === u.user_id ? "text-white/60" : "text-slate-300"}`}>
+                           {new Date(u.last_message_time).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
-                      <p className={`text-xs truncate ${u.unread_count > 0 ? "font-semibold text-slate-800" : "text-slate-500"}`}>
+                      <p className={`text-[11px] truncate tracking-tight ${selectedUser?.user_id === u.user_id ? "font-medium text-white/80" : "font-bold text-slate-400"}`}>
                         {u.last_message}
                       </p>
                     </div>
@@ -509,157 +505,173 @@ export default function AdminChatPage() {
             </div>
           </div>
 
-          {/* ── CHAT PANEL ── */}
+          {/* ── CHAT PANEL REDESIGN ── */}
           <div
-            className={`flex-1 flex flex-col min-w-0 ${
-              !selectedUser ? "hidden md:flex items-center justify-center bg-slate-50/50" : "flex bg-white"
+            className={`flex-1 flex flex-col min-w-0 relative shadow-2xl ${
+              !selectedUser ? "hidden md:flex items-center justify-center bg-slate-50/30" : "flex bg-white"
             }`}
           >
             {!selectedUser ? (
-              <div className="text-center opacity-40">
-                <MessageCircle size={64} className="mx-auto mb-4" />
-                <p className="font-semibold text-lg">Warung Kita Chat Center</p>
-                <p className="text-sm mt-1">Pilih chat pada sidebar untuk mulai merespon</p>
+              <div className="text-center opacity-20 flex flex-col items-center">
+                <div className="w-24 h-24 bg-slate-100 rounded-[2.5rem] flex items-center justify-center text-slate-400 mb-6"><MessageCircle size={48} /></div>
+                <h4 className="font-black text-xl tracking-tighter uppercase">Warden Admin Chat</h4>
+                <p className="text-sm font-bold mt-2">Pilih pelanggan untuk memulai bantuan</p>
               </div>
             ) : (
               <>
-                {/* Chat Header — fixed within panel */}
-                <div className="flex-none h-16 bg-white border-b border-slate-100 flex items-center px-4 shadow-sm z-10">
-                  <button
-                    onClick={() => setSelectedUser(null)}
-                    className="p-2 -ml-2 mr-2 md:hidden text-slate-600 hover:bg-slate-100 rounded-xl"
-                  >
-                    <ChevronLeft size={20} strokeWidth={2.5} />
-                  </button>
-                  <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mr-3 border border-slate-200">
-                    <User size={18} className="text-slate-500" />
-                  </div>
-                  <div className="flex-1">
-                    <h2 className="text-sm font-bold text-slate-800">{selectedUser.name}</h2>
-                    <div className="flex items-center gap-1.5 text-emerald-600 mt-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider">Online</span>
+                {/* Active Chat Header */}
+                <div className="flex-none h-20 bg-white/60 backdrop-blur-md border-b border-slate-50 flex items-center justify-between px-6 z-20">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => setSelectedUser(null)}
+                            className="p-2 -ml-2 mr-1 md:hidden text-slate-400 hover:text-slate-900 bg-slate-50 rounded-xl"
+                        >
+                            <ChevronLeft size={20} strokeWidth={3} />
+                        </button>
+                        <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 bg-slate-100 rounded-2xl flex items-center justify-center border border-slate-200">
+                                <User size={20} className="text-slate-400" strokeWidth={2.5} />
+                            </div>
+                            <div className="min-w-0">
+                                <h2 className="text-sm font-black text-slate-800 truncate">{selectedUser.name}</h2>
+                                <div className="flex items-center gap-1.5 text-emerald-600">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                                    <span className="text-[10px] font-black uppercase tracking-tighter">Verified session</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                  </div>
+                    <div className="flex items-center gap-1">
+                        <button className="p-2.5 text-slate-300 hover:text-slate-600 transition-colors"><Phone size={18} /></button>
+                        <button className="p-2.5 text-slate-300 hover:text-slate-600 transition-colors"><MoreVertical size={18} /></button>
+                    </div>
                 </div>
 
                 {/* Messages scroll area */}
                 <div
                   ref={scrollAreaRef}
                   onScroll={handleScroll}
-                  className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#f8fafc]"
+                  className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#fcfdff]"
                 >
-                  {/* Top sentinel */}
-                  <div ref={topSentinelRef} className="flex justify-center h-6 items-center">
+                  <div ref={topSentinelRef} className="flex justify-center h-8 items-center">
                     {isFetchingOlder ? (
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <Loader2 size={12} className="animate-spin text-indigo-400" />
-                        Memuat pesan lama...
+                      <div className="px-4 py-1.5 bg-white border border-slate-100 rounded-full flex items-center gap-2 text-[10px] font-bold text-slate-400 shadow-sm">
+                        <Loader2 size={12} className="animate-spin text-indigo-500" />
+                        Sinkronisasi pesan lama...
                       </div>
                     ) : hasOlderOnServer ? (
-                      <div className="w-2 h-2 rounded-full bg-slate-200" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-200" />
                     ) : (
-                      <span className="text-[10px] text-slate-300 tracking-wide">Awal percakapan</span>
+                      <div className="px-4 py-1.5 bg-slate-50 rounded-full text-[9px] font-black text-slate-300 uppercase tracking-widest">Chat dimulai</div>
                     )}
                   </div>
 
                   {loadingChat ? (
-                    <div className="flex justify-center text-indigo-600 py-10">
-                      <Loader2 size={32} className="animate-spin" />
+                    <div className="flex justify-center py-20">
+                      <div className="w-10 h-10 border-4 border-indigo-50 border-t-indigo-500 rounded-full animate-spin"></div>
                     </div>
                   ) : (
-                    visibleMessages.map(msg => {
+                    visibleMessages.map((msg, i) => {
                       const isAdmin = msg.sender_type === "admin";
                       const isTemp = msg.id.startsWith("temp-");
-                      const isNew = newMessageIds.has(msg.id);
+                      const showDate = i === 0 || new Date(msg.created_at).getDate() !== new Date(visibleMessages[i-1].created_at).getDate();
 
                       return (
-                        <div
-                          key={msg.id}
-                          className={`flex ${isAdmin ? "justify-end" : "justify-start"} ${
-                            isNew ? (isAdmin ? "msg-slide-right" : "msg-slide-left") : ""
-                          }`}
-                        >
-                          <div className={`max-w-[75%] md:max-w-[60%] flex flex-col ${isAdmin ? "items-end" : "items-start"}`}>
-                            <div
-                              className={`px-4 py-2.5 rounded-2xl ${
-                                isAdmin
-                                  ? "bg-indigo-600 text-white rounded-tr-sm shadow-md shadow-indigo-100"
-                                  : "bg-white text-slate-800 border border-slate-200 rounded-tl-sm shadow-sm"
-                              } ${isTemp ? "opacity-60" : "opacity-100 transition-opacity duration-300"}`}
-                            >
-                              <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                        <div key={msg.id} className="space-y-4">
+                            {showDate && (
+                                <div className="flex justify-center my-4">
+                                    <span className="px-3 py-1 bg-slate-100 rounded-lg text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                                        {new Date(msg.created_at).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })}
+                                    </span>
+                                </div>
+                            )}
+                            <div className={`flex ${isAdmin ? "justify-end" : "justify-start"} group`}>
+                                <div className={`max-w-[80%] md:max-w-[70%] flex flex-col ${isAdmin ? "items-end" : "items-start"}`}>
+                                    <div
+                                        className={`px-5 py-3 rounded-3xl relative shadow-sm transition-all duration-300 ${
+                                            isAdmin
+                                            ? "bg-indigo-600 text-white rounded-tr-sm shadow-indigo-100"
+                                            : "bg-white text-slate-800 border border-slate-100 rounded-tl-sm"
+                                        } ${isTemp ? "opacity-40 translate-y-1" : "opacity-100"}`}
+                                    >
+                                        <p className="text-[13px] font-bold leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                                    </div>
+                                    <div className={`flex items-center gap-2 mt-1.5 px-1.5 ${isAdmin ? "flex-row-reverse" : ""}`}>
+                                        <span className="text-[9px] font-black text-slate-300 uppercase">
+                                            {isTemp ? "SINKRON..." : new Date(msg.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                                        </span>
+                                        {isAdmin && !isTemp && (
+                                            msg.is_read 
+                                                ? <CheckCircle2 size={12} className="text-emerald-500" strokeWidth={2.5} /> 
+                                                : <CheckCircle2 size={12} className="text-slate-200" strokeWidth={2.5} />
+                                        )}
+                                    </div>
+                                </div>
                             </div>
-                            <div className={`flex items-center gap-1 mt-1 px-1 ${isAdmin ? "flex-row-reverse" : ""}`}>
-                              <span className="text-[10px] text-slate-400 font-medium">
-                                {isTemp ? "Mengirim..." : new Date(msg.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                              </span>
-                              {isAdmin && (
-                                isTemp
-                                  ? <Clock size={11} className="text-slate-300" />
-                                  : <CheckCircle2 size={12} className={msg.is_read ? "read-receipt-read" : "read-receipt-unread"} />
-                              )}
-                            </div>
-                          </div>
                         </div>
                       );
                     })
                   )}
 
-                  {/* Typing indicator */}
                   {isTyping && (
-                    <div className="flex justify-start msg-slide-left">
-                      <div className="bg-white border px-4 py-2.5 rounded-2xl rounded-tl-sm shadow-sm">
-                        <div className="flex gap-1 items-center">
-                          <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                          <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                          <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                    <div className="flex justify-start items-center gap-2">
+                        <div className="bg-slate-50 px-4 py-3 rounded-2xl rounded-tl-sm border border-slate-100">
+                             <div className="flex gap-1">
+                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" />
+                             </div>
                         </div>
-                      </div>
                     </div>
                   )}
 
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input */}
-                <form onSubmit={sendMessage} className="flex-none p-4 bg-white border-t border-slate-200">
-                  <div className="flex gap-3">
-                    <div className="relative flex-1">
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        value={newMessage}
-                        onChange={e => { setNewMessage(e.target.value); handleTyping(); }}
-                        onFocus={handleFocus}
-                        style={{ fontSize: "16px" }}
-                        placeholder={`Balas ${selectedUser.name}...`}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-inner pr-12"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAIReply}
-                        disabled={loadingAI}
-                        title="Auto-reply dengan AI"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 disabled:opacity-50 transition-all"
-                      >
-                        {loadingAI ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                      </button>
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={!newMessage.trim()}
-                      className="h-auto px-5 bg-indigo-600 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-indigo-700 active:scale-95 disabled:bg-slate-300 transition-all shadow-md shadow-indigo-200"
-                    >
-                      <span>Kirim</span>
-                      <Send size={16} />
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-                    <Sparkles size={10} className="text-indigo-400" />
-                    Klik ikon bintang untuk saran balasan dari AI Warung Kita
-                  </p>
-                </form>
+                {/* Input Designer Look */}
+                <div className="flex-none p-5 bg-white border-t border-slate-50 z-20">
+                    <form onSubmit={sendMessage} className="relative">
+                        <div className="flex gap-3 items-center">
+                            <div className="relative flex-1 group">
+                                <input
+                                    ref={inputRef}
+                                    type="text"
+                                    value={newMessage}
+                                    onChange={e => { setNewMessage(e.target.value); handleTyping(); }}
+                                    onFocus={handleFocus}
+                                    style={{ fontSize: "16px" }}
+                                    placeholder={`Tulis balasan untuk ${selectedUser.name.split(' ')[0]}...`}
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-[2rem] px-6 py-4 text-sm font-bold outline-none focus:bg-white focus:ring-4 focus:ring-indigo-100/50 transition-all shadow-inner pr-14 placeholder:text-slate-300"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleAIReply}
+                                    disabled={loadingAI}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-[1.4rem] bg-white text-indigo-600 hover:text-white hover:bg-indigo-600 shadow-sm border border-slate-100 transition-all disabled:opacity-40"
+                                >
+                                    {loadingAI ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} strokeWidth={2.5} />}
+                                </button>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={!newMessage.trim()}
+                                className="w-14 h-14 bg-indigo-600 text-white rounded-[1.8rem] flex items-center justify-center shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-90 transition-all disabled:bg-slate-200 disabled:shadow-none"
+                            >
+                                <Send size={24} strokeWidth={2.5} className="mr-0.5" />
+                            </button>
+                        </div>
+                        <div className="mt-3 flex items-center gap-2 px-1">
+                            <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 rounded-full">
+                                <Sparkles size={11} className="text-indigo-400" />
+                                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-tighter">AI Assistant Active</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-full">
+                                <Info size={11} className="text-slate-300" />
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Shift: Administrator</span>
+                            </div>
+                        </div>
+                    </form>
+                </div>
               </>
             )}
           </div>

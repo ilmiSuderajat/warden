@@ -44,7 +44,7 @@ export default function PromoBanner() {
 
     return (
         <div className="flex flex-col justify-center">
-            <div className="relative  overflow-hidden shadow-sm">
+            <div className="relative rounded-xl overflow-hidden shadow-sm">
                 {/* Slides */}
                 <div
                     className="flex transition-transform duration-500 ease-in-out"
