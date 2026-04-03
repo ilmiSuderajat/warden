@@ -20,8 +20,13 @@
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .skeleton-shimmer {
@@ -71,6 +76,7 @@ body {
     opacity: 0;
     transform: translateX(-12px) translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0) translateY(0);
@@ -82,6 +88,7 @@ body {
     opacity: 0;
     transform: translateX(12px) translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0) translateY(0);
@@ -89,9 +96,17 @@ body {
 }
 
 @keyframes readReceiptPulse {
-  0% { color: #cbd5e1; }
-  60% { color: #6ee7b7; }
-  100% { color: #10b981; }
+  0% {
+    color: #cbd5e1;
+  }
+
+  60% {
+    color: #6ee7b7;
+  }
+
+  100% {
+    color: #10b981;
+  }
 }
 
 .msg-slide-left {
@@ -109,4 +124,15 @@ body {
 
 .read-receipt-unread {
   color: #cbd5e1;
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }

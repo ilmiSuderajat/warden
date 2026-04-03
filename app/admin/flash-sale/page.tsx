@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase"
 import { ArrowLeft, Loader2, Zap, Clock, ToggleLeft, ToggleRight, CheckCircle, Search, Hash } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import imageCompression from "browser-image-compression"
+import { ImagePlus } from "lucide-react"
 
 export default function ManageFlashSalePage() {
   const router = useRouter()
@@ -18,7 +20,12 @@ export default function ManageFlashSalePage() {
   const [savingSoldCount, setSavingSoldCount] = useState(false)
   const [endDate, setEndDate] = useState("")
   const [savingDate, setSavingDate] = useState(false)
-  const [activeBanner, setActiveBanner] = useState<any>(null)
+   const [activeBanner, setActiveBanner] = useState<any>(null)
+ 
+   const [bannerTitle, setBannerTitle] = useState("")
+   const [imageFile, setImageFile] = useState<File | null>(null)
+   const [imagePreview, setImagePreview] = useState("")
+   const [savingBanner, setSavingBanner] = useState(false)
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -43,6 +50,8 @@ export default function ManageFlashSalePage() {
       if (bData) {
         setActiveBanner(bData)
         setEndDate(bData.end_date ? new Date(bData.end_date).toISOString().slice(0, 16) : "")
+        setBannerTitle(bData.title || "")
+        setImagePreview(bData.image_url || "")
       }
 
       setLoading(false)
@@ -106,32 +115,76 @@ export default function ManageFlashSalePage() {
     }
   }
 
-  // Simpan countdown ke flash_sale_banners
-  const handleSaveCountdown = async () => {
-    if (!endDate) return toast.error("Pilih waktu berakhir dulu!")
-    setSavingDate(true)
-
-    const isoDate = new Date(endDate).toISOString()
-    let error
-
-    if (activeBanner?.id) {
-      ; ({ error } = await supabase
-        .from("flash_sale_banners")
-        .update({ end_date: isoDate })
-        .eq("id", activeBanner.id))
-    } else {
-      const { data, error: insertError } = await supabase
-        .from("flash_sale_banners")
-        .insert({ title: "Flash Sale", image_url: "", end_date: isoDate, is_active: true })
-        .select()
-        .single()
-      error = insertError
-      if (data) setActiveBanner(data)
+  // Handle Image Change
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setImageFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => setImagePreview(reader.result as string)
+      reader.readAsDataURL(file)
     }
+  }
 
-    setSavingDate(false)
-    if (error) toast.error("Gagal simpan: " + error.message)
-    else toast.success("Countdown berhasil disimpan! ⚡")
+  // Simpan Banner (Title, Image, Countdown)
+  const handleSaveBanner = async () => {
+    if (!endDate) return toast.error("Pilih waktu berakhir dulu!")
+    setSavingBanner(true)
+
+    try {
+      let finalImageUrl = activeBanner?.image_url || ""
+
+      // Upload image if changed
+      if (imageFile) {
+        const options = { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: true }
+        const compressed = await imageCompression(imageFile, options)
+        const ext = imageFile.name.split('.').pop()
+        const fileName = `flash-sale-${Date.now()}.${ext}`
+
+        const { error: uploadErr } = await supabase.storage
+          .from("product-images")
+          .upload(fileName, compressed)
+
+        if (uploadErr) throw uploadErr
+
+        const { data: { publicUrl } } = supabase.storage
+          .from("product-images")
+          .getPublicUrl(fileName)
+
+        finalImageUrl = publicUrl
+      }
+
+      const isoDate = new Date(endDate).toISOString()
+      const payload = {
+        title: bannerTitle || "Flash Sale",
+        image_url: finalImageUrl,
+        end_date: isoDate,
+        is_active: true
+      }
+
+      let error
+      if (activeBanner?.id) {
+        ; ({ error } = await supabase
+          .from("flash_sale_banners")
+          .update(payload)
+          .eq("id", activeBanner.id))
+      } else {
+        const { data, error: insertError } = await supabase
+          .from("flash_sale_banners")
+          .insert(payload)
+          .select()
+          .single()
+        error = insertError
+        if (data) setActiveBanner(data)
+      }
+
+      if (error) throw error
+      toast.success("Banner Flash Sale berhasil diperbarui! ⚡")
+    } catch (err: any) {
+      toast.error("Gagal simpan: " + err.message)
+    } finally {
+      setSavingBanner(false)
+    }
   }
 
   return (
@@ -163,36 +216,63 @@ export default function ManageFlashSalePage() {
 
       <div className="p-4 space-y-4">
 
-        {/* ── COUNTDOWN ── */}
+        {/* ── BANNER & COUNTDOWN ── */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="px-4 pt-4 pb-3 border-b border-slate-50 flex items-center gap-3">
             <div className="p-2 bg-indigo-50 rounded-xl">
               <Clock size={16} className="text-indigo-500" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-800">Countdown Timer</h3>
-              <p className="text-[10px] text-slate-400">
-                {activeBanner?.end_date
-                  ? `Aktif · berakhir ${new Date(activeBanner.end_date).toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
-                  : "Belum diset"
-                }
-              </p>
+              <h3 className="text-sm font-bold text-slate-800">Banner & Countdown</h3>
+              <p className="text-[10px] text-slate-400">Atur tampilan promo di halaman depan</p>
             </div>
           </div>
 
-          <div className="p-4 space-y-3">
-            <input
-              type="datetime-local"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:ring-1 focus:ring-indigo-400 transition-all"
-              value={endDate}
-              onChange={e => setEndDate(e.target.value)}
-            />
+          <div className="p-4 space-y-4">
+            {/* Upload Gambar Banner */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Gambar Banner</label>
+              <label className="block aspect-[21/9] bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 cursor-pointer overflow-hidden hover:border-indigo-300 transition-colors relative">
+                {imagePreview ? (
+                  <img src={imagePreview} className="w-full h-full object-cover" alt="preview" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-300">
+                    <ImagePlus size={24} />
+                    <span className="text-[9px] mt-2 font-bold uppercase tracking-tighter">Upload Banner</span>
+                  </div>
+                )}
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+              </label>
+            </div>
+
+            {/* Judul Promo */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Judul Promo</label>
+              <input
+                type="text"
+                placeholder="Contoh: Flash Sale Lebaran"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:ring-1 focus:ring-indigo-400 transition-all font-medium"
+                value={bannerTitle}
+                onChange={e => setBannerTitle(e.target.value)}
+              />
+            </div>
+
+            {/* Waktu Berakhir */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Waktu Berakhir</label>
+              <input
+                type="datetime-local"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:ring-1 focus:ring-indigo-400 transition-all font-medium"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+              />
+            </div>
 
             {endDate && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 rounded-xl">
+              <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 rounded-xl border border-indigo-100">
                 <CheckCircle size={12} className="text-indigo-400 flex-shrink-0" />
-                <span className="text-[11px] text-indigo-600 font-medium">
-                  {new Date(endDate).toLocaleString("id-ID", {
+                <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">
+                  Ends: {new Date(endDate).toLocaleString("id-ID", {
                     weekday: "long", day: "numeric", month: "long",
                     hour: "2-digit", minute: "2-digit"
                   })}
@@ -202,13 +282,13 @@ export default function ManageFlashSalePage() {
 
             <button
               type="button"
-              onClick={handleSaveCountdown}
-              disabled={savingDate || !endDate}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-200 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+              onClick={handleSaveBanner}
+              disabled={savingBanner || !endDate}
+              className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-200 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-slate-200"
             >
-              {savingDate
+              {savingBanner
                 ? <><Loader2 size={14} className="animate-spin" />Menyimpan...</>
-                : <><Clock size={14} />Simpan Countdown</>
+                : <><Zap size={14} className="fill-white" />Update Banner Flash Sale</>
               }
             </button>
           </div>

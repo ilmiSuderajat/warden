@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
-import { ArrowLeft, Plus, Search, Filter, MoreVertical, LayoutDashboard, ShoppingBag, Users, Settings, Package, Truck, CheckCircle2, AlertCircle, Clock, ChevronRight, LogOut, ArrowRight, Tag, Camera, MapPin, Loader2, CreditCard, Image as ImageIcon, TrendingUp, Trash2, MessageCircle } from "lucide-react"
+import { ArrowLeft, Plus, Search, Filter, MoreVertical, LayoutDashboard, ShoppingBag, Users, Settings, Package, Truck, CheckCircle2, AlertCircle, Clock, ChevronRight, LogOut, ArrowRight, Tag, Camera, MapPin, Loader2, CreditCard, Image as ImageIcon, TrendingUp, Trash2, MessageCircle, Zap } from "lucide-react"
 import { toast } from "sonner"
 import Skeleton from "@/app/components/Skeleton"
 
@@ -350,6 +350,20 @@ export default function AdminDashboard() {
                         <ChevronRight size={16} className="text-slate-300" />
                       </div>
                     </Link>
+                    <Link href="/admin/flash-sale">
+                      <div className="col-span-2 p-5 rounded-xl border border-orange-100 bg-orange-50/50 flex items-center justify-between transition-all hover:bg-orange-50 active:scale-[0.98] shadow-sm mb-3">
+                        <div className="flex items-center gap-4">
+                          <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
+                            <Zap size={20} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900 leading-tight">Kelola Flash Sale</p>
+                            <p className="text-[10px] text-slate-500 font-medium">Atur produk diskon kilat & countdown timer</p>
+                          </div>
+                        </div>
+                        <ChevronRight size={16} className="text-orange-400" />
+                      </div>
+                    </Link>
                     <Link href="/admin/ready">
                       <div className="col-span-2 p-5 rounded-xl border border-indigo-100 bg-indigo-50/50 flex items-center justify-between transition-all hover:bg-indigo-50 active:scale-[0.98]">
                         <div className="flex items-center gap-4">
@@ -388,13 +402,13 @@ export default function AdminDashboard() {
 
             <div className="flex justify-between items-center mb-2 px-1">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide">Kelola Banner Flash Sale</h3>
-              <button
-                onClick={() => toast.info("Fitur Tambah Banner: Masukkan data ke table flash_sale_banners di Supabase untuk saat ini.")}
+              <Link
+                href="/admin/flash-sale"
                 className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                title="Sistem manajemen banner lengkap sedang dikembangkan"
+                title="Kelola Banner & Produk Flash Sale"
               >
                 <Plus size={16} />
-              </button>
+              </Link>
             </div>
 
             {banners.length > 0 ? banners.map((b) => (

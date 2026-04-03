@@ -34,7 +34,7 @@ export default function PromoBanner() {
 
     if (isLoading) {
         return (
-            <div className="px-4 mt-16">
+            <div>
                 <div className="skeleton-shimmer rounded-2xl aspect-[21/9] w-full" />
             </div>
         )
@@ -43,8 +43,8 @@ export default function PromoBanner() {
     if (banners.length === 0) return null
 
     return (
-        <div className="px-4  mt-16">
-            <div className="relative rounded-2xl overflow-hidden shadow-md shadow-slate-200/50">
+        <div className="h-full flex flex-col justify-center">
+            <div className="relative rounded-2xl overflow-hidden shadow-sm h-full">
                 {/* Slides */}
                 <div
                     className="flex transition-transform duration-500 ease-in-out"
@@ -58,7 +58,7 @@ export default function PromoBanner() {
                             <div key={banner.id} className="w-full shrink-0">
                                 {/* @ts-ignore */}
                                 <Wrapper {...wrapperProps} className="block">
-                                    <div className="relative aspect-[21/9] bg-slate-100">
+                                    <div className="relative aspect-[3/4] bg-slate-100">
                                         <img
                                             src={banner.image_url}
                                             alt={banner.title || "Promo"}
@@ -88,8 +88,8 @@ export default function PromoBanner() {
                                 key={i}
                                 onClick={() => setCurrent(i)}
                                 className={`rounded-full transition-all duration-300 ${i === current
-                                    ? 'w-5 h-1.5 bg-white'
-                                    : 'w-1.5 h-1.5 bg-white/50'
+                                    ? 'w-5 h-1.5 '
+                                    : 'w-1.5 h-1.5 '
                                     }`}
                             />
                         ))}

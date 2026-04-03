@@ -20,7 +20,7 @@ export default function SearchBar() {
         .select("name")
         .eq("is_ready", true)
         .limit(5) // Ambil 5 produk terbaru buat saran awal
-      
+
       if (data) {
         // Ambil nama produknya saja dan masukkan ke state
         const productNames = data.map(p => p.name)
@@ -55,10 +55,10 @@ export default function SearchBar() {
   }
 
   return (
-    <main ref={wrapperRef} className="max-w-md h-16 bg-white mx-auto fixed top-0 left-0 right-0 flex items-center px-4 z-100 border-b border-gray-100 ">
+    <main ref={wrapperRef} className="max-w-md h-16 bg-indigo-600 mx-auto fixed top-0 left-0 right-0 flex items-center px-4 z-100 border-b border-gray-100 ">
       <div className="relative w-full">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        
+
         <input
           type="text"
           placeholder="Cari Apa Lur?"
@@ -69,7 +69,7 @@ export default function SearchBar() {
             setShowSuggest(true)
           }}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch(query)}
-          className="w-full h-10 rounded-full border text-gray-800 border-indigo-600 pl-10 pr-24 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+          className="w-full h-10 rounded-full text-gray-800 bg-white pl-10 pr-24 text-sm focus:outline-none focus:ring-2 focus:ring-white/90 transition-all"
         />
 
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -93,7 +93,7 @@ export default function SearchBar() {
               <Sparkles size={14} className="text-indigo-600" />
               <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Saran Produk</span>
             </div>
-            
+
             {suggestions
               .filter(item => item.toLowerCase().includes(query.toLowerCase()))
               .map((item, idx) => (

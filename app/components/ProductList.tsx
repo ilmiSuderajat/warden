@@ -73,7 +73,7 @@ function ProductImageSlider({ images, name }: { images?: string[] | string; name
   )
 }
 
-export default function ProductList() {
+export default function ProductList({ headerItem }: { headerItem?: React.ReactNode }) {
   const [view, setView] = useState<"grid" | "list">("grid")
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -159,7 +159,12 @@ export default function ProductList() {
       </div>
 
       {/* PRODUCT LIST */}
-      <div className={view === "grid" ? "grid grid-cols-2 gap-2 m-3" : "flex flex-col gap-2 "}>
+      <div className={view === "grid" ? "grid grid-cols-2 gap-2 p-3" : "flex flex-col gap-2 "}>
+        {view === "grid" && headerItem && (
+          <div className="h-full">
+            {headerItem}
+          </div>
+        )}
         {loading && products.length === 0 ? (
           Array(6).fill(0).map((_, i) => (
             <ProductCardSkeleton key={i} view={view} />
