@@ -120,7 +120,7 @@ function CategoryContent() {
   }
 
   return (
-    <div className="bg-[#F5F5F5] max-w-md mx-auto font-sans text-gray-900 h-[100dvh] overflow-hidden flex flex-col">
+    <div className="bg-[#F5F5F5] max-w-md mx-auto font-sans text-gray-900 h-screen overflow-hidden flex flex-col">
       {/* ── TOP HEADER ── */}
       <header className="flex-none bg-[#EE4D2D] z-50 shadow-sm">
         {/* Search Bar Row */}
@@ -403,7 +403,7 @@ export default function CategoryPage() {
   return (
     <ErrorBoundary>
       <Suspense fallback={
-        <div className="bg-[#F5F5F5] min-h-screen max-w-md mx-auto flex flex-col items-center justify-center gap-3">
+        <div className="bg-[#F5F5F5] h-screen max-w-md mx-auto flex flex-col items-center justify-center gap-3">
           <div className="w-14 h-14 bg-[#EE4D2D] rounded-2xl flex items-center justify-center shadow-lg shadow-[#EE4D2D]/30">
             <ShoppingBag size={26} className="text-white" />
           </div>
