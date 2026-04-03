@@ -23,11 +23,14 @@ const SORT_OPTIONS = [
 function CategoryContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [isMounted, setIsMounted] = useState(false)
   const initialCatId = searchParams.get("id")
+
   const [categories, setCategories] = useState<any[]>([])
   const [selectedCat, setSelectedCat] = useState<string | null>(initialCatId || null)
   const [products, setProducts] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [isCatsLoading, setIsCatsLoading] = useState(true)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [isFetchingMore, setIsFetchingMore] = useState(false)
@@ -39,15 +42,25 @@ function CategoryContent() {
   const PAGE_SIZE = 8
 
   useEffect(() => {
+    setIsMounted(true)
     const fetchCats = async () => {
-      const { data } = await supabase.from("categories").select("*").order("name")
-      if (data && data.length > 0) {
-        setCategories(data)
-        if (!initialCatId) setSelectedCat(data[0].id)
+      try {
+        setIsCatsLoading(true)
+        const { data, error } = await supabase.from("categories").select("*").order("name")
+        if (error) throw error
+        if (data && data.length > 0) {
+          setCategories(data)
+          // If no selected category from URL, default to the first one
+          if (!selectedCat) setSelectedCat(data[0].id)
+        }
+      } catch (err) {
+        console.error("Error fetching categories:", err)
+      } finally {
+        setIsCatsLoading(false)
       }
     }
     fetchCats()
-  }, [initialCatId])
+  }, [])
 
   const fetchProducts = async (catId: string, pageNum: number, sort = sortBy) => {
     if (pageNum === 0) setLoading(true)
@@ -87,12 +100,16 @@ function CategoryContent() {
     setPage(0)
     setHasMore(true)
     fetchProducts(selectedCat, 0, sortBy)
-    try {
-      const newUrl = new URL(window.location.href)
-      newUrl.searchParams.set("id", selectedCat)
-      window.history.replaceState({}, '', newUrl.toString())
-    } catch (e) { }
-  }, [selectedCat, sortBy])
+
+    // Sync URL without full refresh, safely
+    if (isMounted) {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get("id") !== selectedCat) {
+        params.set("id", selectedCat)
+        router.replace(`/category?${params.toString()}`, { scroll: false })
+      }
+    }
+  }, [selectedCat, sortBy, isMounted])
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -119,6 +136,14 @@ function CategoryContent() {
     } catch { return Package }
   }
 
+  if (!isMounted) {
+    return (
+      <div className="bg-[#F5F5F5] h-screen max-w-md mx-auto flex flex-col items-center justify-center gap-3">
+        <Loader2 className="animate-spin text-[#EE4D2D]" size={24} />
+      </div>
+    )
+  }
+
   return (
     <div className="bg-[#F5F5F5] max-w-md mx-auto font-sans text-gray-900 h-screen overflow-hidden flex flex-col">
       {/* ── TOP HEADER ── */}
@@ -135,9 +160,9 @@ function CategoryContent() {
             <Search size={14} className="text-gray-400 shrink-0" />
             <span className="text-[12px] text-gray-400 truncate">Cari di {currentCategoryName}</span>
           </div>
-          <button className="relative text-white p-1 shrink-0">
+          <button className="relative text-white p-1 shrink-0 active:scale-90 transition-transform">
             <ShoppingBag size={20} />
-            <span className="absolute -top-0.5 -right-0.5 bg-yellow-400 text-[#EE4D2D] text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center">2</span>
+            <span className="absolute -top-0.5 -right-0.5 bg-yellow-400 text-[#EE4D2D] text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center border border-[#EE4D2D]">2</span>
           </button>
         </div>
         {/* Category scrollable tabs */}
@@ -354,8 +379,8 @@ function CategoryContent() {
                   )
                 })}
               </div>
-            ) : !loading && (
-              <div className="flex flex-col items-center py-20 px-8 mt-4 bg-white rounded-xl mx-1">
+            ) : !loading && !isCatsLoading ? (
+              <div className="flex flex-col items-center py-20 px-8 mt-4 bg-white rounded-xl mx-1 shadow-sm">
                 <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mb-4">
                   <Package size={34} className="text-[#EE4D2D]/40" />
                 </div>
@@ -365,10 +390,16 @@ function CategoryContent() {
                 </p>
                 <button
                   onClick={() => router.push("/")}
-                  className="mt-5 px-5 py-2 bg-[#EE4D2D] text-white text-[11px] font-bold rounded-full shadow-md shadow-[#EE4D2D]/30 active:scale-95 transition-transform"
+                  className="mt-5 px-6 py-2.5 bg-[#EE4D2D] text-white text-[11px] font-bold rounded-full shadow-md shadow-[#EE4D2D]/30 active:scale-95 transition-transform"
                 >
                   Jelajahi Kategori Lain
                 </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-1.5">
+                {Array(6).fill(0).map((_, i) => (
+                  <ProductCardSkeleton key={i} />
+                ))}
               </div>
             )}
 
