@@ -43,8 +43,8 @@ export default function PromoBanner() {
     if (banners.length === 0) return null
 
     return (
-        <div className="h-full flex flex-col justify-center">
-            <div className="relative rounded-2xl overflow-hidden shadow-sm h-full">
+        <div className="flex flex-col justify-center">
+            <div className="relative  overflow-hidden shadow-sm">
                 {/* Slides */}
                 <div
                     className="flex transition-transform duration-500 ease-in-out"
@@ -58,7 +58,7 @@ export default function PromoBanner() {
                             <div key={banner.id} className="w-full shrink-0">
                                 {/* @ts-ignore */}
                                 <Wrapper {...wrapperProps} className="block">
-                                    <div className="relative aspect-[3/4] bg-slate-100">
+                                    <div className="relative aspect-[3/4] bg-white">
                                         <img
                                             src={banner.image_url}
                                             alt={banner.title || "Promo"}

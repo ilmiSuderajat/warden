@@ -29,7 +29,7 @@ const WALLET_ITEMS = [
 export default function TopCard() {
     return (
         <div className="w-full font-sans">
-            <div className="p-3">
+            <div className="px-3 pt-3 pb-0">
                 {/* Main Wallet Card */}
                 <div className="bg-white w-full h-20 rounded-xl mt-10 border border-gray-100 overflow-hidden">
                     <div className="flex items-center mt-4 divide-x divide-gray-100">

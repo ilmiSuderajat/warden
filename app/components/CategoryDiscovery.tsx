@@ -36,6 +36,7 @@ export default function CategoryDiscovery() {
           .from("categories")
           .select("id, name, icon_name, color_theme")
           .order("created_at", { ascending: true })
+          .limit(6)
         if (data) setCategories(data)
       } catch (error) {
         console.error("Error fetching categories:", error)
@@ -58,7 +59,7 @@ export default function CategoryDiscovery() {
   if (isLoading) return null
 
   return (
-    <section className="bg-white py-4 w-[95%] h-27 rounded-xl mx-auto border-b border-gray-100">
+    <section className="bg-white/95 py-4 w-[95%] h-27 rounded-xl mx-auto ">
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -79,6 +80,19 @@ export default function CategoryDiscovery() {
             </div>
           )
         })}
+
+        {/* Tombol Lihat Semua */}
+        {!isLoading && categories.length > 0 && (
+          <div className="flex-shrink-0 w-[72px]">
+            <CategoryItem
+              href="/category"
+              index={categories.length}
+              icon={<LucideIcons.LayoutGrid className="w-5 h-5 flex-shrink-0" />}
+              label="Lihat Semua"
+              colorTheme="from-slate-100 to-slate-200 !text-slate-600 ring-1 ring-slate-200"
+            />
+          </div>
+        )}
       </div>
 
       {/* Indikator scroll - hanya render jika mounted dan ada categories */}
