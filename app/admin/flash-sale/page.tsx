@@ -383,8 +383,8 @@ export default function ManageFlashSalePage() {
                                                       <input 
                                                           autoFocus
                                                           type="number"
-                                                          value={editingSoldCount.value}
-                                                          onChange={e => setEditingSoldCount({...editingSoldCount, value: e.target.value})}
+                                                          value={editingSoldCount?.value || ""}
+                                                          onChange={e => editingSoldCount && setEditingSoldCount({...editingSoldCount, value: e.target.value})}
                                                           className="w-10 px-1 py-0.5 bg-white border border-orange-200 rounded text-[9px] font-black outline-none"
                                                       />
                                                       <button onClick={handleSaveSoldCount} className="text-[8px] font-black text-orange-600">YES</button>
