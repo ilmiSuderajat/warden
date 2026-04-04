@@ -190,7 +190,7 @@ export default function SearchBar() {
               <Share2 size={26} strokeWidth={2.5} />
             </button>
           ) : (
-            <Link href="/chat" className="relative text-white hover:bg-white/10 rounded-xl transition-all active:scale-90">
+            <Link href="/chat/shop" className="relative text-white hover:bg-white/10 rounded-xl transition-all active:scale-90">
               <MessageCircle size={24} strokeWidth={2.5} />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500  border-indigo-600 rounded-full animate-pulse"></span>
             </Link>

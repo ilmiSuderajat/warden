@@ -32,6 +32,7 @@ export default function ShopChatRoom() {
   const params = useParams();
   const shopId = params.shopId as string;
 
+  const [isMounted, setIsMounted] = useState(false);
   const allMessagesRef = useRef<ChatMessage[]>([]);
   const [visibleMessages, setVisibleMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -53,6 +54,10 @@ export default function ShopChatRoom() {
   const oldestCursorRef = useRef<string | null>(null);
   const isAtBottomRef = useRef(true);
 
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior }), 80);
   }, []);
@@ -67,12 +72,16 @@ export default function ShopChatRoom() {
   // Load shop info
   useEffect(() => {
     const fetchShop = async () => {
-      const { data, error } = await supabase
-        .from("shops")
-        .select("id, name, image_url, slug, owner_id")
-        .eq("id", shopId)
-        .single();
-      if (data && !error) setShop(data);
+      try {
+        const { data, error } = await supabase
+          .from("shops")
+          .select("id, name, image_url, slug, owner_id")
+          .eq("id", shopId)
+          .single();
+        if (data && !error) setShop(data);
+      } catch (err) {
+        console.error("Error fetching shop:", err);
+      }
     };
     if (shopId) fetchShop();
   }, [shopId]);
@@ -326,9 +335,9 @@ export default function ShopChatRoom() {
   };
 
   // Not logged in
-  if (!loading && !user) {
+  if (isMounted && !loading && !user) {
     return (
-      <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans flex flex-col">
+      <div className="fixed inset-0 bg-slate-50 max-w-md mx-auto font-sans flex flex-col z-[60]">
         <header className="h-14 bg-white flex items-center px-4 border-b border-slate-100 shrink-0">
           <button onClick={() => router.back()} className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform">
             <ArrowLeft size={24} strokeWidth={2.5} />
@@ -352,8 +361,10 @@ export default function ShopChatRoom() {
     );
   }
 
+  if (!isMounted) return <div className="fixed inset-0 bg-white" />;
+
   return (
-    <div className="fixed inset-0 flex flex-col bg-slate-50">
+    <div className="fixed inset-0 flex flex-col bg-slate-50 z-[60]">
       <div className="flex flex-col flex-1 max-w-md mx-auto w-full overflow-hidden">
         {/* HEADER */}
         <header className="flex-none bg-white border-b border-slate-100 shadow-sm z-20">

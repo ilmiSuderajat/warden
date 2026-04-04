@@ -2,52 +2,50 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { RefreshCw, Zap } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 interface PullToRefreshProps {
   children: React.ReactNode;
 }
 
 export default function PullToRefresh({ children }: PullToRefreshProps) {
-  const router = useRouter();
+  const pathname = usePathname();
   const [pullDist, setPullDist] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
   const startY = useRef(0);
-  const threshold = 100; // Jarak tarik untuk memicu refresh
+  const threshold = 100;
+
+  // Disable PTR logic entirely for chat and specific full-screen pages
+  const isDisabledPage = pathname?.startsWith('/chat') || pathname?.startsWith('/admin/chat') || pathname?.startsWith('/admin/shop-chat');
 
   const handleTouchStart = (e: TouchEvent) => {
-    // Hanya aktif jika scroll bar berada di paling atas
-    if (window.scrollY === 0) {
+    if (window.scrollY === 0 && !isDisabledPage) {
       startY.current = e.touches[0].pageY;
       setIsPulling(true);
+      setIsAnimating(true);
     }
   };
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!isPulling || isRefreshing) return;
+    if (!isPulling || isRefreshing || isDisabledPage) return;
 
     const currentY = e.touches[0].pageY;
     const diff = currentY - startY.current;
 
     if (diff > 0 && window.scrollY === 0) {
-      // Menambahkan resistensi (r) pada tarikan
       const r = 0.4;
       const pull = Math.min(diff * r, threshold + 20);
       setPullDist(pull);
-
-      // Prevent default browser behavior (seperti bounce ios / refresh bawaan jika perlu)
-      if (diff > 10 && e.cancelable) {
-        // e.preventDefault(); 
-      }
     } else {
       setIsPulling(false);
       setPullDist(0);
     }
-  }, [isPulling, isRefreshing]);
+  }, [isPulling, isRefreshing, isDisabledPage]);
 
   const handleTouchEnd = useCallback(() => {
-    if (!isPulling) return;
+    if (!isPulling || isDisabledPage) return;
 
     if (pullDist >= threshold) {
       handleRefresh();
@@ -55,17 +53,13 @@ export default function PullToRefresh({ children }: PullToRefreshProps) {
       setPullDist(0);
     }
     setIsPulling(false);
-  }, [isPulling, pullDist]);
+  }, [isPulling, pullDist, isDisabledPage]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     setPullDist(threshold);
 
-    // Memberikan feedback visual sebentar sebelum reload
     setTimeout(() => {
-      // Menggunakan router.refresh() untuk Next.js (hanya merefresh data server)
-      // Atau window.location.reload() untuk full refresh.
-      // Kita gunakan full reload agar semua state aplikasi ter-reset bersih
        window.location.reload();
     }, 800);
   };
@@ -82,9 +76,12 @@ export default function PullToRefresh({ children }: PullToRefreshProps) {
     };
   }, [handleTouchMove, handleTouchEnd]);
 
+  if (isDisabledPage) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="relative">
-      {/* PTR INDICATOR */}
       <div 
         className="absolute left-0 right-0 flex items-center justify-center pointer-events-none z-[1000]"
         style={{ 
@@ -107,10 +104,14 @@ export default function PullToRefresh({ children }: PullToRefreshProps) {
         </div>
       </div>
 
-      {/* WRAPPED CONTENT */}
       <div 
+        onTransitionEnd={() => {
+          if (!isPulling && pullDist === 0 && !isRefreshing) {
+            setIsAnimating(false);
+          }
+        }}
         style={{ 
-           transform: `translateY(${pullDist}px)`,
+           transform: (isPulling || isRefreshing || pullDist > 0 || isAnimating) ? `translateY(${pullDist}px)` : 'none',
            transition: isPulling ? 'none' : 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
       >
@@ -119,3 +120,4 @@ export default function PullToRefresh({ children }: PullToRefreshProps) {
     </div>
   );
 }
+
