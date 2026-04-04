@@ -505,11 +505,11 @@ export default function ProductDetail() {
           <div className="flex items-center gap-2.5 px-4 py-3 max-w-md mx-auto">
             {/* CHAT */}
             <button
-              onClick={() => router.push(`/chat/live?product=${id}`)}
+              onClick={() => router.push(`/chat/shop/${shop?.id || product.shop_id}`)}
               className="flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 transition-colors w-[3.2rem] shrink-0"
             >
               <MessageCircle size={22} strokeWidth={1.8} />
-              <span className="text-[9px] font-bold mt-0.5">Chat</span>
+              <span className="text-[9px] font-bold mt-0.5">Chat Toko</span>
             </button>
 
             {/* KERANJANG */}

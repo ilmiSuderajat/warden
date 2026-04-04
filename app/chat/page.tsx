@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react'
-import { Search, ChevronDown, MessageCircle, Mail, FileText, HelpCircle, Clock, ArrowRight, ArrowLeft, MessageSquare, ExternalLink } from 'lucide-react'
+import { Search, ChevronDown, MessageCircle, Mail, FileText, HelpCircle, Clock, ArrowRight, ArrowLeft, MessageSquare, ExternalLink, Store } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 const faqData = [
@@ -150,8 +150,29 @@ export default function ChatPage() {
                                 className="w-full flex items-center justify-between p-4 bg-white rounded-2xl text-indigo-600 font-bold text-sm shadow-sm active:scale-[0.98] transition-all"
                             >
                                 <div className="flex items-center gap-3">
-                                    <MessageCircle size={20} />
-                                    <span>Live Chat Sekarang</span>
+                                    <div className="w-8 h-8 bg-indigo-50 rounded-full flex items-center justify-center">
+                                        <MessageCircle size={18} />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="leading-none mb-1">Live Chat Admin</p>
+                                        <p className="text-[10px] text-slate-400 font-medium">Bantuan cepat tim support</p>
+                                    </div>
+                                </div>
+                                <ArrowRight size={18} />
+                            </button>
+
+                            <button
+                                onClick={() => router.push('/chat/shop')}
+                                className="w-full flex items-center justify-between p-4 bg-white rounded-2xl text-indigo-600 font-bold text-sm shadow-sm active:scale-[0.98] transition-all"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-amber-50 rounded-full flex items-center justify-center text-amber-600">
+                                        <Store size={18} />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="leading-none mb-1">Chat dengan Toko</p>
+                                        <p className="text-[10px] text-slate-400 font-medium">Tanya stok & detail produk</p>
+                                    </div>
                                 </div>
                                 <ArrowRight size={18} />
                             </button>
