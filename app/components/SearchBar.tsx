@@ -1,18 +1,37 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Search, X, Clock, TrendingUp, Sparkles, MessageCircle, ShoppingCart } from "lucide-react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { Search, X, Clock, TrendingUp, Sparkles, MessageCircle, ShoppingCart, Share2, ArrowLeft } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
+import { toast } from "sonner"
 
 export default function SearchBar() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const isProductPage = !!pathname.match(/^\/product\/[^\/]+$/)
+  const productId = isProductPage ? pathname.split('/').pop() : null
   const [query, setQuery] = useState(searchParams.get('q') || "")
   const [showSuggest, setShowSuggest] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [cartCount, setCartCount] = useState(0)
+  const [productName, setProductName] = useState("")
   const wrapperRef = useRef<HTMLDivElement>(null)
+
+  // AMBIL NAMA PRODUK UNTUK PLACEHOLDER
+  useEffect(() => {
+    if (!isProductPage || !productId) return
+    const fetchProductName = async () => {
+      const { data } = await supabase
+        .from("products")
+        .select("name")
+        .eq("id", productId)
+        .maybeSingle()
+      if (data) setProductName(data.name)
+    }
+    fetchProductName()
+  }, [isProductPage, productId])
 
   // AMBIL DATA SARAN DARI DATABASE
   useEffect(() => {
@@ -38,15 +57,15 @@ export default function SearchBar() {
         .from("cart")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id)
-      
+
       setCartCount(count || 0)
 
       // Realtime subscription
       const channel = supabase
         .channel('cart_count_sync')
-        .on('postgres_changes', { 
-          event: '*', 
-          schema: 'public', 
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
           table: 'cart',
           filter: `user_id=eq.${user.id}`
         }, () => {
@@ -85,16 +104,30 @@ export default function SearchBar() {
     }
   }
 
+  const placeholder = isProductPage && productName
+    ? productName
+    : "Cari Apa Lur?"
+
   return (
-    <main ref={wrapperRef} className="max-w-md h-16 bg-indigo-600 mx-auto fixed top-0 left-0 right-0 flex items-center px-4 z-[100] border-b border-indigo-700/50 shadow-lg">
+    <main ref={wrapperRef} className="max-w-md h-16 bg-indigo-600 mx-auto fixed top-0 left-0 right-0 flex items-center px-4 z-[100] border-b border-indigo-700/50 ">
       <div className="flex items-center gap-3 w-full">
+        {/* Back Arrow - hanya tampil di product page */}
+        {isProductPage && (
+          <button
+            onClick={() => router.back()}
+            className="text-white hover:bg-white/10 p-1.5 rounded-xl transition-all active:scale-90 shrink-0"
+          >
+            <ArrowLeft size={22} strokeWidth={2.5} />
+          </button>
+        )}
+
         {/* Search Input Container */}
         <div className="relative flex-1 group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
 
           <input
             type="text"
-            placeholder="Cari Apa Lur?"
+            placeholder={placeholder}
             value={query}
             onFocus={() => setShowSuggest(true)}
             onChange={(e) => {
@@ -111,12 +144,6 @@ export default function SearchBar() {
                 <X size={14} />
               </button>
             )}
-            <button
-              onClick={() => handleSearch(query)}
-              className="bg-indigo-600 text-white text-[10px] px-3 py-1 rounded-full font-black active:scale-95 transition-all uppercase tracking-tighter"
-            >
-              Cari
-            </button>
           </div>
 
           {/* --- DROPDOWN SARAN DINAMIS --- */}
@@ -145,14 +172,33 @@ export default function SearchBar() {
 
         {/* Right Action Icons */}
         <div className="flex items-center gap-2">
-          <Link href="/chat" className="relative text-white hover:bg-white/10 rounded-xl transition-all active:scale-90">
-            <MessageCircle size={26} strokeWidth={2.5} />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 border-2 border-indigo-600 rounded-full animate-pulse"></span>
-          </Link>
+          {isProductPage ? (
+            <button
+              onClick={async () => {
+                const url = window.location.href
+                try {
+                  if (navigator.share) {
+                    await navigator.share({ title: document.title, url })
+                  } else {
+                    await navigator.clipboard.writeText(url)
+                    toast.success("Link produk disalin!")
+                  }
+                } catch { }
+              }}
+              className="relative p-1 text-white hover:bg-white/10 rounded-xl transition-all active:scale-90"
+            >
+              <Share2 size={26} strokeWidth={2.5} />
+            </button>
+          ) : (
+            <Link href="/chat" className="relative text-white hover:bg-white/10 rounded-xl transition-all active:scale-90">
+              <MessageCircle size={24} strokeWidth={2.5} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500  border-indigo-600 rounded-full animate-pulse"></span>
+            </Link>
+          )}
           <Link href="/cart" className="relative p-2 text-white hover:bg-white/10 rounded-xl transition-all active:scale-90">
-            <ShoppingCart size={26} strokeWidth={2.5} />
+            <ShoppingCart size={24} strokeWidth={2.5} />
             {cartCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-indigo-600 animate-in zoom-in duration-300">
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center  border-indigo-600 animate-in zoom-in duration-300">
                 {cartCount}
               </span>
             )}

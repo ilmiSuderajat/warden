@@ -1,9 +1,8 @@
-
 "use client"
 import { useEffect, useRef, useState } from "react"
 import { ImageOff } from "lucide-react"
 
-export default function ProductImageSlider({ images, name }: { images?: string[] | string; name?: string }) {
+export default function ProductImageSlider({ images, name, autoSlide = true, fitMode = "cover" }: { images?: string[] | string; name?: string; autoSlide?: boolean; fitMode?: "cover" | "contain" }) {
   const [activeIndex, setActiveIndex] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -20,7 +19,7 @@ export default function ProductImageSlider({ images, name }: { images?: string[]
   const isSlider = imageList.length > 1
 
   useEffect(() => {
-    if (!isSlider) return
+    if (!isSlider || !autoSlide) return
 
     const interval = setInterval(() => {
       if (!scrollRef.current) return
@@ -37,7 +36,7 @@ export default function ProductImageSlider({ images, name }: { images?: string[]
     }, 3000)
 
     return () => clearInterval(interval)
-  }, [activeIndex, isSlider, imageList.length])
+  }, [activeIndex, isSlider, imageList.length, autoSlide])
 
   return (
     <div
@@ -55,7 +54,7 @@ export default function ProductImageSlider({ images, name }: { images?: string[]
           <img
             src={url}
             alt={`${name ?? "product"}-${idx}`}
-            className="w-full h-full object-cover"
+            className={`w-full h-full ${fitMode === "contain" ? "object-contain" : "object-cover"}`}
           />
         </div>
       ))}

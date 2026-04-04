@@ -182,26 +182,28 @@ export default function ProductList({ headerItem }: { headerItem?: React.ReactNo
           <div className="p-2 flex flex-col justify-between flex-1 min-w-0">
             <div>
               <p className="text-[11px] leading-[1.2] text-gray-800 line-clamp-2 mb-1 font-medium">{p.name}</p>
-              <div className="flex flex-col leading-tight">
-                <span className="text-red-500 font-bold text-[13px]">Rp {price.toLocaleString("id-ID")}</span>
-                {discount > 0 && (
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className="text-[9px] text-gray-400 line-through truncate">Rp {original.toLocaleString("id-ID")}</span>
-                    <span className="text-[9px] text-red-500 font-bold">-{discount}%</span>
+              <div className="flex items-center justify-between gap-1">
+                <div className="flex flex-col leading-tight min-w-0">
+                  <span className="text-red-500 font-bold text-[13px]">Rp {price.toLocaleString("id-ID")}</span>
+                  {discount > 0 && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className="text-[9px] text-gray-400 line-through truncate">Rp {original.toLocaleString("id-ID")}</span>
+                      <span className="text-[9px] text-red-500 font-bold">-{discount}%</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-0.5 shrink-0">
+                  <div className="flex items-center text-orange-400">
+                    <Star size={8} fill="currentColor" />
+                    <span className="text-[9px] font-bold ml-0.5 text-gray-700">{(p.rating || 5.0).toFixed(1)}</span>
                   </div>
-                )}
+                  <span className="text-gray-400 text-[9px]">{p.sold_count || 0} terjual</span>
+                </div>
               </div>
             </div>
 
-            {/* META */}
-            <div className="mt-1 space-y-0.5">
-              <div className="flex items-center gap-1">
-                <div className="flex items-center text-orange-400">
-                  <Star size={8} fill="currentColor" />
-                  <span className="text-[9px] font-bold ml-0.5 text-gray-700">{(p.rating || 5.0).toFixed(1)}</span>
-                </div>
-                <span className="text-gray-400 text-[9px] ml-1">{p.sold_count || 0} terjual</span>
-              </div>
+            {/* LOKASI */}
+            <div className="mt-1">
               <div className="flex items-center text-gray-400 gap-0.5 overflow-hidden">
                 <MapPin size={8} className="text-orange-500 shrink-0" />
                 <span className="text-[9px] truncate font-medium">

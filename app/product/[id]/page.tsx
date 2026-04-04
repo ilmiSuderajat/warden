@@ -1,12 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
+import { createPortal } from "react-dom"
 import { useParams, useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase"
 import {
   ArrowLeft, Share2, Star, MapPin, X,
-  Store, ShoppingCart, Heart, MessageCircle, Maximize2, Loader2
+  Store, ShoppingCart, Heart, MessageCircle, Maximize2, Loader2,
+  Plus, Link as LinkIcon, Facebook, Twitter
 } from "lucide-react"
 import ProductImageSlider from "@/app/components/ProductImageSlider"
 import ProductList from "@/app/components/ProductList"
@@ -25,14 +27,49 @@ export default function ProductDetail() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [isWishlisted, setIsWishlisted] = useState(false)
   const [wishlistLoading, setWishlistLoading] = useState(false)
+  const [cartCount, setCartCount] = useState(0)
+  const [isScrolled, setIsScrolled] = useState(false)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
+  const [previewIndex, setPreviewIndex] = useState(0)
+  const previewScrollRef = useRef<HTMLDivElement>(null)
   const { location: userLoc } = useUserLocation()
+
+  // <-- TAMBAHAN: Pastikan hanya jalan di client
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 80)
+    }
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
+  useEffect(() => {
+    const fetchCart = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        const { data: cartData } = await supabase
+          .from("cart")
+          .select("quantity")
+          .eq("user_id", session.user.id)
+        if (cartData) {
+          const total = cartData.reduce((acc: number, item: { quantity: number }) => acc + item.quantity, 0)
+          setCartCount(total)
+        }
+      }
+    }
+    fetchCart()
+  }, [])
 
   useEffect(() => {
     const fetchDetail = async () => {
       const { data } = await supabase.from("products").select("*").eq("id", id).maybeSingle()
       if (data) {
         setProduct(data)
-        // Fetch associated shop
         if (data.shop_id) {
           const { data: shopData } = await supabase.from("shops").select("id, name, slug, image_url, address, latitude, longitude").eq("id", data.shop_id).maybeSingle()
           if (shopData) setShop(shopData)
@@ -52,7 +89,6 @@ export default function ProductDetail() {
     fetchDetail()
   }, [id])
 
-  // Cek apakah sudah di wishlist
   useEffect(() => {
     const checkWishlist = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -118,7 +154,7 @@ export default function ProductDetail() {
         await navigator.clipboard.writeText(url)
         toast.success("Link produk disalin!")
       }
-    } catch (error) {
+    } catch {
       // User cancelled share
     }
   }
@@ -152,6 +188,7 @@ export default function ProductDetail() {
           .insert([{ user_id: user.id, product_id: product.id, quantity: 1 }])
       }
 
+      setCartCount(prev => prev + 1)
       if (!silent) toast.success("Ditambahkan ke keranjang!")
     } catch (error) {
       console.error(error)
@@ -165,6 +202,18 @@ export default function ProductDetail() {
     router.push("/checkout")
   }
 
+  // Lock scroll when preview open
+  useEffect(() => {
+    if (isPreviewOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isPreviewOpen])
+
   if (loading) return <ProductDetailSkeleton />
 
   const imageList = product?.image_url
@@ -172,36 +221,102 @@ export default function ProductDetail() {
     : []
 
   return (
-    <div className="bg-white min-h-screen pb-28 max-w-md mx-auto relative font-sans text-slate-800">
+    <div className="bg-white min-h-screen max-w-md mx-auto relative font-sans text-slate-800"
+      style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }}
+    >
 
-      {/* IMAGE PREVIEW FULLSCREEN */}
-      {isPreviewOpen && (
-        <div className="fixed max-w-md mx-auto inset-0 z-100 bg-black flex flex-col justify-center items-center animate-in fade-in">
-          <button onClick={() => setIsPreviewOpen(false)} className="absolute top-6 right-6 text-white/80 hover:text-white p-2 bg-white/10 rounded-full z-10">
-            <X size={24} />
-          </button>
-          <div className="w-full h-full flex items-center">
-            <ProductImageSlider images={imageList} name={product.name} />
+      {/* IMAGE PREVIEW FULLSCREEN — PORTAL KE BODY */}
+      {isPreviewOpen && isMounted && createPortal(
+        <div className="fixed inset-0 z-[999] bg-black flex flex-col w-full h-full animate-fadeIn max-w-md mx-auto">
+          {/* Header Area */}
+          <div className="flex items-center justify-between px-4 h-16 shrink-0 z-50">
+            <button
+              onClick={() => setIsPreviewOpen(false)}
+              className="text-white/80 hover:text-white p-2 bg-white/10 rounded-xl active:scale-95 transition-all"
+            >
+              <X size={24} />
+            </button>
+            {imageList.length > 1 && (
+              <div className="text-white/90 text-xs font-black bg-white/10 px-4 py-2 rounded-full tracking-widest uppercase">
+                {previewIndex + 1} / {imageList.length}
+              </div>
+            )}
+            <div className="w-12" />
           </div>
-        </div>
+
+          {/* Image Viewport */}
+          <div className="flex-1 relative w-full overflow-hidden flex items-center justify-center">
+            <div
+              ref={previewScrollRef}
+              className="absolute inset-0 flex overflow-x-auto snap-x snap-mandatory no-scrollbar"
+              onScroll={(e) => {
+                const el = e.currentTarget
+                const idx = Math.round(el.scrollLeft / el.clientWidth)
+                if (idx !== previewIndex) setPreviewIndex(idx)
+              }}
+            >
+              {imageList.map((url: string, idx: number) => (
+                <div key={idx} className="w-full h-full shrink-0 snap-center flex items-center justify-center p-4">
+                  <div className="relative w-full h-full flex items-center justify-center">
+                    <img
+                      src={url}
+                      alt="Preview"
+                      className="max-w-full max-h-full object-contain pointer-events-none shadow-2xl"
+                      draggable={false}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom Controls (Dots) */}
+          {imageList.length > 1 && (
+            <div className="h-20 flex items-center justify-center shrink-0 z-50">
+              <div className="flex gap-2.5">
+                {imageList.map((_: string, idx: number) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      previewScrollRef.current?.scrollTo({
+                        left: idx * (previewScrollRef.current?.clientWidth || 0),
+                        behavior: 'smooth'
+                      })
+                    }}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${idx === previewIndex ? 'bg-white w-8' : 'bg-white/20 w-1.5'}`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>,
+        document.body
       )}
 
       {/* NAVBAR ATAS */}
-      <nav className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-100 flex items-center h-14 px-4 max-w-md mx-auto">
-        <button onClick={() => router.back()} className="p-2 -ml-2 hover:bg-slate-50 rounded-xl transition-colors">
-          <ArrowLeft size={20} className="text-slate-700" />
+      <nav className={`fixed top-0 inset-x-0 z-50  transition-all duration-300 ${isScrolled ? 'opacity-0 pointer-events-none -translate-y-full' : 'opacity-100 translate-y-0'} flex items-center h-14 px-4 max-w-md mx-auto`}>
+        <button onClick={() => router.back()} className="p-2 -ml-2 bg-black/20 rounded-full transition-colors shrink-0">
+          <ArrowLeft size={20} className="text-white drop-shadow-md" />
         </button>
+
         <div className="flex-1"></div>
-        <button onClick={handleShare} className="p-2 hover:bg-slate-50 rounded-xl transition-colors mr-1">
-          <Share2 size={20} className="text-slate-500" />
+
+        <button onClick={() => setIsShareModalOpen(true)} className="p-2 bg-black/20 rounded-full transition-colors mr-2 shrink-0">
+          <Share2 size={20} className="text-white drop-shadow-md" />
         </button>
-        <button onClick={() => router.push("/cart")} className="p-2 hover:bg-slate-50 rounded-xl transition-colors relative">
-          <ShoppingCart size={20} className="text-slate-700" />
-          <span className="absolute top-1.5 right-1.5 bg-red-500 w-2 h-2 rounded-full border-2 border-white"></span>
+        <button onClick={() => router.push("/cart")} className="p-2 bg-black/20 rounded-full transition-colors relative shrink-0">
+          <ShoppingCart size={20} className="text-white drop-shadow-md" />
+          {cartCount > 0 ? (
+            <span className="absolute -top-1 -right-0.5 bg-red-500 text-white min-w-[16px] h-4 rounded-full text-[10px] flex items-center justify-center px-1 font-bold">
+              {cartCount > 99 ? '99+' : cartCount}
+            </span>
+          ) : (
+            <span className="absolute top-1 right-1 bg-red-500 w-2 h-2 rounded-full border-2 border-white"></span>
+          )}
         </button>
       </nav>
 
-      <div className="pt-14">
+      <div className="">
         {/* SLIDER GAMBAR */}
         <div className="bg-white relative aspect-square cursor-zoom-in group" onClick={() => setIsPreviewOpen(true)}>
           <ProductImageSlider images={imageList} name={product.name} />
@@ -219,20 +334,30 @@ export default function ProductDetail() {
                 <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-full">
                   <Star size={12} className="text-amber-400 fill-amber-400" />
                   <span className="text-xs font-bold text-amber-600">
-                    {product.rating ? product.rating.toFixed(1) : (reviews.length > 0 ? (reviews.reduce((acc: any, r: any) => acc + r.rating, 0) / reviews.length).toFixed(1) : "Baru")}
+                    {product.rating ? product.rating.toFixed(1) : (reviews.length > 0 ? (reviews.reduce((acc: number, r: { rating: number }) => acc + r.rating, 0) / reviews.length).toFixed(1) : "Baru")}
                   </span>
                 </div>
                 <span className="text-xs text-slate-400">• {product.sold_count || 0} Terjual</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => router.push(`/chat/live?product=${id}`)}
-                className="flex items-center gap-1.5 px-3 py-2 border border-slate-100 rounded-xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all active:scale-90 shrink-0"
-              >
-                <MessageCircle size={16} />
-                <span className="text-[11px] font-bold">Chat Penjual</span>
-              </button>
+              {(() => {
+                const shopLat = shop?.latitude || product.latitude
+                const shopLon = shop?.longitude || product.longitude
+                if (userLoc && shopLat && shopLon) {
+                  const dist = calculateDistance(userLoc.latitude, userLoc.longitude, shopLat, shopLon)
+                  const estMinutes = Math.round(dist * 2) // ~30km/h avg
+                  return (
+                    <div className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl shrink-0">
+                      <MapPin size={14} className="text-indigo-500" />
+                      <span className="text-[11px] font-bold text-indigo-600">
+                        {formatDistance(dist)} | {estMinutes < 60 ? `${estMinutes} mnt` : `${Math.floor(estMinutes / 60)} jam ${estMinutes % 60} mnt`}
+                      </span>
+                    </div>
+                  )
+                }
+                return null
+              })()}
               <button
                 onClick={handleToggleWishlist}
                 disabled={wishlistLoading}
@@ -312,7 +437,7 @@ export default function ProductDetail() {
 
           {reviews.length > 0 ? (
             <div className="space-y-5">
-              {reviews.map((rev: any) => (
+              {reviews.map((rev: { id: string; rating: number; reviewer_name?: string; comment?: string; photo_url?: string; created_at: string }) => (
                 <div key={rev.id} className="border-b border-slate-50 pb-5 last:border-0 last:pb-0">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -362,7 +487,7 @@ export default function ProductDetail() {
         </div>
 
         {/* PRODUK TERKAIT */}
-        <div className="mt-2 bg-white  border-t border-slate-100">
+        <div className="mt-2 bg-white border-t border-slate-100">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm p-2 font-bold text-slate-900">Rekomendasi Untukmu</h3>
             <button className="text-xs p-2 font-semibold text-slate-400 hover:text-slate-600">Lihat Semua</button>
@@ -371,40 +496,136 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* BOTTOM ACTION BAR */}
-      <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-slate-100 max-w-md mx-auto p-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push("/")}
-            className="flex flex-col items-center justify-center text-slate-500 hover:text-slate-700 transition-colors w-12 shrink-0"
-          >
-            <Store size={22} />
-            <span className="text-[9px] font-semibold mt-0.5">Toko</span>
-          </button>
+      {/* ========== BOTTOM ACTION BAR — PORTAL KE BODY ========== */}
+      {isMounted && !isPreviewOpen && createPortal(
+        <div
+          className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md-w-md max-w-md mx-auto border-t border-slate-200 shadow-[0_-4px_24px_rgba(0,0,0,0.08)]"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        >
+          <div className="flex items-center gap-2.5 px-4 py-3 max-w-md mx-auto">
+            {/* CHAT */}
+            <button
+              onClick={() => router.push(`/chat/live?product=${id}`)}
+              className="flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 transition-colors w-[3.2rem] shrink-0"
+            >
+              <MessageCircle size={22} strokeWidth={1.8} />
+              <span className="text-[9px] font-bold mt-0.5">Chat</span>
+            </button>
 
-          <button
-            onClick={() => handleAddToCart()}
-            disabled={isProcessing}
-            className="flex items-center justify-center bg-white border-2 border-indigo-800 text-indigo-800 w-14 h-12 rounded-xl active:scale-95 transition-all disabled:opacity-50 shrink-0"
-          >
-            {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <ShoppingCart size={18} />}
-          </button>
+            {/* KERANJANG */}
+            <button
+              onClick={() => handleAddToCart()}
+              disabled={isProcessing}
+              className="flex items-center justify-center bg-white border-2 border-indigo-800 text-indigo-800 w-[3.2rem] h-12 rounded-xl active:scale-95 transition-all disabled:opacity-50 shrink-0 gap-0.5 hover:bg-indigo-50"
+            >
+              {isProcessing ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <>
+                  <Plus size={13} strokeWidth={3} className="-mr-1" />
+                  <ShoppingCart size={17} strokeWidth={1.8} />
+                </>
+              )}
+            </button>
 
-          <button
-            onClick={handleBuyNow}
-            disabled={isProcessing}
-            className="flex-1 bg-indigo-800 hover:bg-slate-800 text-white h-12 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-400 shadow-sm flex items-center justify-center gap-2"
+            {/* BELI SEKARANG */}
+            <button
+              onClick={handleBuyNow}
+              disabled={isProcessing}
+              className="flex-1 bg-indigo-800 hover:bg-indigo-900 active:bg-indigo-950 text-white h-12 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-400 shadow-lg shadow-indigo-800/25 flex items-center justify-center"
+            >
+              {isProcessing ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                "Beli Sekarang"
+              )}
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* SHARE MODAL — JUGA PORTAL */}
+      {isShareModalOpen && isMounted && createPortal(
+        <>
+          <div className="fixed inset-0 bg-black/40 z-[90] animate-in fade-in" onClick={() => setIsShareModalOpen(false)}></div>
+          <div
+            className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-3xl pt-4 px-6 animate-in slide-in-from-bottom flex flex-col shadow-2xl"
+            style={{ paddingBottom: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }}
           >
-            {isProcessing ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <>
-                <span>Beli Sekarang</span>
-              </>
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6"></div>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-bold text-lg text-slate-800">Bagikan Produk</h3>
+              <button onClick={() => setIsShareModalOpen(false)} className="bg-slate-50 p-2 rounded-full text-slate-400 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
+              <button onClick={() => {
+                const text = `Cek ${product?.name} di Warung Kita Mall! Harga Rp ${product?.price?.toLocaleString('id-ID')}\n${window.location.origin}/product/${id}`
+                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank")
+                setIsShareModalOpen(false)
+              }} className="flex flex-col items-center gap-2 group">
+                <div className="w-14 h-14 rounded-full bg-green-500 text-white flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <MessageCircle size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600">WhatsApp</span>
+              </button>
+
+              <button onClick={() => {
+                const url = `${window.location.origin}/product/${id}`
+                window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, "_blank")
+                setIsShareModalOpen(false)
+              }} className="flex flex-col items-center gap-2 group">
+                <div className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Facebook size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600">Facebook</span>
+              </button>
+
+              <button onClick={() => {
+                const text = `Cek ${product?.name} di Warung Kita Mall! Harga Rp ${product?.price?.toLocaleString('id-ID')}`
+                const url = `${window.location.origin}/product/${id}`
+                window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, "_blank")
+                setIsShareModalOpen(false)
+              }} className="flex flex-col items-center gap-2 group">
+                <div className="w-14 h-14 rounded-full bg-sky-500 text-white flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Twitter size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600">Twitter</span>
+              </button>
+
+              <button onClick={() => {
+                const url = `${window.location.origin}/product/${id}`
+                navigator.clipboard.writeText(url)
+                toast.success("Link produk disalin!")
+                setIsShareModalOpen(false)
+              }} className="flex flex-col items-center gap-2 group">
+                <div className="w-14 h-14 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <LinkIcon size={24} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600">Salin</span>
+              </button>
+            </div>
+
+            {typeof navigator !== 'undefined' && navigator.share && (
+              <div className="mt-8">
+                <button onClick={() => {
+                  navigator.share({
+                    title: product?.name,
+                    text: `Cek ${product?.name} di Warung Kita Mall! Harga Rp ${product?.price?.toLocaleString('id-ID')}`,
+                    url: `${window.location.origin}/product/${id}`
+                  }).catch(() => { })
+                }} className="w-full py-3 bg-slate-50 hover:bg-slate-100 rounded-xl font-bold text-sm text-slate-600 transition-colors">
+                  Opsi Lainnya
+                </button>
+              </div>
             )}
-          </button>
-        </div>
-      </div>
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   )
 }
