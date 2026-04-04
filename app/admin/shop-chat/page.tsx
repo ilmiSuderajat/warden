@@ -467,7 +467,15 @@ export default function ShopOwnerChatPage() {
                         </span>
                       </div>
                       <p className={`text-[10px] truncate ${selectedBuyer?.buyer_id === u.buyer_id ? "text-white/80" : "text-slate-400"}`}>
-                        {u.last_message}
+                        {(() => {
+                          try {
+                            if (u.last_message.startsWith('{"type":"product_reference"')) {
+                              const parsed = JSON.parse(u.last_message);
+                              return `📦 ${parsed.product.name}`;
+                            }
+                          } catch { }
+                          return u.last_message;
+                        })()}
                       </p>
                     </div>
                   </button>
@@ -547,7 +555,35 @@ export default function ShopOwnerChatPage() {
                                 ? "bg-indigo-600 text-white rounded-tr-sm"
                                 : "bg-white text-slate-700 border border-slate-100 rounded-tl-sm"
                                 } ${isTemp ? "opacity-50" : ""}`}>
-                                <p className="text-[13px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                                {(() => {
+                                  try {
+                                    if (msg.message.startsWith('{"type":"product_reference"')) {
+                                      const parsed = JSON.parse(msg.message);
+                                      return (
+                                        <div className="flex flex-col gap-2">
+                                          <div 
+                                            onClick={() => window.open(`/product/${parsed.product.id}`, '_blank')}
+                                            className={`flex items-center gap-2 p-2 rounded-xl border ${isOwner ? 'bg-white/10 border-indigo-500 hover:bg-white/20' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'} cursor-pointer transition-colors active:scale-95`}
+                                          >
+                                            {parsed.product.image_url ? (
+                                              <img src={parsed.product.image_url} alt={parsed.product.name} className="w-10 h-10 object-cover rounded-md shrink-0" />
+                                            ) : (
+                                              <div className="w-10 h-10 bg-slate-200 rounded-md flex items-center justify-center shrink-0">
+                                                <Store size={14} className="text-slate-400" />
+                                              </div>
+                                            )}
+                                            <div className="flex-1 min-w-0 pr-2">
+                                              <h4 className={`text-[11px] font-bold truncate mb-0.5 ${isOwner ? 'text-white' : 'text-slate-800'}`}>{parsed.product.name}</h4>
+                                              <p className={`text-[10px] font-bold ${isOwner ? 'text-indigo-100' : 'text-indigo-600'}`}>Rp {parsed.product.price?.toLocaleString('id-ID')}</p>
+                                            </div>
+                                          </div>
+                                          <p className="text-[13px] whitespace-pre-wrap leading-relaxed">{parsed.text}</p>
+                                        </div>
+                                      );
+                                    }
+                                  } catch { /* ignore fallback to text */ }
+                                  return <p className="text-[13px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>;
+                                })()}
                               </div>
                               <div className={`flex items-center gap-1.5 mt-1 px-1 ${isOwner ? "flex-row-reverse" : ""}`}>
                                 <span className="text-[9px] font-bold text-slate-300">

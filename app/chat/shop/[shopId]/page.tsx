@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ArrowLeft, Send, Loader2, Clock, Store, MessageCircle } from "lucide-react";
+import { ArrowLeft, Send, Loader2, Clock, Store, MessageCircle, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 
 interface ChatMessage {
   id: string;
@@ -54,9 +54,35 @@ export default function ShopChatRoom() {
   const oldestCursorRef = useRef<string | null>(null);
   const isAtBottomRef = useRef(true);
 
+  const searchParams = useSearchParams();
+  const productId = searchParams.get("product_id");
+  const [productContext, setProductContext] = useState<{ id: string; name: string; image_url: string; price: number } | null>(null);
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Load product context
+  useEffect(() => {
+    if (!productId) return;
+    const fetchProductContext = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("products")
+          .select("id, name, image_url, price")
+          .eq("id", productId)
+          .single();
+          
+        if (data && !error) {
+          const img = Array.isArray(data.image_url) ? data.image_url[0] : data.image_url;
+          setProductContext({ id: data.id, name: data.name, image_url: img, price: data.price });
+        }
+      } catch (err) {
+        console.error("Error fetching product context:", err);
+      }
+    };
+    fetchProductContext();
+  }, [productId]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior }), 80);
@@ -277,9 +303,19 @@ export default function ShopChatRoom() {
     e.preventDefault();
     if (!newMessage.trim() || !user || sending) return;
 
-    const msg = newMessage.trim();
+    const msgInput = newMessage.trim();
     setNewMessage("");
     setSending(true);
+
+    let finalMessage = msgInput;
+    if (productContext) {
+      finalMessage = JSON.stringify({
+        type: "product_reference",
+        product: productContext,
+        text: msgInput
+      });
+      setProductContext(null); // Clear after first send
+    }
 
     const tempId = `temp-${Date.now()}`;
     const tempMsg: ChatMessage = {
@@ -287,7 +323,7 @@ export default function ShopChatRoom() {
       shop_id: shopId,
       buyer_id: user.id,
       sender_id: user.id,
-      message: msg,
+      message: finalMessage,
       created_at: new Date().toISOString(),
     };
 
@@ -299,7 +335,7 @@ export default function ShopChatRoom() {
     try {
       const { error } = await supabase
         .from("shop_chats")
-        .insert([{ shop_id: shopId, buyer_id: user.id, sender_id: user.id, message: msg }]);
+        .insert([{ shop_id: shopId, buyer_id: user.id, sender_id: user.id, message: finalMessage }]);
       if (error) throw error;
     } catch {
       toast.error("Gagal mengirim pesan");
@@ -447,7 +483,35 @@ export default function ShopChatRoom() {
                         : "bg-white border border-slate-100 text-slate-700 rounded-tl-sm shadow-sm"
                         } ${isTemp ? "opacity-60" : "opacity-100 transition-opacity duration-300"}`}
                     >
-                      <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                        {(() => {
+                          try {
+                            if (msg.message.startsWith('{"type":"product_reference"')) {
+                              const parsed = JSON.parse(msg.message);
+                              return (
+                                <div className="flex flex-col gap-2">
+                                  <div 
+                                    onClick={() => router.push(`/product/${parsed.product.id}`)}
+                                    className={`flex items-center gap-2 p-2 rounded-xl border ${isMine ? 'bg-white/10 border-indigo-500 hover:bg-white/20' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'} cursor-pointer transition-colors active:scale-95`}
+                                  >
+                                    {parsed.product.image_url ? (
+                                      <img src={parsed.product.image_url} alt={parsed.product.name} className="w-10 h-10 object-cover rounded-md shrink-0" />
+                                    ) : (
+                                      <div className="w-10 h-10 bg-slate-200 rounded-md flex items-center justify-center shrink-0">
+                                        <Store size={14} className="text-slate-400" />
+                                      </div>
+                                    )}
+                                    <div className="flex-1 min-w-0 pr-2">
+                                      <h4 className={`text-[11px] font-bold truncate mb-0.5 ${isMine ? 'text-white' : 'text-slate-800'}`}>{parsed.product.name}</h4>
+                                      <p className={`text-[10px] font-bold ${isMine ? 'text-indigo-100' : 'text-indigo-600'}`}>Rp {parsed.product.price?.toLocaleString('id-ID')}</p>
+                                    </div>
+                                  </div>
+                                  <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{parsed.text}</p>
+                                </div>
+                              );
+                            }
+                          } catch { /* ignore fallback to text */ }
+                          return <p className="text-[13.5px] whitespace-pre-wrap leading-relaxed">{msg.message}</p>;
+                        })()}
                     </div>
                     <div className={`flex items-center gap-1 mt-1 px-1 ${isMine ? "" : "flex-row-reverse"}`}>
                       <span className="text-[10px] font-medium text-slate-400">
@@ -478,8 +542,33 @@ export default function ShopChatRoom() {
         </div>
 
         {/* INPUT */}
-        <form onSubmit={sendMessage} className="flex-none p-4 bg-white border-t border-slate-200">
-          <div className="flex gap-3">
+        <div className="flex-none bg-white border-t border-slate-200">
+          {productContext && (
+            <div className="px-4 pt-3 pb-1 relative animate-in slide-in-from-bottom-2">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center gap-3 pr-8 shadow-sm">
+                {productContext.image_url ? (
+                  <img src={productContext.image_url} alt={productContext.name} className="w-10 h-10 object-cover rounded-lg border border-slate-200 shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 bg-slate-200 rounded-lg flex items-center justify-center shrink-0">
+                    <Store size={14} className="text-slate-400" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-[11px] font-bold text-slate-800 truncate mb-0.5 leading-none">{productContext.name}</h4>
+                  <p className="text-[10px] text-indigo-600 font-bold leading-none">Rp {productContext.price?.toLocaleString('id-ID')}</p>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setProductContext(null)}
+                  className="absolute right-6 p-1.5 text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"
+                >
+                  <X size={12} strokeWidth={3} />
+                </button>
+              </div>
+            </div>
+          )}
+          <form onSubmit={sendMessage} className="p-4">
+            <div className="flex gap-3">
             <div className="relative flex-1">
               <input
                 ref={inputRef}
@@ -500,7 +589,8 @@ export default function ShopChatRoom() {
               {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
           </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );

@@ -180,39 +180,51 @@ export default function ProductList({ headerItem }: { headerItem?: React.ReactNo
           </div>
           {/* INFO */}
           <div className="p-2 flex flex-col justify-between flex-1 min-w-0">
-            <div>
-              <p className="text-[11px] leading-[1.2] text-gray-800 line-clamp-2 mb-1 font-medium">{p.name}</p>
-              <div className="flex items-center justify-between gap-1">
-                <div className="flex flex-col leading-tight min-w-0">
-                  <span className="text-red-500 font-bold text-[13px]">Rp {price.toLocaleString("id-ID")}</span>
+            <div className="flex flex-col">
+              <p className="text-[11px] leading-[1.3] text-gray-800 line-clamp-2 mb-1.5 font-medium">{p.name}</p>
+
+              <div className="flex items-start justify-between gap-2 w-full">
+                {/* LEFT SIDE: Price */}
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-red-500 font-bold text-[13px] truncate whitespace-nowrap">
+                    Rp {price.toLocaleString("id-ID")}
+                  </span>
                   {discount > 0 && (
                     <div className="flex items-center gap-1 mt-0.5">
                       <span className="text-[9px] text-gray-400 line-through truncate">Rp {original.toLocaleString("id-ID")}</span>
-                      <span className="text-[9px] text-red-500 font-bold">-{discount}%</span>
+                      <span className="text-[8px] text-red-500 font-bold bg-red-50 px-1 py-0.5 rounded-[3px] shrink-0">-{discount}%</span>
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col items-end gap-0.5 shrink-0">
-                  <div className="flex items-center text-orange-400">
-                    <Star size={8} fill="currentColor" />
-                    <span className="text-[9px] font-bold ml-0.5 text-gray-700">{(p.rating || 5.0).toFixed(1)}</span>
+
+                {/* RIGHT SIDE: Distance & Star (Sejajar Kanan, Distance di atas Star) */}
+                <div className="flex flex-col items-end gap-1.5 shrink-0 mt-0.5">
+                  {userLoc && (p.shops?.latitude || p.latitude) && (p.shops?.longitude || p.longitude) && (
+                    <div className="flex items-center gap-0.5 bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-[5px]">
+                      <MapPin size={8} className="shrink-0" />
+                      <span className="text-[7.5px] font-bold whitespace-nowrap">
+                        {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.shops?.latitude || p.latitude, p.shops?.longitude || p.longitude))} dari kamu
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1">
+                    <div className="flex items-center text-orange-400">
+                      <Star size={9} fill="currentColor" />
+                      <span className="text-[9px] font-bold ml-0.5 text-gray-700">{(p.rating || 5.0).toFixed(1)}</span>
+                    </div>
+                    <div className="w-[2px] h-[2px] bg-slate-300 rounded-full shrink-0" />
+                    <span className="text-gray-400 text-[8px] whitespace-nowrap">{p.sold_count || 0} terjual</span>
                   </div>
-                  <span className="text-gray-400 text-[9px]">{p.sold_count || 0} terjual</span>
                 </div>
               </div>
             </div>
 
-            {/* LOKASI */}
-            <div className="mt-1">
-              <div className="flex items-center text-gray-400 gap-0.5 overflow-hidden">
-                <MapPin size={8} className="text-orange-500 shrink-0" />
-                <span className="text-[9px] truncate font-medium">
+            {/* LOKASI (TETAP DI BAWAH) */}
+            <div className="mt-auto">
+              <div className="flex items-center text-gray-400 gap-1 overflow-hidden border-t border-slate-50 pt-1.5">
+                <MapPin size={9} className="text-slate-400/80 shrink-0" />
+                <span className="text-[8.5px] truncate font-medium">
                   {p.shops?.address || p.location || "Lokasi tidak tersedia"}
-                  {userLoc && (p.shops?.latitude || p.latitude) && (p.shops?.longitude || p.longitude) && (
-                    <span className="ml-1 text-indigo-600 font-bold">
-                      • {formatDistance(calculateDistance(userLoc.latitude, userLoc.longitude, p.shops?.latitude || p.latitude, p.shops?.longitude || p.longitude))}
-                    </span>
-                  )}
                 </span>
               </div>
             </div>
