@@ -23,9 +23,15 @@ export default function TopUpModal({ isOpen, onClose, onSuccess }: TopUpModalPro
   // Load Midtrans Snap script once
   useEffect(() => {
     if (document.querySelector('script[src*="snap.js"]')) return
+    const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || ""
+    const isSandbox = clientKey.startsWith('SB-')
+    const scriptSrc = isSandbox 
+      ? "https://app.sandbox.midtrans.com/snap/snap.js"
+      : "https://app.midtrans.com/snap/snap.js"
+
     const script = document.createElement("script")
-    script.src = "https://app.midtrans.com/snap/snap.js"
-    script.setAttribute("data-client-key", process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || "")
+    script.src = scriptSrc
+    script.setAttribute("data-client-key", clientKey)
     script.async = true
     document.head.appendChild(script)
   }, [])

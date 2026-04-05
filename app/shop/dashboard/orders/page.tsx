@@ -3,12 +3,16 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import * as Icons from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 
 export default function ShopOrdersPage() {
     const router = useRouter()
-    const [activeTab, setActiveTab] = useState("baru")
+    const searchParams = useSearchParams()
+
+    // Inisialisasi tab dari URL param ?tab=, fallback ke "baru"
+    const tabFromUrl = searchParams.get("tab") || "baru"
+    const [activeTab, setActiveTab] = useState(tabFromUrl)
     const [orders, setOrders] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [shop, setShop] = useState<any>(null)
@@ -19,6 +23,19 @@ export default function ShopOrdersPage() {
         { id: "dikirim", label: "Dikirim", icon: "Truck" },
         { id: "selesai", label: "Selesai", icon: "CheckCircle2" },
     ]
+
+    // Sync URL ke tab aktif saat URL berubah dari luar
+    useEffect(() => {
+        const t = searchParams.get("tab") || "baru"
+        if (t !== activeTab) setActiveTab(t)
+    }, [searchParams])
+
+    const handleTabChange = (tabId: string) => {
+        setActiveTab(tabId)
+        const params = new URLSearchParams(searchParams.toString())
+        params.set("tab", tabId)
+        router.replace(`/shop/dashboard/orders?${params.toString()}`, { scroll: false })
+    }
 
     useEffect(() => {
         fetchShopAndOrders()
@@ -45,12 +62,14 @@ export default function ShopOrdersPage() {
 
             if (orderError) throw orderError
 
+            // Filter orders yang milik toko ini berdasarkan product_name
             let filteredOrders = allOrders?.filter(order =>
                 order.order_items?.some((item: any) =>
                     item.product_name?.includes(`| ${shopData.id}`)
                 )
             ) || []
 
+            // Map ulang items agar hanya menampilkan produk milik toko ini
             filteredOrders = filteredOrders.map(order => ({
                 ...order,
                 items: order.order_items
@@ -61,12 +80,36 @@ export default function ShopOrdersPage() {
                     })) || []
             }))
 
-            if (activeTab === "baru") filteredOrders = filteredOrders.filter((o: any) => ["Menunggu Konfirmasi", "Perlu Dikemas", "Mencari Kurir", "Kurir Menuju Lokasi"].includes(o.status))
-            if (activeTab === "proses") filteredOrders = filteredOrders.filter((o: any) => ["Diproses", "Kurir di Toko"].includes(o.status))
-            if (activeTab === "dikirim") filteredOrders = filteredOrders.filter((o: any) => ["Dikirim", "Kurir di Lokasi", "Kurir Tidak Tersedia"].includes(o.status))
-            if (activeTab === "selesai") filteredOrders = filteredOrders.filter((o: any) => ["Selesai", "Dibatalkan"].includes(o.status))
+            // Filter berdasarkan tab aktif
+            // Tab "Baru": pesanan baru masuk, belum diproses
+            if (activeTab === "baru") {
+                filteredOrders = filteredOrders.filter((o: any) =>
+                    ["Perlu Dikemas", "Menunggu Konfirmasi"].includes(o.status) &&
+                    o.payment_status === "paid"
+                )
+            }
+            // Tab "Diproses": sedang dikemas atau menunggu kurir
+            if (activeTab === "proses") {
+                filteredOrders = filteredOrders.filter((o: any) =>
+                    ["Diproses", "Mencari Kurir", "Kurir Menuju Lokasi", "Kurir di Toko"].includes(o.status)
+                )
+            }
+            // Tab "Dikirim": kurir sudah mengambil paket
+            if (activeTab === "dikirim") {
+                filteredOrders = filteredOrders.filter((o: any) =>
+                    ["Dikirim", "Kurir di Lokasi", "Kurir Tidak Tersedia"].includes(o.status)
+                )
+            }
+            // Tab "Selesai": termasuk dibatalkan
+            if (activeTab === "selesai") {
+                filteredOrders = filteredOrders.filter((o: any) =>
+                    ["Selesai", "Dibatalkan"].includes(o.status)
+                )
+            }
 
-            setOrders(filteredOrders.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()))
+            setOrders(filteredOrders.sort((a: any, b: any) =>
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            ))
         } catch (err) {
             console.error(err)
             toast.error("Gagal mengambil data pesanan")
@@ -111,7 +154,7 @@ export default function ShopOrdersPage() {
                         return (
                             <button
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
+                                onClick={() => handleTabChange(tab.id)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap ${isActive
                                         ? 'bg-zinc-900 text-white shadow-sm'
                                         : 'bg-white text-zinc-500 border border-zinc-200 hover:border-zinc-300 hover:text-zinc-700'
@@ -234,7 +277,7 @@ export default function ShopOrdersPage() {
                                         }}
                                         className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white py-3 rounded-xl font-bold text-xs transition-all active:scale-[0.98]"
                                     >
-                                        Proses & Cari Kurir
+                                        Proses &amp; Cari Kurir
                                     </button>
                                 )}
                                 {order.status === "Diproses" && (

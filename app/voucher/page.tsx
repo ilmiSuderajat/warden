@@ -6,7 +6,7 @@ import { ArrowLeft, Tag, Copy, Loader2, Check } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
-export default function PromoPage() {
+export default function VoucherPage() {
     const router = useRouter()
     const [vouchers, setVouchers] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
@@ -61,7 +61,7 @@ export default function PromoPage() {
                     >
                         <ArrowLeft size={24} strokeWidth={2.5} />
                     </button>
-                    <h1 className="text-lg font-bold tracking-wide">Promo & Diskon</h1>
+                    <h1 className="text-lg font-bold tracking-wide">Voucher Belanja</h1>
                     <div className="w-10"></div> {/* Placeholder to keep header justified */}
                 </div>
 
@@ -126,8 +126,8 @@ export default function PromoPage() {
                 ) : (
                     <div className="text-center py-16 flex flex-col items-center bg-white rounded-2xl border border-slate-100 shadow-sm">
                         <Tag size={40} className="text-slate-300 mb-3" />
-                        <h3 className="text-base font-bold text-slate-800">Yah, promo belum tersedia</h3>
-                        <p className="text-sm text-slate-400 mt-1 px-8">Saat ini belum ada promo aktif. Cek lagi nanti ya!</p>
+                        <h3 className="text-base font-bold text-slate-800">Yah, voucher belum tersedia</h3>
+                        <p className="text-sm text-slate-400 mt-1 px-8">Saat ini belum ada voucher aktif. Cek lagi nanti ya!</p>
                         <button 
                             onClick={() => router.push('/')}
                             className="mt-6 px-6 py-2.5 bg-indigo-50 text-indigo-600 font-bold text-sm rounded-full"

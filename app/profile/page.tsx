@@ -22,7 +22,7 @@ export default function ProfilePage() {
     const getProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
-      
+
       if (user) {
         const { data: shop } = await supabase
           .from("shops")
@@ -48,7 +48,7 @@ export default function ProfilePage() {
           setPoints(wallet.points_balance || 0)
         }
       }
-      
+
       setLoading(false)
     }
     const fetchCartCount = async () => {
@@ -115,7 +115,7 @@ export default function ProfilePage() {
     getProfile()
     let cartChannel: any
     let chatChannel: any
-    
+
     fetchCartCount().then(ch => cartChannel = ch)
     fetchChatCount().then(ch => chatChannel = ch)
 
@@ -141,7 +141,7 @@ export default function ProfilePage() {
   const walletItems = [
     { icon: "Wallet", label: "Saldo Saya", sub: `Rp ${balance.toLocaleString("id-ID")}`, href: "/wallet" },
     { icon: "Coins", label: "Koin Saya", sub: `${points.toLocaleString()} Poin`, href: "/wallet" },
-    { icon: "Ticket", label: "Voucher", sub: "5+ Voucher", href: "#" },
+    { icon: "Ticket", label: "Voucher", sub: "5+ Voucher", href: "/voucher" },
   ]
 
   const activityMenu = [
@@ -194,7 +194,7 @@ export default function ProfilePage() {
                 </span>
               )}
             </Link>
-            <Link href="/chat" className="relative text-white/90 active:scale-95 transition-transform">
+            <Link href="/chat/shop" className="relative text-white/90 active:scale-95 transition-transform">
               <Icons.MessageCircle size={22} />
               {chatCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-white text-indigo-700 text-[9px] font-black min-w-[16px] h-4 rounded-full flex items-center justify-center px-1 shadow">

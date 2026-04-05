@@ -6,7 +6,7 @@ const isValidUUID = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 
 const snap = new Midtrans.Snap({
-  isProduction: process.env.NODE_ENV === "production",
+  isProduction: false,
   serverKey: process.env.MIDTRANS_SERVER_KEY!,
   clientKey: process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!,
 })
@@ -39,8 +39,13 @@ export async function POST(req: Request) {
 
     if (orderError || !order) {
       console.warn(`[Payment] Order not found or access denied. order=${orderId} user=${user.id}`)
+      if (orderError) console.error(`[Payment] Supabase Error:`, orderError)
+
       // Generic message — do not reveal whether order exists but belongs to someone else
-      return NextResponse.json({ error: "Pesanan tidak ditemukan." }, { status: 404 })
+      return NextResponse.json({
+        error: "Pesanan tidak ditemukan.",
+        debug: process.env.NODE_ENV === 'development' ? { orderId, userId: user.id } : undefined
+      }, { status: 404 })
     }
 
     // ── 3. Prevent re-processing ──────────────────────────────────

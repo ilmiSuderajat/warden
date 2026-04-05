@@ -20,13 +20,13 @@ export default function ConditionalSearchBar() {
   const isFlashSale = pathname.startsWith("/flash-sale");
   const isReady = pathname.startsWith("/ready");
   const isWishlist = pathname.startsWith('/wishlist');
-  const isPromo = pathname.startsWith('/promo');
+  const isVoucher = pathname.startsWith('/voucher');
   const isChat = pathname.startsWith('/chat');
   const isShopPage = pathname.startsWith('/shop');
   const isDriverPage = pathname.startsWith('/driver');
   const isWalletPage = pathname.startsWith('/wallet');
 
-  const hiddenPages = isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isAdressPage || isFlashSale || isReady || isWishlist || isPromo || isChat || isShopPage || isDriverPage || isWalletPage;
+  const hiddenPages = isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isAdressPage || isFlashSale || isReady || isWishlist || isVoucher || isChat || isShopPage || isDriverPage || isWalletPage;
 
   useEffect(() => {
     if (!isProductDetailPage) return;

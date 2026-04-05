@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowLeft, CheckCircle2, Truck, Loader2, CreditCard,
-  Wallet, ShieldCheck, MapPin, AlertCircle, Info
+  Wallet, ShieldCheck, MapPin, AlertCircle, Info, Clock
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
@@ -14,19 +14,24 @@ import Link from "next/link"
 const isValidUUID = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 
-// Load Midtrans Snap script — production URL
+// Load Midtrans Snap script — environment aware
 const loadMidtransScript = (clientKey: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     if ((window as any).snap) { resolve(); return }
 
-    const existing = document.querySelector('script[src*="midtrans.com/snap/snap.js"]')
+    const isSandbox = clientKey.startsWith('SB-');
+    const scriptSrc = isSandbox 
+      ? "https://app.sandbox.midtrans.com/snap/snap.js"
+      : "https://app.snap.midtrans.com/snap/snap.js";
+
+    const existing = document.querySelector(`script[src="${scriptSrc}"]`)
     if (existing) {
       existing.addEventListener("load", () => resolve())
       return
     }
 
     const script = document.createElement("script")
-    script.src = "https://app.midtrans.com/snap/snap.js"
+    script.src = scriptSrc
     script.setAttribute("data-client-key", clientKey)
     script.async = true
     script.onload = () => resolve()
@@ -41,6 +46,7 @@ interface OrderInfo {
   customer_name: string
   payment_status: string
   distance_km: number | null
+  created_at: string
 }
 
 function PaymentContent() {
@@ -55,8 +61,17 @@ function PaymentContent() {
   const [codError, setCodError] = useState<string | null>(null)
   const [walletBalance, setWalletBalance] = useState<number>(0)
 
+  // Timer logic
+  const [now, setNow] = useState(Date.now())
+  const [expiryTime, setExpiryTime] = useState<number | null>(null)
+  
   // ✅ Ref guard: prevents concurrent payment requests entirely
   const isProcessingRef = useRef(false)
+
+  useEffect(() => {
+    const timerId = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timerId)
+  }, [])
 
   const COD_MAX_KM = 15
 
@@ -71,7 +86,7 @@ function PaymentContent() {
         // RLS ensures only own orders are returned
         const { data: order, error } = await supabase
           .from("orders")
-          .select("id, total_amount, customer_name, payment_status, distance_km")
+          .select("id, total_amount, customer_name, payment_status, distance_km, created_at")
           .eq("id", orderId)
           .maybeSingle()
 
@@ -88,6 +103,7 @@ function PaymentContent() {
         }
 
         setOrderInfo(order)
+        setExpiryTime(new Date(order.created_at || Date.now()).getTime() + 10 * 60 * 1000)
 
         // Fetch user wallet balance
         const balance = await getWalletBalance()
@@ -226,6 +242,9 @@ function PaymentContent() {
 
   const distanceKm = Number(orderInfo?.distance_km ?? 0)
   const codUnavailable = distanceKm > COD_MAX_KM
+  
+  const diff = expiryTime ? expiryTime - now : 0
+  const isTimeExpired = diff <= 0 && expiryTime !== null
 
   if (fetchingData) {
     return (
@@ -287,8 +306,31 @@ function PaymentContent() {
           )}
         </div>
 
+        {/* ── COUNTDOWN BANNER ── */}
+        {!isTimeExpired && expiryTime && (
+          <div className="bg-orange-50 border border-orange-100 rounded-2xl px-4 py-3.5 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2">
+              <Clock size={16} className="text-orange-500 shrink-0" />
+              <p className="text-[12px] text-orange-800 font-medium">Selesaikan proses pembayaran dalam</p>
+            </div>
+            <p className="text-[14px] font-black text-orange-600 tabular-nums bg-white px-2.5 py-1 rounded-lg border border-orange-100 shadow-sm">
+              {Math.max(0, Math.floor(diff / 60000)).toString().padStart(2, '0')}:
+              {Math.max(0, Math.floor((diff % 60000) / 1000)).toString().padStart(2, '0')}
+            </p>
+          </div>
+        )}
+        
+        {isTimeExpired && (
+          <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3.5 flex items-center gap-3 shadow-sm">
+            <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+            <p className="text-[13px] text-red-700 font-medium leading-relaxed">
+              Waktu pembayaran telah habis. Pesanan ini akan dibatalkan secara otomatis jika Anda belum melakukan pembayaran.
+            </p>
+          </div>
+        )}
+
         {/* ── Method Selection ── */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-2.5">
+        <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-2.5 ${isTimeExpired ? 'opacity-50 pointer-events-none' : ''}`}>
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">
             Metode Pembayaran
           </p>
@@ -434,10 +476,10 @@ function PaymentContent() {
       {/* ── Sticky Footer CTA ── */}
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-slate-100 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] px-4 pt-4 pb-6">
         <button
-          disabled={loading || !orderInfo}
+          disabled={loading || !orderInfo || isTimeExpired}
           onClick={handleProcessPayment}
           style={{
-            background: loading ? undefined : "linear-gradient(135deg, #f97316 0%, #ea580c 100%)"
+            background: loading || isTimeExpired ? undefined : "linear-gradient(135deg, #f97316 0%, #ea580c 100%)"
           }}
           className="w-full h-13 py-3.5 text-white rounded-2xl text-[14px] font-bold
             flex items-center justify-center gap-2
@@ -449,6 +491,8 @@ function PaymentContent() {
               <Loader2 size={16} className="animate-spin" />
               <span>Memproses...</span>
             </>
+          ) : isTimeExpired ? (
+            "Waktu Habis"
           ) : selectedMethod === "online" ? (
             "Bayar Sekarang"
           ) : (

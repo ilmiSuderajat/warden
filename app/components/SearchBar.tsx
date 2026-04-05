@@ -229,19 +229,19 @@ export default function SearchBar() {
               <Share2 size={26} strokeWidth={2.5} />
             </button>
           ) : (
-            <Link href="/chat/shop" className="relative text-white hover:bg-white/10 rounded-xl transition-all active:scale-90">
-              <MessageCircle size={24} strokeWidth={2.5} />
+            <Link href="/chat/shop" className="relative text-white/90 active:scale-95 transition-transform">
+              <MessageCircle size={24} />
               {chatCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-indigo-600 animate-pulse">
+                <span className="absolute -top-2 -right-2 bg-white text-indigo-700 text-[9px] font-black min-w-[16px] h-4 rounded-full flex items-center justify-center px-1 shadow">
                   {chatCount}
                 </span>
               )}
             </Link>
           )}
-          <Link href="/cart" className="relative p-2 text-white hover:bg-white/10 rounded-xl transition-all active:scale-90">
-            <ShoppingCart size={24} strokeWidth={2.5} />
+          <Link href="/cart" className="relative text-white/90 active:scale-95 transition-transform">
+            <ShoppingCart size={24} />
             {cartCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center  border-indigo-600 animate-in zoom-in duration-300">
+              <span className="absolute -top-2 -right-2 bg-white text-indigo-700 text-[9px] font-black min-w-[16px] h-4 rounded-full flex items-center justify-center px-1 shadow">
                 {cartCount}
               </span>
             )}
