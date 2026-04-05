@@ -1,21 +1,24 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Store, MessageCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Store, MessageCircle, Loader2, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface ChatConversation {
+  id: string;
   shop_id: string;
-  shop_name: string;
-  shop_image: string | null;
+  buyer_id: string;
   last_message: string;
   last_time: string;
   unread_count: number;
+  display_name: string;
+  display_image: string | null;
+  display_role: "buyer" | "shop";
 }
 
-export default function ShopChatList() {
+export default function UnifiedShopChatList() {
   const router = useRouter();
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,88 +35,88 @@ export default function ShopChatList() {
       const uid = session.user.id;
       setUserId(uid);
 
-      // Fetch all shop_chats for this buyer
-      const { data: chats, error } = await supabase
-        .from("shop_chats")
-        .select("*")
-        .eq("buyer_id", uid)
-        .order("created_at", { ascending: false });
+      // 1. Fetch shops owned by user
+      const { data: myShopsData } = await supabase.from("shops").select("id").eq("owner_id", uid);
+      const myShopIds = (myShopsData || []).map(s => s.id);
 
-      if (error) {
-        console.error(error);
+      // 2. Fetch all conversations matching either buyer_id or shop_id
+      let query = supabase.from("shop_conversations").select("*");
+      if (myShopIds.length > 0) {
+        query = query.or(`buyer_id.eq.${uid},shop_id.in.(${myShopIds.join(',')})`);
+      } else {
+        query = query.eq("buyer_id", uid);
+      }
+
+      const { data: rawConvs, error } = await query;
+
+      if (error || !rawConvs) {
         setLoading(false);
         return;
       }
 
-      // Group by shop_id
-      const shopMap = new Map<string, { shop_id: string; last_message: string; last_time: string; unread_count: number }>();
-      (chats || []).forEach((chat: any) => {
-        if (!shopMap.has(chat.shop_id)) {
-          shopMap.set(chat.shop_id, {
-            shop_id: chat.shop_id,
-            last_message: chat.message,
-            last_time: chat.created_at,
-            unread_count: 0,
+      // 3. Resolve display names natively without making N+1 queries
+      const allShopIds = [...new Set(rawConvs.map(c => c.shop_id))];
+      const allBuyerIds = [...new Set(rawConvs.filter(c => c.buyer_id !== uid).map(c => c.buyer_id))];
+
+      const [shopsData, buyersData] = await Promise.all([
+        allShopIds.length ? supabase.from("shops").select("id, name, image_url").in("id", allShopIds) : Promise.resolve({ data: [] }),
+        allBuyerIds.length ? supabase.from("addresses").select("user_id, name").in("user_id", allBuyerIds).eq("is_default", true) : Promise.resolve({ data: [] })
+      ]);
+
+      const shopMap = new Map((shopsData.data || []).map(s => [s.id, s]));
+      const buyerMap = new Map((buyersData.data || []).map(b => [b.user_id, b.name]));
+
+      // 4. Map them together
+      const mapped: ChatConversation[] = rawConvs.flatMap(c => {
+        const results: ChatConversation[] = [];
+        const isBuyer = c.buyer_id === uid;
+        const isOwner = myShopIds.includes(c.shop_id);
+        const sData = shopMap.get(c.shop_id);
+
+        if (isBuyer) {
+          results.push({
+            id: c.id,
+            shop_id: c.shop_id,
+            buyer_id: c.buyer_id,
+            last_message: c.last_message || "",
+            last_time: c.last_time || c.created_at,
+            unread_count: c.unread_buyer || 0,
+            display_name: sData?.name || "Toko",
+            display_image: sData?.image_url || null,
+            display_role: "buyer" // I am the buyer interacting with the shop
           });
         }
-        if (chat.sender_id !== uid && !chat.is_read) {
-          shopMap.get(chat.shop_id)!.unread_count += 1;
+
+        if (isOwner && c.buyer_id !== uid) {
+          results.push({
+            id: c.id,
+            shop_id: c.shop_id,
+            buyer_id: c.buyer_id,
+            last_message: c.last_message || "",
+            last_time: c.last_time || c.created_at,
+            unread_count: c.unread_shop || 0,
+            display_name: buyerMap.get(c.buyer_id) || "Pembeli",
+            display_image: null,
+            display_role: "shop" // I am the shop interacting with the buyer
+          });
         }
+
+        return results;
       });
 
-      // Fetch shop info
-      const shopIds = Array.from(shopMap.keys());
-      if (shopIds.length === 0) {
-        setConversations([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data: shops } = await supabase
-        .from("shops")
-        .select("id, name, image_url")
-        .in("id", shopIds);
-
-      const shopInfoMap = new Map<string, { name: string; image_url: string | null }>();
-      (shops || []).forEach((s: any) => shopInfoMap.set(s.id, { name: s.name, image_url: s.image_url }));
-
-      const convs: ChatConversation[] = Array.from(shopMap.values()).map(c => ({
-        ...c,
-        shop_name: shopInfoMap.get(c.shop_id)?.name || "Toko",
-        shop_image: shopInfoMap.get(c.shop_id)?.image_url || null,
-      }));
-
-      convs.sort((a, b) => new Date(b.last_time).getTime() - new Date(a.last_time).getTime());
-      setConversations(convs);
+      mapped.sort((a, b) => new Date(b.last_time).getTime() - new Date(a.last_time).getTime());
+      setConversations(mapped);
       setLoading(false);
 
-      // Subscribe to new messages
+      // 5. Subscription
       const channel = supabase
-        .channel("shop-chat-list")
+        .channel("shop-conv-list")
         .on(
           "postgres_changes",
-          { event: "INSERT", schema: "public", table: "shop_chats" },
+          { event: "*", schema: "public", table: "shop_conversations" },
           (payload) => {
-            const msg = payload.new as any;
-            if (msg.buyer_id !== uid) return;
-
-            setConversations(prev => {
-              const idx = prev.findIndex(c => c.shop_id === msg.shop_id);
-              const updated = [...prev];
-              if (idx > -1) {
-                updated[idx] = {
-                  ...updated[idx],
-                  last_message: msg.message,
-                  last_time: msg.created_at,
-                  unread_count: msg.sender_id !== uid ? updated[idx].unread_count + 1 : updated[idx].unread_count,
-                };
-              } else {
-                // New conversation — refetch
-                init();
-                return prev;
-              }
-              return updated.sort((a, b) => new Date(b.last_time).getTime() - new Date(a.last_time).getTime());
-            });
+             // For simplicity, just refetch on any change that affects us.
+             init();
           }
         )
         .subscribe();
@@ -124,7 +127,19 @@ export default function ShopChatList() {
     init();
   }, []);
 
+  const formatMessagePreview = (message: string) => {
+    if (!message) return "Memulai percakapan...";
+    try {
+      if (message.startsWith('{"type":"product_reference"')) {
+        const parsed = JSON.parse(message);
+        return `📦 ${parsed.product?.name || "Produk"}`;
+      }
+    } catch { }
+    return message;
+  };
+
   const formatTime = (dateStr: string) => {
+    if (!dateStr) return "";
     const date = new Date(dateStr);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
@@ -142,14 +157,14 @@ export default function ShopChatList() {
           <button onClick={() => router.back()} className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform">
             <ArrowLeft size={24} strokeWidth={2.5} />
           </button>
-          <h1 className="ml-3 text-lg font-bold tracking-tight">Chat Toko</h1>
+          <h1 className="ml-3 text-lg font-bold tracking-tight">Chat & Pesan</h1>
         </header>
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
           <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
             <MessageCircle size={28} className="text-indigo-600" />
           </div>
           <h2 className="text-lg font-bold text-slate-800 mb-2">Login diperlukan</h2>
-          <p className="text-sm text-slate-500 mb-6">Silakan login untuk melihat daftar chat toko.</p>
+          <p className="text-sm text-slate-500 mb-6">Silakan login untuk melihat daftar kotak masuk Anda.</p>
           <button
             onClick={() => router.push("/login")}
             className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold text-sm active:scale-95 transition-all shadow-md shadow-indigo-200"
@@ -163,13 +178,12 @@ export default function ShopChatList() {
 
   return (
     <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans pb-20">
-      {/* Header */}
       <header className="fixed max-w-md mx-auto top-0 left-0 right-0 z-50 flex justify-center bg-white">
         <div className="w-full max-w-md h-14 flex items-center px-4 border-b border-slate-100">
           <button onClick={() => router.back()} className="p-1 -ml-1 text-slate-700 active:scale-95 transition-transform">
             <ArrowLeft size={24} strokeWidth={2.5} />
           </button>
-          <h1 className="ml-3 text-lg font-bold tracking-tight">Chat Toko</h1>
+          <h1 className="ml-3 text-lg font-bold tracking-tight">Kotak Masuk</h1>
           <span className="ml-auto text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 px-2 py-1 rounded-full">
             {conversations.length} Chat
           </span>
@@ -184,28 +198,27 @@ export default function ShopChatList() {
         ) : conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center pt-20 text-center px-8">
             <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mb-5">
-              <Store className="w-10 h-10 text-indigo-400" />
+              <MessageCircle className="w-10 h-10 text-indigo-400" />
             </div>
             <h2 className="text-lg font-bold text-slate-800 mb-2">Belum ada percakapan</h2>
             <p className="text-sm text-slate-500 max-w-[260px]">
-              Mulai chat dengan toko dari halaman produk untuk menanyakan ketersediaan, harga, dan informasi lainnya.
+              Chat dari toko maupun pertanyaan dari pembeli toko Anda akan muncul di sini.
             </p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
             {conversations.map(conv => (
               <Link
-                key={conv.shop_id}
-                href={`/chat/shop/${conv.shop_id}`}
+                key={`${conv.id}-${conv.display_role}`}
+                href={`/chat/shop/${conv.id}`}
                 className="flex items-center gap-3 px-4 py-4 bg-white hover:bg-slate-50 active:bg-slate-100 transition-colors"
               >
-                {/* Avatar */}
                 <div className="relative shrink-0">
                   <div className="w-12 h-12 rounded-full bg-slate-100 overflow-hidden flex items-center justify-center border border-slate-200">
-                    {conv.shop_image ? (
-                      <img src={conv.shop_image} alt={conv.shop_name} className="w-full h-full object-cover" />
+                    {conv.display_image ? (
+                      <img src={conv.display_image} alt={conv.display_name} className="w-full h-full object-cover" />
                     ) : (
-                      <Store size={20} className="text-slate-400" />
+                      conv.display_role === "buyer" ? <Store size={20} className="text-slate-400" /> : <User size={20} className="text-slate-400" />
                     )}
                   </div>
                   {conv.unread_count > 0 && (
@@ -215,16 +228,22 @@ export default function ShopChatList() {
                   )}
                 </div>
 
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center mb-0.5">
-                    <h3 className="text-sm font-bold text-slate-800 truncate">{conv.shop_name}</h3>
+                    <h3 className="text-sm font-bold text-slate-800 truncate flex items-center gap-1.5">
+                      {conv.display_name}
+                      {conv.display_role === "shop" && (
+                        <span className="text-[8px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded uppercase tracking-wider font-extrabold">
+                          Pembeli
+                        </span>
+                      )}
+                    </h3>
                     <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap ml-3">
                       {formatTime(conv.last_time)}
                     </span>
                   </div>
                   <p className={`text-xs truncate ${conv.unread_count > 0 ? "font-bold text-slate-700" : "text-slate-400"}`}>
-                    {conv.last_message}
+                    {formatMessagePreview(conv.last_message)}
                   </p>
                 </div>
               </Link>

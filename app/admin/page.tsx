@@ -284,7 +284,7 @@ export default function MasterAdminPage() {
               <MenuCard href="/admin/chat" icon={MessageCircle} title="Live Chat CS (Admin)" desc="Layanan support & chat pengguna ke pusat" color="sky" layout="horizontal" />
             </div>
             <div className="col-span-2">
-              <MenuCard href="/admin/shop-chat" icon={Store} title="Chat Toko (Owner)" desc="Kelola chat pembeli ke toko Anda" color="amber" layout="horizontal" />
+              <MenuCard href="/chat/shop" icon={Store} title="Chat Toko (Owner)" desc="Kelola chat pembeli ke toko Anda" color="amber" layout="horizontal" />
             </div>
             <div className="col-span-2">
               <MenuCard href="/admin/customers" icon={Users} title="User & Admin" desc="Database pengguna dan role akses" color="slate" layout="horizontal" />

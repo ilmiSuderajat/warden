@@ -139,6 +139,42 @@ export default function ProductDetail() {
     }
   }
 
+  const handleChatToko = async () => {
+    if (!product) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push("/login");
+      return;
+    }
+    
+    // Check if conversation already exists
+    let convId = null;
+    try {
+       const shopId = shop?.id || product.shop_id;
+       const { data: existing } = await supabase.from("shop_conversations")
+         .select("id")
+         .eq("buyer_id", session.user.id)
+         .eq("shop_id", shopId)
+         .maybeSingle();
+         
+       if (existing) {
+         convId = existing.id;
+       } else {
+         // Create new conversation
+         const { data: newConv, error } = await supabase.from("shop_conversations").insert([{
+           buyer_id: session.user.id,
+           shop_id: shopId
+         }]).select('id').single();
+         if (error) throw error;
+         convId = newConv.id;
+       }
+       
+       router.push(`/chat/shop/${convId}?product_id=${product.id}`);
+    } catch {
+       toast.error("Gagal memulai percakapan");
+    }
+  };
+
   const handleShare = async () => {
     const url = `${window.location.origin}/product/${id}`
     const shareData = {
@@ -503,9 +539,8 @@ export default function ProductDetail() {
           style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         >
           <div className="flex items-center gap-2.5 px-4 py-3 max-w-md mx-auto">
-            {/* CHAT */}
             <button
-              onClick={() => router.push(`/chat/shop/${shop?.id || product.shop_id}?product_id=${product.id}`)}
+              onClick={() => handleChatToko()}
               className="flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 transition-colors w-[3.2rem] shrink-0"
             >
               <MessageCircle size={22} strokeWidth={1.8} />
