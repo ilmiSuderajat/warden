@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import Midtrans from "midtrans-client"
 
 const snap = new Midtrans.Snap({
-    isProduction: true,
+    isProduction: !process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.startsWith('SB-'),
     serverKey: process.env.MIDTRANS_SERVER_KEY!,
     clientKey: process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!,
 })

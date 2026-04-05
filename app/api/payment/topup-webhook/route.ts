@@ -10,6 +10,8 @@ const supabase = createClient(
 export async function POST(req: Request) {
     try {
         const body = await req.json()
+        console.log("📦 [Topup Webhook] Received Body:", JSON.stringify(body, null, 2))
+
         const {
             order_id,
             status_code,
@@ -19,34 +21,39 @@ export async function POST(req: Request) {
         } = body
 
         // 1. Verifikasi signature Midtrans
+        // Gunakan gross_amount persis seperti yang dikirim Midtrans (bisa berupa string "50000.00")
         const serverKey = process.env.MIDTRANS_SERVER_KEY!
+        const payload = order_id + status_code + gross_amount + serverKey
         const hash = crypto
             .createHash("sha512")
-            .update(order_id + status_code + gross_amount + serverKey)
+            .update(payload)
             .digest("hex")
 
         if (hash !== signature_key) {
-            console.log("❌ [Topup Webhook] Signature tidak valid")
+            console.error("❌ [Topup Webhook] Signature mismatch!")
+            console.error("Expected:", hash)
+            console.error("Received:", signature_key)
             return NextResponse.json({ message: "Invalid signature" }, { status: 403 })
         }
 
-        console.log(`🔔 [Topup Webhook] order_id: ${order_id}, status: ${transaction_status}`)
+        console.log(`🔔 [Topup Webhook] Validated: ${order_id}, status: ${transaction_status}`)
 
         // Cek tipe topup (Driver vs Shop vs User)
-        const isDriverTopup = order_id.startsWith("DRVTOPUP-")
-        const isUserTopup = order_id.startsWith("USERTOPUP-")
-
-        if (isDriverTopup) {
-            return await handleDriverTopup(order_id, transaction_status)
-        } else if (isUserTopup) {
-            return await handleUserTopup(order_id, transaction_status)
+        let response: NextResponse
+        if (order_id.startsWith("DRVTOPUP-")) {
+            response = await handleDriverTopup(order_id, transaction_status)
+        } else if (order_id.startsWith("USERTOPUP-")) {
+            response = await handleUserTopup(order_id, transaction_status)
         } else {
-            return await handleShopTopup(order_id, transaction_status)
+            response = await handleShopTopup(order_id, transaction_status)
         }
+
+        console.log(`✅ [Topup Webhook] Finished processing ${order_id}`)
+        return response
 
     } catch (err: any) {
         console.error("🔥 [Topup Webhook Error]:", err.message)
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+        return NextResponse.json({ error: "Internal Server Error", details: err.message }, { status: 500 })
     }
 }
 
@@ -67,7 +74,18 @@ async function handleDriverTopup(order_id: string, transaction_status: string) {
     }
 
     if (transaction_status === "settlement" || transaction_status === "capture") {
-        // 1. Update wallet balance via RPC (Unified)
+        // 1. Insert secure transaction via RPC (Unified Ledger)
+        // Note: Call this first so it reads the balance before increment
+        const { error: ledgerErr } = await supabase.rpc('create_transaction', {
+            p_user_id: topupReq.driver_id,
+            p_order_id: null,
+            p_type: 'topup',
+            p_amount: topupReq.amount,
+            p_description: `Topup Saldo Driver via Midtrans (${order_id})`
+        })
+        if (ledgerErr) throw ledgerErr
+
+        // 2. Update wallet balance via RPC (Unified)
         const { error: updateErr } = await supabase.rpc('increment_wallet_balance', {
             p_user_id: topupReq.driver_id,
             p_amount: topupReq.amount
@@ -79,15 +97,6 @@ async function handleDriverTopup(order_id: string, transaction_status: string) {
             const { data: wallet } = await supabase.from("wallets").select("balance").eq("user_id", topupReq.driver_id).single()
             await supabase.from("wallets").update({ balance: (wallet?.balance || 0) + topupReq.amount }).eq("user_id", topupReq.driver_id)
         }
-
-        // 2. Insert secure transaction via RPC (Unified Ledger)
-        await supabase.rpc('create_wallet_transaction', {
-            p_user_id: topupReq.driver_id,
-            p_order_id: null,
-            p_type: 'topup',
-            p_amount: topupReq.amount,
-            p_desc: `Topup Saldo Driver via Midtrans (${order_id})`
-        })
 
         // 3. Mark request as paid
         await supabase.from("driver_topup_requests")
@@ -126,7 +135,17 @@ async function handleShopTopup(order_id: string, transaction_status: string) {
         const { data: shop } = await supabase.from("shops").select("owner_id, balance").eq("id", topupReq.shop_id).single()
         if (!shop) throw new Error("Shop not found")
 
-        // 2. Update wallet balance via RPC (Unified)
+        // 2. Insert secure transaction via RPC (Unified Ledger)
+        const { error: ledgerErr } = await supabase.rpc('create_transaction', {
+            p_user_id: shop.owner_id,
+            p_order_id: null,
+            p_type: 'topup',
+            p_amount: topupReq.amount,
+            p_description: `Topup Saldo Warung via Midtrans (${order_id})`
+        })
+        if (ledgerErr) throw ledgerErr
+
+        // 3. Update wallet balance via RPC (Unified)
         const { error: updateErr } = await supabase.rpc('increment_wallet_balance', {
             p_user_id: shop.owner_id,
             p_amount: topupReq.amount
@@ -138,23 +157,6 @@ async function handleShopTopup(order_id: string, transaction_status: string) {
             const { data: wallet } = await supabase.from("wallets").select("balance").eq("user_id", shop.owner_id).single()
             await supabase.from("wallets").update({ balance: (wallet?.balance || 0) + topupReq.amount }).eq("user_id", shop.owner_id)
         }
-
-        // 3. Update shop COD status based on new theoretical balance
-        // Note: In long term, shops.balance column should be deprecated.
-        const newShopBalance = (shop.balance || 0) + topupReq.amount
-        await supabase.from("shops").update({ 
-            balance: newShopBalance,
-            cod_enabled: newShopBalance >= 0 
-        }).eq("id", topupReq.shop_id)
-
-        // 4. Insert secure transaction via RPC (Unified Ledger)
-        await supabase.rpc('create_wallet_transaction', {
-            p_user_id: shop.owner_id,
-            p_order_id: null,
-            p_type: 'topup',
-            p_amount: topupReq.amount,
-            p_desc: `Topup Saldo Warung via Midtrans (${order_id})`
-        })
 
         await supabase.from("shop_topup_requests")
             .update({ status: "paid" })
@@ -188,7 +190,17 @@ async function handleUserTopup(order_id: string, transaction_status: string) {
     }
 
     if (transaction_status === "settlement" || transaction_status === "capture") {
-        // 1. Update wallet balance
+        // 1. Insert secure transaction via RPC
+        const { error: ledgerErr } = await supabase.rpc('create_transaction', {
+            p_user_id: topupReq.user_id,
+            p_order_id: null,
+            p_type: 'topup',
+            p_amount: topupReq.amount,
+            p_description: `Topup Saldo Wallet via Midtrans (${order_id})`
+        })
+        if (ledgerErr) throw ledgerErr
+
+        // 2. Update wallet balance
         const { error: updateErr } = await supabase.rpc('increment_wallet_balance', {
             p_user_id: topupReq.user_id,
             p_amount: topupReq.amount
@@ -200,15 +212,6 @@ async function handleUserTopup(order_id: string, transaction_status: string) {
             const { error: manualErr } = await supabase.from("wallets").update({ balance: (wallet?.balance || 0) + topupReq.amount }).eq("user_id", topupReq.user_id)
             if (manualErr) throw manualErr
         }
-
-        // 2. Insert secure transaction via RPC
-        await supabase.rpc('create_wallet_transaction', {
-            p_user_id: topupReq.user_id,
-            p_order_id: null,
-            p_type: 'topup',
-            p_amount: topupReq.amount,
-            p_desc: `Topup Saldo Wallet via Midtrans (${order_id})`
-        })
 
         // 3. Mark request as paid
         await supabase.from("user_topup_requests")

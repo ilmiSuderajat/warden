@@ -75,7 +75,8 @@ export default function TopUpModal({ isOpen, onClose, onSuccess }: TopUpModalPro
           onSuccess()
         },
         onPending: () => {
-          toast.info("Menunggu konfirmasi pembayaran...")
+          toast.info(`Menunggu konfirmasi pembayaran... (Order ID: ${data.orderId})`)
+          console.log("Midtrans Order ID:", data.orderId)
           onSuccess() // Refresh data meski masih pending
         },
         onError: () => {

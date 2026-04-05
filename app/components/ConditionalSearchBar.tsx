@@ -25,8 +25,9 @@ export default function ConditionalSearchBar() {
   const isShopPage = pathname.startsWith('/shop');
   const isDriverPage = pathname.startsWith('/driver');
   const isWalletPage = pathname.startsWith('/wallet');
+  const isReviewPage = pathname.startsWith('/reviews');
 
-  const hiddenPages = isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isAdressPage || isFlashSale || isReady || isWishlist || isVoucher || isChat || isShopPage || isDriverPage || isWalletPage;
+  const hiddenPages = isAdmin || isCategory || isCart || isProfile || isLogin || isOrders || isCheckout || isAdressPage || isFlashSale || isReady || isWishlist || isVoucher || isChat || isShopPage || isDriverPage || isWalletPage || isReviewPage;
 
   useEffect(() => {
     if (!isProductDetailPage) return;

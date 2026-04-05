@@ -7,6 +7,7 @@ import { cancelOrder } from "@/lib/wallet"
 import * as Icons from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Skeleton from "@/app/components/Skeleton"
+import ProductList from "@/app/components/ProductList"
 
 /** Compress image to under maxKB using Canvas (client-side only) */
 async function compressImage(file: File, maxKB = 100): Promise<File> {
@@ -84,7 +85,7 @@ function OrdersContent() {
   // Review state
   const [reviewOrder, setReviewOrder] = useState<any>(null)
   const [isSubmittingReview, setIsSubmittingReview] = useState(false)
-  const [reviewsState, setReviewsState] = useState<Record<string, { rating: number; comment: string; photoFile?: File | null; photoPreview?: string }>>({})
+  const [reviewsState, setReviewsState] = useState<Record<string, { rating: number; comment: string; photos?: { file: File | null; url: string }[] }>>({})
   const [reviewerName, setReviewerName] = useState<string>("")
 
   // Cancel state
@@ -99,7 +100,7 @@ function OrdersContent() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [isSearching, setIsSearching] = useState(false)
-  const [viewCancelReason, setViewCancelReason] = useState<string | null>(null)
+  const [viewCancelOrder, setViewCancelOrder] = useState<any>(null)
 
   const activeOrderId = searchParams.get("active")
 
@@ -226,7 +227,7 @@ function OrdersContent() {
     const initial: Record<string, any> = {}
     let hasReviewable = false
     order.order_items?.forEach((item: any) => {
-      if (item.product_id) { initial[item.product_id] = { rating: 5, comment: "", photoFile: null, photoPreview: "" }; hasReviewable = true }
+      if (item.product_id) { initial[item.product_id] = { rating: 5, comment: "", photos: [] }; hasReviewable = true }
     })
     if (!hasReviewable) { toast.info("Pesanan ini adalah pesanan lama yang belum mendukung Ulasan Produk."); return }
     const { data: { user } } = await supabase.auth.getUser()
@@ -237,7 +238,8 @@ function OrdersContent() {
     const { data: existing } = await supabase.from("product_reviews").select("id, product_id, rating, comment, photo_url").eq("order_id", order.id)
     if (existing) {
       existing.forEach((ex: any) => {
-        if (initial[ex.product_id]) initial[ex.product_id] = { rating: ex.rating, comment: ex.comment || "", photoFile: null, photoPreview: ex.photo_url || "", id: ex.id }
+        const urls = ex.photo_url ? ex.photo_url.split(',') : []
+        if (initial[ex.product_id]) initial[ex.product_id] = { rating: ex.rating, comment: ex.comment || "", photos: urls.filter(Boolean).map((u: string) => ({ file: null, url: u.trim() })), id: ex.id }
       })
     }
     setReviewsState(initial)
@@ -249,18 +251,25 @@ function OrdersContent() {
     try {
       const reviewPayload = await Promise.all(
         Object.entries(reviewsState).map(async ([productId, rev]: any) => {
-          let photoUrl: string | null = rev.photoPreview || null
-          if (rev.photoFile) {
-            try {
-              const compressed = await compressImage(rev.photoFile, 100)
-              const fd = new FormData()
-              fd.append("file", compressed); fd.append("orderId", reviewOrder.id); fd.append("productId", productId)
-              const uploadRes = await fetch("/api/review/photo", { method: "POST", body: fd })
-              const uploadData = await uploadRes.json()
-              photoUrl = uploadRes.ok && uploadData.url ? uploadData.url : null
-            } catch { photoUrl = null }
+          let urls: string[] = []
+          if (rev.photos && Array.isArray(rev.photos)) {
+            for (let i = 0; i < rev.photos.length; i++) {
+               const p = rev.photos[i]
+               if (p.file) {
+                 try {
+                   const compressed = await compressImage(p.file, 100)
+                   const fd = new FormData()
+                   fd.append("file", compressed); fd.append("orderId", reviewOrder.id); fd.append("productId", productId + "_" + i)
+                   const uploadRes = await fetch("/api/review/photo", { method: "POST", body: fd })
+                   const uploadData = await uploadRes.json()
+                   if (uploadRes.ok && uploadData.url) urls.push(uploadData.url)
+                 } catch { /* ignore */ }
+               } else if (p.url) {
+                 urls.push(p.url)
+               }
+            }
           }
-          return { productId, rating: rev.rating, comment: rev.comment, photoUrl, existingId: rev.id || undefined }
+          return { productId, rating: rev.rating, comment: rev.comment, photoUrl: urls.length > 0 ? urls.join(',') : null, existingId: rev.id || undefined }
         })
       )
       const res = await fetch("/api/review", {
@@ -301,6 +310,210 @@ function OrdersContent() {
 
   const isUnpaid = (order: any) => order.payment_status === "pending" || order.status === "Menunggu Pembayaran"
   const getTotalItems = (order: any) => order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0) || 0
+
+  // ─── CANCEL DETAILS FULL SCREEN (RINCIAN PEMBATALAN) ──────────
+  if (viewCancelOrder) {
+    const details = orders.find(o => o.id === viewCancelOrder.id) || viewCancelOrder
+    const firstItem = details.order_items?.[0]
+    return (
+      <div className="min-h-screen bg-[#f5f5f5] font-sans max-w-md mx-auto">
+        <div className="bg-white sticky top-0 z-40 border-b border-slate-100 flex items-center px-4 h-14">
+          <button onClick={() => setViewCancelOrder(null)} className="p-1 -ml-1 text-[#ee4d2d] shrink-0">
+            <Icons.ArrowLeft size={24} />
+          </button>
+          <h1 className="text-[17px] font-normal text-slate-800 ml-4 flex-1">Rincian Pembatalan</h1>
+        </div>
+
+        <div className="bg-white px-4 py-6 mb-2 flex justify-between items-center">
+           <div>
+             <h2 className="text-[#ee4d2d] text-lg font-medium">Pembatalan Berhasil</h2>
+             <p className="text-xs text-slate-500 mt-1">pada {formatDate(details.created_at)}</p>
+           </div>
+           <div className="w-10 h-10 rounded-full border border-[#ee4d2d] shrink-0 flex items-center justify-center">
+             <Icons.Check size={24} className="text-[#ee4d2d] stroke-[1.5px]" />
+           </div>
+        </div>
+
+        <div className="bg-white px-4 py-3 border-b border-slate-100 mt-2 flex items-center gap-2">
+           <div className="bg-[#ee4d2d] text-white text-[9px] font-bold px-1 rounded-sm">Star</div>
+           <span className="text-[13px] font-semibold text-slate-800">{details.shop_name || "Official Store"}</span>
+           <Icons.ChevronRight size={14} className="text-slate-400" />
+        </div>
+        <div className="bg-white px-4 py-3 flex gap-3 border-b border-white">
+           <img src={firstItem?.image_url || "/placeholder.png"} className="w-[72px] h-[72px] object-cover border border-slate-200" alt="product" />
+           <div className="flex-1 min-w-0 flex flex-col justify-start pt-1">
+             <p className="text-[13px] text-slate-800 line-clamp-2 leading-snug">{firstItem?.product_name?.split(" | ")[0]}</p>
+           </div>
+           <div className="text-right shrink-0 flex flex-col justify-start pt-1">
+             <p className="text-[13px] text-slate-800 font-medium">Rp{firstItem?.price?.toLocaleString("id-ID")}</p>
+             <p className="text-xs text-slate-400 line-through">Rp{((firstItem?.price || 0) * 1.2)?.toLocaleString("id-ID")}</p>
+             <p className="text-xs text-slate-500 mt-1">x{firstItem?.quantity || 1}</p>
+           </div>
+        </div>
+
+        <div className="bg-white px-4 py-4 mb-2">
+          <div className="flex justify-between text-[13px] text-slate-500 mb-3">
+             <span className="w-1/3">Diminta oleh</span>
+             <span className="text-slate-800 text-right">Sistem / Pembeli</span>
+          </div>
+          <div className="flex justify-between text-[13px] text-slate-500 mb-3">
+             <span className="w-1/3">Diminta pada</span>
+             <span className="text-slate-800 text-right">{formatDate(details.created_at)}</span>
+          </div>
+          <div className="flex justify-between text-[13px] text-slate-500 mb-3">
+             <span className="w-1/3">Alasan</span>
+             <span className="text-slate-800 text-right max-w-[60%] ml-auto">{details.cancel_reason || "Tidak ada pembayaran / Dibatalkan"}</span>
+          </div>
+          <div className="flex justify-between text-[13px] text-slate-500">
+             <span className="w-1/3">Metode pembayaran</span>
+             <span className="text-slate-800 text-right">Belum Bayar</span>
+          </div>
+        </div>
+        
+        <div className="bg-[#f5f5f5] px-4 py-4">
+           <button onClick={() => { setExpandedOrderId(details.id); setViewCancelOrder(null); }} className="w-full py-2.5 bg-white border border-slate-300 rounded text-sm text-slate-700 font-medium tracking-wide">Rincian Pesanan</button>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── REVIEW FULL SCREEN (NILAI PRODUK) ─────────────────────────
+  if (reviewOrder) {
+    return (
+      <div className="min-h-screen bg-[#f5f5f5] font-sans max-w-md mx-auto pb-20">
+        <div className="bg-white sticky top-0 z-40 flex items-center px-4 h-14 shadow-sm relative">
+          <button onClick={() => setReviewOrder(null)} className="p-1 -ml-1 text-[#ee4d2d] shrink-0">
+            <Icons.ArrowLeft size={24} />
+          </button>
+          <h1 className="text-[18px] font-normal text-slate-800 ml-4 flex-1">Nilai Produk</h1>
+        </div>
+
+        <div className="py-2 space-y-2">
+          {reviewOrder.order_items?.filter((i: any) => i.product_id).map((item: any) => {
+            const PId = item.product_id
+            const revState = reviewsState[PId] || { rating: 5, comment: "", photos: [] }
+            return (
+              <div key={PId}>
+                {/* Section 1: Item & Review Input */}
+                <div className="bg-white p-4">
+                  <div className="flex gap-3 mb-4">
+                    <img src={item.image_url || "/placeholder.png"} className="w-12 h-12 object-cover rounded border border-slate-100" alt="product" />
+                    <div>
+                       <p className="text-[13px] font-semibold text-slate-800 line-clamp-1">{item.product_name?.split(" | ")[0]}</p>
+                       <p className="text-[11px] text-slate-400">Variasi: -</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2 mb-4">
+                    <p className="text-[13px] text-slate-500">Nilai Produk</p>
+                    <div className="flex items-center gap-3">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button key={star} onClick={() => setReviewsState(prev => ({ ...prev, [PId]: { ...prev[PId], rating: star } }))} className="transition-transform active:scale-95">
+                          <Icons.Star size={32} className={star <= revState.rating ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-100"} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                     <div className="flex justify-between items-center mb-2">
+                       <p className="text-[12px] text-slate-600">Tambahkan 2 foto dan video</p>
+                       <span className="text-[11px] text-amber-500 font-medium flex items-center">+30 <Icons.CircleDollarSign size={10} className="ml-1" /></span>
+                     </div>
+                     <div className="flex gap-2 overflow-x-auto no-scrollbar snap-x pb-2">
+                       {revState.photos?.map((p: any, idx: number) => (
+                           <div key={idx} className="relative w-20 h-20 shrink-0 snap-start rounded border border-slate-200 bg-white">
+                             <img src={p.url} className="w-full h-full object-cover rounded" alt="preview" />
+                             <button onClick={() => {
+                                 const newPhotos = [...(revState.photos || [])];
+                                 newPhotos.splice(idx, 1);
+                                 setReviewsState(prev => ({ ...prev, [PId]: { ...prev[PId], photos: newPhotos } }))
+                             }} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slate-700/80 text-white rounded-full flex items-center justify-center shadow backdrop-blur-sm z-10 transition-transform active:scale-95">
+                               <Icons.X size={10} strokeWidth={3} />
+                             </button>
+                           </div>
+                       ))}
+                       {(revState.photos?.length || 0) < 2 && (
+                         <label className="cursor-pointer shrink-0 w-20 h-20 border-2 border-dashed border-slate-300 rounded bg-white flex flex-col items-center justify-center gap-1.5 hover:border-indigo-400 hover:bg-slate-50 transition-colors snap-start relative overflow-hidden">
+                            <Icons.Camera size={26} className="text-slate-400" strokeWidth={1} />
+                            <span className="text-[9px] font-medium text-slate-500 text-center leading-tight">Video/Foto</span>
+                            <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              if (!files.length) return;
+                              const currentCount = revState.photos?.length || 0;
+                              let added = 0;
+                              files.forEach(file => {
+                                if (currentCount + added < 2) {
+                                  if (file.size > 5 * 1024 * 1024) { toast.error("Ukuran foto maksimal 5MB"); return; }
+                                  const reader = new FileReader();
+                                  reader.onload = (ev) => {
+                                      setReviewsState(prev => {
+                                          const prevPhotos = prev[PId]?.photos || [];
+                                          return { ...prev, [PId]: { ...prev[PId], photos: [...prevPhotos, { file, url: ev.target?.result as string }] } }
+                                      })
+                                  };
+                                  reader.readAsDataURL(file);
+                                  added++;
+                                }
+                              });
+                            }} />
+                         </label>
+                       )}
+                     </div>
+                  </div>
+
+                  <div className="mb-4 bg-slate-50 rounded-lg p-3 relative">
+                     <div className="flex justify-between items-center mb-1">
+                       <p className="text-[12px] text-slate-600">Tulis ulasan minimal 50 karakter</p>
+                       <span className="text-[11px] text-amber-500 font-medium flex items-center">+10 <Icons.CircleDollarSign size={10} className="ml-1" /></span>
+                     </div>
+                     <textarea
+                       placeholder="Desain: 
+Bahan: 
+
+Bagikan penilaianmu dan bantu Pengguna lain membuat pilihan yang lebih baik!"
+                       value={revState.comment}
+                       onChange={(e) => setReviewsState(prev => ({ ...prev, [PId]: { ...prev[PId], comment: e.target.value } }))}
+                       className="w-full bg-transparent text-[13px] border-none outline-none resize-none h-32 placeholder:text-slate-300 mt-1 text-slate-700 focus:ring-0 leading-relaxed"
+                     />
+                     <span className="absolute bottom-2 right-3 text-[10px] text-slate-300">{(revState.comment || "").length} karakter</span>
+                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer mt-2 pt-2">
+                     <input type="checkbox" className="w-4 h-4 rounded text-indigo-600 accent-indigo-600 border-slate-300" />
+                     <span className="text-[12px] text-slate-600">Sembunyikan username pada penilaian</span>
+                  </label>
+                </div>
+
+                {/* Section 2: Seller & Shipping Ratings */}
+                <div className="bg-white p-4 mt-2">
+                  <div className="flex justify-between items-center mb-4">
+                     <span className="text-[13px] text-slate-800">Pelayanan Penjual</span>
+                     <div className="flex items-center gap-2">
+                        {[1, 2, 3, 4, 5].map((star) => <Icons.Star key={star} size={24} className="text-amber-400 fill-amber-400" />)}
+                     </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                     <span className="text-[13px] text-slate-800">Kecepatan Jasa Kirim</span>
+                     <div className="flex items-center gap-2">
+                        {[1, 2, 3, 4, 5].map((star) => <Icons.Star key={star} size={24} className="text-amber-400 fill-amber-400" />)}
+                     </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="fixed bottom-0 w-full max-w-md bg-white p-3 z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] border-t border-slate-100">
+           <button disabled={isSubmittingReview} onClick={submitReviews} className="w-full py-3 bg-[#ee4d2d] text-white rounded-[2px] font-medium text-[15px] flex justify-center items-center">
+             {isSubmittingReview ? <Icons.Loader2 className="animate-spin mr-2" size={18} /> : null}
+             KIRIM
+           </button>
+        </div>
+      </div>
+    )
+  }
 
   // ─── EXPANDED FULL SCREEN (RINCIAN PESANAN) ───────────────────
   if (expandedOrderId) {
@@ -622,7 +835,7 @@ function OrdersContent() {
                     </>
                   ) : order.status === "Dibatalkan" ? (
                     <>
-                      <button onClick={() => setViewCancelReason(order.cancel_reason || "Dibatalkan oleh sistem")} className="px-5 py-1.5 border border-slate-300 rounded text-slate-700 bg-white">Rincian Pembatalan</button>
+                      <button onClick={() => setViewCancelOrder(order)} className="px-5 py-1.5 border border-slate-300 rounded text-slate-700 bg-white">Rincian Pembatalan</button>
                       <button onClick={() => router.push(`/product/${firstItem?.product_id}`)} className="px-5 py-1.5 border border-indigo-600 text-indigo-600 rounded bg-white">Beli Lagi</button>
                     </>
                   ) : order.status === "Dikirim" ? (
@@ -642,91 +855,20 @@ function OrdersContent() {
         )}
       </div>
 
-      {/* ── REVIEW MODAL ────────────────────────────────── */}
-      {reviewOrder && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-full max-w-md rounded-t-[24px] p-5 shadow-2xl pb-safe pt-2 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom">
-            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto my-3" />
-            <div className="mb-5 text-center">
-              <h2 className="text-base font-bold text-slate-900">Beri Ulasan 🌟</h2>
-              <p className="text-xs text-slate-400 mt-1">Gimana pesanannya? Ceritakan pengalamanmu.</p>
+      {/* --- REKOMENDASI PRODUK --- */}
+      <div className="mt-2 bg-white pb-6 pt-4 border-t border-slate-200">
+        <div className="flex flex-col items-center mb-6 pt-2">
+          <div className="flex items-center gap-3 w-full px-6">
+            <div className="flex-1 h-[1px] bg-slate-200"></div>
+            <div className="flex items-center gap-2 px-1 text-slate-500">
+              <Icons.Heart size={16} className="text-red-400 fill-red-400" />
+              <h3 className="text-[12px] font-bold text-red-500 uppercase">Anda mungkin juga suka</h3>
             </div>
-            <div className="flex items-center gap-2 px-1 mb-3">
-              <Icons.UserCircle2 size={13} className="text-slate-400" />
-              <span className="text-[11px] text-slate-500">Ulasan atas nama: <span className="font-bold text-slate-700">{reviewerName || "Pembeli"}</span></span>
-            </div>
-            <div className="space-y-4">
-              {reviewOrder.order_items?.filter((i: any) => i.product_id).map((item: any) => {
-                const PId = item.product_id
-                const revState = reviewsState[PId] || { rating: 5, comment: "", photoFile: null, photoPreview: "" }
-                return (
-                  <div key={PId} className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-                    <div className="flex gap-3 mb-3 pb-3 border-b border-slate-100">
-                      <img src={item.image_url || "/placeholder.png"} className="w-10 h-10 rounded-lg object-cover border border-slate-100 shrink-0" alt="prod" />
-                      <p className="text-xs font-bold text-slate-800 line-clamp-2 self-center">{item.product_name?.split(" | ")[0]}</p>
-                    </div>
-                    <div className="flex items-center justify-center gap-1.5 mb-3">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <button key={star} onClick={() => setReviewsState(prev => ({ ...prev, [PId]: { ...prev[PId], rating: star } }))} className="transition-transform hover:scale-110 active:scale-90">
-                          <Icons.Star size={26} className={star <= revState.rating ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-100"} />
-                        </button>
-                      ))}
-                    </div>
-                    <textarea
-                      placeholder="Ceritakan kepuasanmu (Opsional)..."
-                      value={revState.comment}
-                      onChange={(e) => setReviewsState(prev => ({ ...prev, [PId]: { ...prev[PId], comment: e.target.value } }))}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all resize-none h-20"
-                    />
-                    <div className="mt-3">
-                      {revState.photoPreview ? (
-                        <div className="relative w-20 h-20">
-                          <img src={revState.photoPreview} className="w-20 h-20 rounded-xl object-cover border border-slate-200" alt="preview" />
-                          <button onClick={() => setReviewsState(prev => ({ ...prev, [PId]: { ...prev[PId], photoFile: null, photoPreview: "" } }))} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slate-700 text-white rounded-full flex items-center justify-center shadow">
-                            <Icons.X size={10} strokeWidth={3} />
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="cursor-pointer">
-                          <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 bg-white flex flex-col items-center justify-center gap-1 hover:border-indigo-400 hover:bg-indigo-50/50 transition-colors">
-                            <Icons.ImagePlus size={18} className="text-slate-400" />
-                            <span className="text-[9px] font-bold text-slate-400">Foto</span>
-                          </div>
-                          <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-                            if (file.size > 5 * 1024 * 1024) { toast.error("Ukuran foto maksimal 5MB"); return }
-                            const reader = new FileReader()
-                            reader.onload = (ev) => setReviewsState(prev => ({ ...prev, [PId]: { ...prev[PId], photoFile: file, photoPreview: ev.target?.result as string } }))
-                            reader.readAsDataURL(file)
-                          }} />
-                        </label>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            <div className="flex gap-3 mt-5 pt-4 border-t border-slate-100 sticky bottom-0 bg-white pb-6">
-              <button onClick={() => setReviewOrder(null)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">Nanti Saja</button>
-              <button disabled={isSubmittingReview} onClick={submitReviews} className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center">
-                {isSubmittingReview ? <Icons.Loader2 size={16} className="animate-spin" /> : "Kirim Ulasan"}
-              </button>
-            </div>
+            <div className="flex-1 h-[1px] bg-slate-200"></div>
           </div>
         </div>
-      )}
-
-      {/* ── CANCEL MODAL ────────────────────────────────── */}
-      {viewCancelReason && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm shadow-sm animate-in fade-in duration-200" onClick={() => setViewCancelReason(null)}>
-          <div className="bg-white rounded-2xl p-5 max-w-xs w-full shadow-xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-slate-800 mb-2 border-b pb-2">Alasan Pembatalan</h3>
-            <p className="text-[13px] text-slate-600 mb-5 leading-relaxed">{viewCancelReason}</p>
-            <button className="w-full py-2.5 bg-slate-800 text-white rounded-xl font-medium text-[13px]" onClick={() => setViewCancelReason(null)}>Tutup</button>
-          </div>
-        </div>
-      )}
+        <ProductList sortBy="popular" />
+      </div>
 
       {cancelOrderObj && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center px-4 pb-10 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">

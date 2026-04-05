@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
-import { Search, X, Clock, TrendingUp, Sparkles, MessageCircle, ShoppingCart, Share2, ArrowLeft } from "lucide-react"
+import { Search, X, Clock, TrendingUp, Sparkles, MessageCircle, ShoppingCart, Share2, ArrowLeft, MessageSquareMore } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -230,7 +230,7 @@ export default function SearchBar() {
             </button>
           ) : (
             <Link href="/chat/shop" className="relative text-white/90 active:scale-95 transition-transform">
-              <MessageCircle size={24} />
+              <MessageSquareMore size={22} />
               {chatCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-white text-indigo-700 text-[9px] font-black min-w-[16px] h-4 rounded-full flex items-center justify-center px-1 shadow">
                   {chatCount}

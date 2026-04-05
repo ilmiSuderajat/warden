@@ -523,13 +523,16 @@ export default function ProductDetail() {
                   </div>
                   {rev.comment && <p className="text-xs text-slate-600 mt-2 leading-relaxed pl-10">{rev.comment}</p>}
                   {rev.photo_url && (
-                    <div className="pl-10 mt-2">
-                      <img
-                        src={rev.photo_url}
-                        alt="Foto ulasan"
-                        className="w-28 h-28 object-cover rounded-xl border border-slate-100 cursor-pointer hover:opacity-90 transition-opacity"
-                        onClick={() => window.open(rev.photo_url, '_blank')}
-                      />
+                    <div className="pl-10 mt-2 flex gap-2 overflow-x-auto no-scrollbar snap-x">
+                      {rev.photo_url.split(',').map((url: string, idx: number) => (
+                        <img
+                          key={idx}
+                          src={url.trim()}
+                          alt="Foto ulasan"
+                          className="w-24 h-24 shrink-0 snap-start object-cover rounded-xl border border-slate-100 cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => window.open(url.trim(), '_blank')}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>

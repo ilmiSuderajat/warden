@@ -73,7 +73,7 @@ function ProductImageSlider({ images, name }: { images?: string[] | string; name
   )
 }
 
-export default function ProductList({ headerItem }: { headerItem?: React.ReactNode }) {
+export default function ProductList({ headerItem, sortBy = "newest" }: { headerItem?: React.ReactNode, sortBy?: "newest" | "popular" }) {
   const [view, setView] = useState<"grid" | "list">("grid")
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -93,7 +93,7 @@ export default function ProductList({ headerItem }: { headerItem?: React.ReactNo
     const to = from + PAGE_SIZE - 1
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("products")
         .select(`
           *,
@@ -104,8 +104,14 @@ export default function ProductList({ headerItem }: { headerItem?: React.ReactNo
           )
         `)
         .eq("is_ready", true)
-        .order("created_at", { ascending: false })
-        .range(from, to)
+
+      if (sortBy === "popular") {
+        query = query.order("sold_count", { ascending: false, nullsFirst: false }).order("rating", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false })
+      } else {
+        query = query.order("created_at", { ascending: false })
+      }
+
+      const { data, error } = await query.range(from, to)
 
       if (error) throw error
 

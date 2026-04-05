@@ -132,10 +132,10 @@ export default function ProfilePage() {
   }
 
   const orderStatuses = [
-    { icon: "Wallet", label: "Belum Bayar", href: "/orders?status=unpaid", badge: null },
-    { icon: "Package", label: "Dikemas", href: "/orders?status=packing", badge: null },
-    { icon: "Truck", label: "Dikirim", href: "/orders?status=shipping", badge: null },
-    { icon: "Star", label: "Beri Penilaian", href: "/orders?status=review", badge: null },
+    { icon: "Wallet", label: "Belum Bayar", href: "/orders?status=unpaid&tab=pending", badge: null },
+    { icon: "Package", label: "Dikemas", href: "/orders?status=packing&tab=dikemas", badge: null },
+    { icon: "Truck", label: "Dikirim", href: "/orders?status=shipping&tab=dikirim", badge: null },
+    { icon: "Star", label: "Beri Penilaian", href: "/reviews", badge: null },
   ]
 
   const walletItems = [

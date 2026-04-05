@@ -50,6 +50,7 @@ export default function WalletPage() {
       const bal = await getWalletBalance()
       setBalance(bal)
       const history = await getTransactionHistory()
+      setTransactions(history)
       // Fetch wallet data (balance & points)
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
