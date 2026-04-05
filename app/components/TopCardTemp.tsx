@@ -3,30 +3,58 @@
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { ScanLine, Wallet, Coins, Ticket, Sparkles } from "lucide-react"
+import useSWR from "swr"
+import { supabase } from "@/lib/supabase"
 
-const WALLET_ITEMS = [
-    {
-        label: "Rp 0",
-        subLabel: "Saldo",
-        href: "/wallet",
-        icon: <Wallet className="w-6 h-6 text-indigo-600" />,
-        status: "active"
-    },
-    {
-        label: "0",
-        subLabel: "Point",
-        href: "/points",
-        icon: <Coins className="w-6 h-6 text-yellow-500" />
-    },
-    {
-        label: "0",
-        subLabel: "Voucher",
-        href: "/voucher",
-        icon: <Ticket className="w-6 h-6 text-orange-500" />
-    },
-]
+const fetcher = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data, error } = await supabase
+        .from('wallets')
+        .select('balance, points_balance')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+    if (error) throw error
+    return data || { balance: 0, points_balance: 0 }
+}
 
 export default function TopCard() {
+    const { data: wallet, error, isLoading } = useSWR('user_wallet', fetcher, {
+        revalidateOnFocus: true,
+        dedupingInterval: 10000, // 10 seconds cache
+    })
+
+    const formatCurrency = (val: number) => {
+        return new Intl.NumberFormat("id-ID", {
+            style: "currency",
+            currency: "IDR",
+            minimumFractionDigits: 0,
+        }).format(val)
+    }
+
+    const WALLET_ITEMS = [
+        {
+            label: wallet ? formatCurrency(wallet.balance) : (isLoading ? "..." : "Rp 0"),
+            subLabel: "Saldo",
+            href: "/wallet",
+            icon: <Wallet className="w-6 h-6 text-indigo-600" />,
+            status: "active"
+        },
+        {
+            label: wallet ? wallet.points_balance.toLocaleString() : (isLoading ? "..." : "0"),
+            subLabel: "Point",
+            href: "/points",
+            icon: <Coins className="w-6 h-6 text-yellow-500" />
+        },
+        {
+            label: "0",
+            subLabel: "Voucher",
+            href: "/voucher",
+            icon: <Ticket className="w-6 h-6 text-orange-500" />
+        },
+    ]
     return (
         <div className="w-full font-sans">
             <div className="px-3 pt-3 pb-0">

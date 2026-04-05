@@ -5,45 +5,43 @@ import Link from "next/link"
 import { Zap, ChevronRight, Flame } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 
+import useSWR from "swr"
+
 export default function FlashSale() {
-  const [flashProducts, setFlashProducts] = useState<any[]>([])
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 })
-  const [endDate, setEndDate] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [showTimer, setShowTimer] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  const fetcher = async () => {
+    const { data: products } = await supabase
+      .from("products")
+      .select("*")
+      .eq("is_flash_sale", true)
+      .eq("is_ready", true)
+      .limit(10)
+
+    const { data: banner } = await supabase
+      .from("flash_sale_banners")
+      .select("end_date")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    return { products: products || [], endDate: banner?.end_date || null }
+  }
+
+  const { data, isLoading } = useSWR("flash_sale_data", fetcher, {
+    revalidateOnFocus: true,
+    dedupingInterval: 30000, // 30 seconds
+  })
+
+  const flashProducts = data?.products || []
+  const endDate = data?.endDate || null
 
   useEffect(() => {
     const t = setInterval(() => setShowTimer(v => !v), 3500)
     return () => clearInterval(t)
-  }, [])
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const { data: products } = await supabase
-          .from("products")
-          .select("*")
-          .eq("is_flash_sale", true)
-          .eq("is_ready", true)
-          .limit(10)
-        if (products) setFlashProducts(products)
-
-        const { data: banner } = await supabase
-          .from("flash_sale_banners")
-          .select("end_date")
-          .eq("is_active", true)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        if (banner?.end_date) setEndDate(banner.end_date)
-      } catch (err) {
-        console.error("Flash sale error:", err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchData()
   }, [])
 
   useEffect(() => {

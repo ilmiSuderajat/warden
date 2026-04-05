@@ -73,75 +73,63 @@ function ProductImageSlider({ images, name }: { images?: string[] | string; name
   )
 }
 
+import useSWRInfinite from "swr/infinite"
+
 export default function ProductList({ headerItem, sortBy = "newest" }: { headerItem?: React.ReactNode, sortBy?: "newest" | "popular" }) {
   const [view, setView] = useState<"grid" | "list">("grid")
-  const [products, setProducts] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [page, setPage] = useState(0)
-  const [hasMore, setHasMore] = useState(true)
-  const [isFetchingMore, setIsFetchingMore] = useState(false)
   const { location: userLoc } = useUserLocation()
-
   const loaderRef = useRef<HTMLDivElement>(null)
   const PAGE_SIZE = 8
 
-  const fetchProducts = async (pageNum: number) => {
-    if (pageNum === 0) setLoading(true)
-    else setIsFetchingMore(true)
-
-    const from = pageNum * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
-
-    try {
-      let query = supabase
-        .from("products")
-        .select(`
-          *,
-          shops (
-            address,
-            latitude,
-            longitude
-          )
-        `)
-        .eq("is_ready", true)
-
-      if (sortBy === "popular") {
-        query = query.order("sold_count", { ascending: false, nullsFirst: false }).order("rating", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false })
-      } else {
-        query = query.order("created_at", { ascending: false })
-      }
-
-      const { data, error } = await query.range(from, to)
-
-      if (error) throw error
-
-      if (data) {
-        if (pageNum === 0) {
-          setProducts(data)
-        } else {
-          setProducts(prev => [...prev, ...data])
-        }
-        setHasMore(data.length === PAGE_SIZE)
-      }
-    } catch (err) {
-      console.error("Error fetching products:", err)
-    } finally {
-      setLoading(false)
-      setIsFetchingMore(false)
-    }
+  const getKey = (pageIndex: number, previousPageData: any) => {
+    if (previousPageData && !previousPageData.length) return null
+    return [`products_infinite`, sortBy, pageIndex]
   }
 
-  useEffect(() => {
-    fetchProducts(0)
-  }, [])
+  const fetcher = async ([, sort, pageIndex]: [string, string, number]) => {
+    const from = pageIndex * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+
+    let query = supabase
+      .from("products")
+      .select(`
+        *,
+        shops (
+          address,
+          latitude,
+          longitude
+        )
+      `)
+      .eq("is_ready", true)
+
+    if (sort === "popular") {
+      query = query.order("sold_count", { ascending: false, nullsFirst: false })
+        .order("rating", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+    } else {
+      query = query.order("created_at", { ascending: false })
+    }
+
+    const { data, error } = await query.range(from, to)
+    if (error) throw error
+    return data || []
+  }
+
+  const { data, error, size, setSize, isValidating, isLoading } = useSWRInfinite(getKey, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60000, // 1 minute
+    persistSize: true,
+  })
+
+  const products = data ? data.flat() : []
+  const isFetchingMore = isValidating && products.length > 0
+  const hasMore = data ? data[data.length - 1]?.length === PAGE_SIZE : true
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading && !isFetchingMore) {
-          const nextPage = page + 1
-          setPage(nextPage)
-          fetchProducts(nextPage)
+        if (entries[0].isIntersecting && hasMore && !isValidating && !isLoading) {
+          setSize(size + 1)
         }
       },
       { threshold: 1.0 }
@@ -152,7 +140,7 @@ export default function ProductList({ headerItem, sortBy = "newest" }: { headerI
     }
 
     return () => observer.disconnect()
-  }, [hasMore, loading, isFetchingMore, page])
+  }, [hasMore, isValidating, isLoading, size, setSize])
 
   const renderProduct = (p: any, currentView: "grid" | "list") => {
     const price = p.price || 0
@@ -250,27 +238,27 @@ export default function ProductList({ headerItem, sortBy = "newest" }: { headerI
           {/* Kolom Kiri */}
           <div className="flex rounded-xl flex-col gap-2 flex-1 w-1/2 min-w-0">
             {headerItem && <div className="w-full">{headerItem}</div>}
-            {loading && products.length === 0 ? (
+            {isLoading && products.length === 0 ? (
               Array(3).fill(0).map((_, i) => <ProductCardSkeleton key={`l-${i}`} view="grid" />)
             ) : (
-              products.filter((_, i) => i % 2 === 0).map((p) => renderProduct(p, "grid"))
+              products.filter((_, i) => i % 2 === 0).map((p: any) => renderProduct(p, "grid"))
             )}
           </div>
           {/* Kolom Kanan */}
           <div className="flex flex-col rounded-xl gap-2 flex-1 w-1/2 min-w-0">
-            {loading && products.length === 0 ? (
+            {isLoading && products.length === 0 ? (
               Array(3).fill(0).map((_, i) => <ProductCardSkeleton key={`r-${i}`} view="grid" />)
             ) : (
-              products.filter((_, i) => i % 2 !== 0).map((p) => renderProduct(p, "grid"))
+              products.filter((_, i) => i % 2 !== 0).map((p: any) => renderProduct(p, "grid"))
             )}
           </div>
         </div>
       ) : (
         <div className="flex rounded-xl flex-col gap-2">
-          {loading && products.length === 0 ? (
+          {isLoading && products.length === 0 ? (
             Array(6).fill(0).map((_, i) => <ProductCardSkeleton key={`list-${i}`} view="list" />)
           ) : (
-            products.map((p) => renderProduct(p, "list"))
+            products.map((p: any) => renderProduct(p, "list"))
           )}
         </div>
       )}
