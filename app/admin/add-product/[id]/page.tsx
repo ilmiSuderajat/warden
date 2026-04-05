@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import {
     ArrowLeft, ImagePlus, Loader2, Navigation,
-    Check, Search, ExternalLink, MapPin, X, Info, ChevronDown, Package, ShoppingBag, Globe, Zap, Edit3
+    Check, Search, ExternalLink, MapPin, X, Info, ChevronDown, Package, ShoppingBag, Globe, Zap, Edit3, Coins
 } from "lucide-react";
 import imageCompression from 'browser-image-compression';
 import { useRouter, useParams } from "next/navigation";
@@ -31,6 +31,7 @@ export default function EditProductPage() {
         description: "",
         location: "",
         stock: "",
+        points_reward: "",
         latitude: null as number | null,
         longitude: null as number | null
     });
@@ -58,6 +59,7 @@ export default function EditProductPage() {
                         description: p.description || "",
                         location: p.location || "",
                         stock: p.stock?.toString() || "",
+                        points_reward: p.points_reward?.toString() || "0",
                         latitude: p.latitude,
                         longitude: p.longitude
                     });
@@ -197,6 +199,7 @@ export default function EditProductPage() {
                     description: formData.description,
                     location: formData.location,
                     stock: parseInt(formData.stock),
+                    points_reward: parseInt(formData.points_reward || "0"),
                     category_id: selectedCategory,
                     latitude: formData.latitude,
                     longitude: formData.longitude,
@@ -339,6 +342,21 @@ export default function EditProductPage() {
                                     onChange={e => setFormData({ ...formData, stock: e.target.value })}
                                     required
                                 />
+                            </div>
+                            <div className="space-y-1.5 col-span-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Poin Reward Pembelian</label>
+                                <div className="relative">
+                                    <Coins className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                    <input
+                                        type="number"
+                                        placeholder="Contoh: 100"
+                                        value={formData.points_reward}
+                                        className="w-full pl-10 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all font-sans"
+                                        onChange={e => setFormData({ ...formData, points_reward: e.target.value })}
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-indigo-500 uppercase tracking-widest">Poin</span>
+                                </div>
+                                <p className="text-[9px] text-slate-400 font-bold mt-1 px-1 italic">User akan mendapatkan poin ini setelah pesanan selesai.</p>
                             </div>
                         </div>
                     </div>

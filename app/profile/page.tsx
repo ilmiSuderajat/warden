@@ -14,6 +14,9 @@ export default function ProfilePage() {
   const [hasShop, setHasShop] = useState(false)
   const [isDriver, setIsDriver] = useState(false)
   const [balance, setBalance] = useState(0)
+  const [cartCount, setCartCount] = useState(0)
+  const [chatCount, setChatCount] = useState(0)
+  const [points, setPoints] = useState(0)
 
   useEffect(() => {
     const getProfile = async () => {
@@ -28,7 +31,6 @@ export default function ProfilePage() {
           .maybeSingle()
         if (shop) setHasShop(true)
 
-        // Check driver role
         const { data: userRecord } = await supabase
           .from("users")
           .select("role")
@@ -36,18 +38,91 @@ export default function ProfilePage() {
           .maybeSingle()
         if (userRecord?.role === "driver" || userRecord?.role === "admin") setIsDriver(true)
 
-        // Fetch wallet balance
         const { data: wallet } = await supabase
           .from("wallets")
-          .select("balance")
+          .select("balance, points_balance")
           .eq("user_id", user.id)
           .maybeSingle()
-        if (wallet) setBalance(wallet.balance)
+        if (wallet) {
+          setBalance(wallet.balance || 0)
+          setPoints(wallet.points_balance || 0)
+        }
       }
       
       setLoading(false)
     }
+    const fetchCartCount = async () => {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) return
+
+      const { count } = await supabase
+        .from("cart")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", authUser.id)
+
+      setCartCount(count || 0)
+
+      const channel = supabase
+        .channel('profile_cart_sync')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'cart',
+          filter: `user_id=eq.${authUser.id}`
+        }, () => {
+          fetchCartCount()
+        })
+        .subscribe()
+
+      return channel
+    }
+
+    const fetchChatCount = async () => {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) return
+
+      const { data: conversations } = await supabase
+        .from("shop_conversations")
+        .select("unread_buyer, unread_shop, shops!inner(owner_id)")
+        .or(`buyer_id.eq.${authUser.id},shops.owner_id.eq.${authUser.id}`)
+
+      let totalUnread = 0
+      conversations?.forEach((c: any) => {
+        const shop = Array.isArray(c.shops) ? c.shops[0] : c.shops
+        if (shop?.owner_id === authUser.id) {
+          totalUnread += (c.unread_shop || 0)
+        } else {
+          totalUnread += (c.unread_buyer || 0)
+        }
+      })
+
+      setChatCount(totalUnread)
+
+      const chatChannel = supabase
+        .channel('profile_chat_sync')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'shop_conversations'
+        }, () => {
+          fetchChatCount()
+        })
+        .subscribe()
+
+      return chatChannel
+    }
+
     getProfile()
+    let cartChannel: any
+    let chatChannel: any
+    
+    fetchCartCount().then(ch => cartChannel = ch)
+    fetchChatCount().then(ch => chatChannel = ch)
+
+    return () => {
+      if (cartChannel) supabase.removeChannel(cartChannel)
+      if (chatChannel) supabase.removeChannel(chatChannel)
+    }
   }, [])
 
   const handleLogout = async () => {
@@ -56,166 +131,305 @@ export default function ProfilePage() {
     router.refresh()
   }
 
-  const menuItems = [
-    { href: "/orders", icon: "ShoppingBag", label: "Pesanan Saya", color: "text-blue-600", bg: "bg-blue-50" },
-    { href: "/wallet", icon: "Wallet", label: "Wallet Saya", color: "text-indigo-600", bg: "bg-indigo-50" },
-    { href: "/wishlist", icon: "Heart", label: "Wishlist", color: "text-red-500", bg: "bg-red-50" },
-    { href: "/address", icon: "MapPin", label: "Alamat Saya", color: "text-orange-500", bg: "bg-orange-50" },
-    { 
-      href: hasShop ? "/shop/dashboard" : "/shop/create", 
-      icon: "Store", 
-      label: hasShop ? "Warung Saya" : "Buka Warung", 
-      color: "text-indigo-600", 
-      bg: "bg-indigo-50",
-      badge: !hasShop ? "BARU" : null
-    },
-    { href: "/settings", icon: "Settings", label: "Pengaturan Akun", color: "text-slate-600", bg: "bg-slate-100" },
-    { href: "/chat", icon: "ShieldCheck", label: "Pusat Bantuan", color: "text-green-600", bg: "bg-green-50" },
+  const orderStatuses = [
+    { icon: "Wallet", label: "Belum Bayar", href: "/orders?status=unpaid", badge: null },
+    { icon: "Package", label: "Dikemas", href: "/orders?status=packing", badge: null },
+    { icon: "Truck", label: "Dikirim", href: "/orders?status=shipping", badge: null },
+    { icon: "Star", label: "Beri Penilaian", href: "/orders?status=review", badge: null },
+  ]
+
+  const walletItems = [
+    { icon: "Wallet", label: "Saldo Saya", sub: `Rp ${balance.toLocaleString("id-ID")}`, href: "/wallet" },
+    { icon: "Coins", label: "Koin Saya", sub: `${points.toLocaleString()} Poin`, href: "/wallet" },
+    { icon: "Ticket", label: "Voucher", sub: "5+ Voucher", href: "#" },
+  ]
+
+  const activityMenu = [
+    { href: hasShop ? "/shop/dashboard" : "/shop/create", icon: "Store", label: hasShop ? "Warung Saya" : "Buka Warung", badge: !hasShop ? "BARU" : null },
+    { href: "/wishlist", icon: "Heart", label: "Favorit Saya", badge: null },
+    { href: "/orders", icon: "RotateCcw", label: "Beli Lagi", badge: null },
+    { href: "/address", icon: "MapPin", label: "Alamat Saya", badge: null },
+    { href: "/chat", icon: "ShieldCheck", label: "Pusat Bantuan", badge: null },
+    { href: "/settings", icon: "Settings", label: "Pengaturan", badge: null },
   ]
 
   return (
-    <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans pb-10">
+    <div className="min-h-screen bg-slate-100 max-w-md mx-auto font-sans pb-24" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
 
-      {/* HEADER FIXED */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-white border-b border-slate-100">
-        <div className="w-full max-w-md h-14 flex items-center justify-between px-4">
-          <h1 className="text-lg font-bold text-slate-900">Akun Saya</h1>
-          <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
-            <Icons.Bell size={20} />
-          </button>
+      {/* === HERO BANNER === */}
+      <div className="relative" style={{ background: "linear-gradient(135deg, #4f46e5 0%, #6d28d9 60%, #7c3aed 100%)" }}>
+        {/* Decorative pattern */}
+        <div className="absolute inset-0 overflow-hidden opacity-10">
+          {[...Array(12)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute rounded-full border-2 border-white"
+              style={{
+                width: `${60 + i * 20}px`,
+                height: `${60 + i * 20}px`,
+                top: `${(i % 4) * 20 - 30}px`,
+                left: `${(i % 5) * 18}%`,
+                opacity: 0.4,
+              }}
+            />
+          ))}
         </div>
-      </header>
 
-      {/* CONTENT AREA */}
-      <div className="pt-20 px-4">
+        {/* Top action row */}
+        <div className="relative flex items-center justify-between px-4 pt-12 pb-3">
+          <button className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/30 active:scale-95 transition-transform">
+            <Icons.Store size={13} />
+            Mulai Jual
+            <Icons.ChevronRight size={13} />
+          </button>
+          <div className="flex items-center gap-3">
+            <Link href="/settings" className="relative text-white/90 active:scale-95 transition-transform">
+              <Icons.Settings size={22} />
+            </Link>
+            <Link href="/cart" className="relative text-white/90 active:scale-95 transition-transform">
+              <Icons.ShoppingCart size={22} />
+              {cartCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-white text-indigo-700 text-[9px] font-black min-w-[16px] h-4 rounded-full flex items-center justify-center px-1 shadow">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
+            <Link href="/chat" className="relative text-white/90 active:scale-95 transition-transform">
+              <Icons.MessageCircle size={22} />
+              {chatCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-white text-indigo-700 text-[9px] font-black min-w-[16px] h-4 rounded-full flex items-center justify-center px-1 shadow">
+                  {chatCount}
+                </span>
+              )}
+            </Link>
+          </div>
+        </div>
 
-        {loading ? (
-          <>
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center mb-6">
-              <Skeleton className="w-24 h-24 rounded-full mb-4" />
-              <Skeleton className="h-6 w-32 mb-2" />
-              <Skeleton className="h-4 w-40" />
+        {/* Profile Info */}
+        <div className="relative flex items-center gap-3 px-4 pb-6">
+          {loading ? (
+            <div className="w-16 h-16 rounded-full bg-white/30 animate-pulse" />
+          ) : (
+            <div className="relative">
+              <div className="w-16 h-16 rounded-full border-2 border-white/80 shadow-lg overflow-hidden bg-indigo-200 flex items-center justify-center">
+                {user?.user_metadata?.avatar_url ? (
+                  <img src={user.user_metadata.avatar_url} className="w-full h-full object-cover" alt="Profile" />
+                ) : (
+                  <Icons.User size={28} className="text-indigo-600" />
+                )}
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow">
+                <Icons.Camera size={10} className="text-indigo-600" />
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-white p-3 rounded-xl border border-slate-100 flex flex-col items-center gap-1 shadow-sm">
-                  <Skeleton className="h-4 w-10" />
-                  <Skeleton className="h-3 w-12" />
+          )}
+
+          <div className="flex-1">
+            {loading ? (
+              <>
+                <div className="h-5 w-28 bg-white/30 rounded-full animate-pulse mb-2" />
+                <div className="h-3 w-20 bg-white/20 rounded-full animate-pulse" />
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-white font-bold text-base leading-tight">
+                    {user?.user_metadata?.full_name || "Sobat Warung Kita"}
+                  </h1>
+                  <span className="bg-yellow-400 text-yellow-900 text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow-sm">
+                    <Icons.Crown size={8} />
+                    Gold
+                  </span>
                 </div>
-              ))}
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm divide-y divide-slate-50 mb-6">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="w-9 h-9 rounded-lg" />
-                    <Skeleton className="h-4 w-32" />
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-white/80 text-[11px] font-medium">
+                    <span className="text-white font-bold">12</span> Pengikut
+                  </span>
+                  <span className="text-white/40">·</span>
+                  <span className="text-white/80 text-[11px] font-medium">
+                    <span className="text-white font-bold">8</span> Mengikuti
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+
+          <Link href="/settings" className="border border-white/50 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full active:scale-95 transition-transform backdrop-blur-sm bg-white/10">
+            Edit
+          </Link>
+        </div>
+
+        {/* Bottom wave */}
+        <div className="h-4 bg-slate-100 rounded-t-3xl" />
+      </div>
+
+      {/* === PESANAN SAYA === */}
+      <div className="mx-3 -mt-2 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-3">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-50">
+          <span className="text-sm font-bold text-slate-800">Pesanan Saya</span>
+          <Link href="/orders" className="flex items-center gap-1 text-xs text-indigo-600 font-semibold">
+            Lihat Riwayat
+            <Icons.ChevronRight size={13} />
+          </Link>
+        </div>
+        <div className="grid grid-cols-4 py-4">
+          {orderStatuses.map((s, i) => {
+            const Icon = (Icons as any)[s.icon] || Icons.Package
+            return (
+              <Link key={i} href={s.href} className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
+                <div className="relative">
+                  <div className="w-11 h-11 rounded-full bg-indigo-50 flex items-center justify-center">
+                    <Icon size={20} className="text-indigo-600" />
                   </div>
-                  <Skeleton className="w-4 h-4 rounded-full" />
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <>
-            {/* PROFIL CARD */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center mb-6">
-              <div className="relative mb-4">
-                <div className="w-24 h-24 rounded-full bg-slate-100 border-4 border-white shadow-md overflow-hidden flex items-center justify-center">
-                  {user?.user_metadata?.avatar_url ? (
-                    <img
-                      src={user.user_metadata.avatar_url}
-                      className="w-full h-full object-cover"
-                      alt="Profile"
-                    />
-                  ) : (
-                    <Icons.User size={40} className="text-slate-300" />
+                  {s.badge && (
+                    <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                      {s.badge}
+                    </span>
                   )}
                 </div>
-                <button className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full border border-slate-200 shadow-sm active:scale-95 transition-transform">
-                  <Icons.Camera size={14} className="text-slate-600" />
-                </button>
-              </div>
-
-              <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-                {user?.user_metadata?.full_name || "Sobat Warung Kita"}
-              </h2>
-              <p className="text-xs text-slate-400 font-medium mt-1">
-                {user?.email || "Belum Login"}
-              </p>
-            </div>
-
-            {/* STATS SECTION */}
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              {[
-                { label: "Poin", val: "1.2k" },
-                { label: "Voucher", val: "5" },
-                { label: "Saldo", val: `Rp ${balance.toLocaleString("id-ID")}` }
-              ].map((stat, i) => (
-                <div key={i} className="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm">
-                  <p className="text-sm font-bold text-slate-800">{stat.val}</p>
-                  <p className="text-[10px] font-medium text-slate-400 uppercase mt-0.5">{stat.label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* MENU LIST */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
-              {menuItems.map((item, idx) => {
-                const Icon = (Icons as any)[item.icon] || Icons.Package
-                return (
-                  <Link
-                    href={item.href}
-                    key={idx}
-                    className="w-full p-4 flex items-center justify-between active:bg-slate-50 transition-colors group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${item.bg}`}>
-                        <Icon size={18} className={item.color} />
-                      </div>
-                      <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900 flex items-center gap-2">
-                        {item.label}
-                        {item.badge && (
-                          <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm tracking-wider">
-                            {item.badge}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <Icons.ChevronRight size={18} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
-                  </Link>
-                )
-              })}
-            </div>
-
-            {/* DRIVER MODE BUTTON — only shown for drivers */}
-            {isDriver && (
-              <Link
-                href="/driver"
-                className="w-full mt-4 bg-emerald-500 p-4 rounded-2xl flex items-center justify-center gap-2 text-white active:bg-emerald-600 transition-all shadow-lg shadow-emerald-200 font-bold"
-              >
-                <Icons.Bike size={18} />
-                <span className="text-sm">Beralih ke Mode Driver</span>
+                <span className="text-[10px] text-slate-500 font-medium text-center leading-tight px-1">{s.label}</span>
               </Link>
-            )}
-
-            {/* LOGOUT BUTTON */}
-            <button
-              onClick={handleLogout}
-              className="w-full mt-4 bg-white p-4 rounded-2xl flex items-center justify-center gap-2 text-red-500 active:bg-red-50 transition-all border border-slate-200 shadow-sm font-semibold"
-            >
-              <Icons.LogOut size={18} />
-              <span className="text-sm">Keluar Akun</span>
-            </button>
-          </>
-        )}
-
-        {/* FOOTER INFO */}
-
-        {/* FOOTER INFO */}
-        <div className="text-center pb-8">
-          <p className="text-[10px] text-slate-300 font-medium">Warung Kita App v1.0.4</p>
+            )
+          })}
         </div>
+      </div>
+
+      {/* === LAYANAN KHUSUS === */}
+      <div className="mx-3 mb-3">
+        <Link href="/wallet" className="bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between px-4 py-3 active:bg-indigo-50 transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+              <Icons.Zap size={16} className="text-indigo-600" />
+            </div>
+            <span className="text-sm font-semibold text-slate-700">Pulsa, Tagihan & Tiket</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-bold text-indigo-600">Diskon 50RB</span>
+            <Icons.ChevronRight size={14} className="text-indigo-400" />
+          </div>
+        </Link>
+      </div>
+
+      {/* === DOMPET SAYA === */}
+      <div className="mx-3 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-3">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-50">
+          <span className="text-sm font-bold text-slate-800">Dompet Saya</span>
+        </div>
+        <div className="grid grid-cols-3 py-4 px-2">
+          {walletItems.map((item, i) => {
+            const Icon = (Icons as any)[item.icon] || Icons.Package
+            return (
+              <Link key={i} href={item.href} className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                    <Icon size={22} className="text-indigo-600" />
+                  </div>
+                  {i === 0 && (
+                    <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] font-black px-1 py-0.5 rounded-full shadow">
+                      •
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-bold text-slate-700 text-center">{item.sub}</p>
+                <p className="text-[10px] text-slate-400 text-center">{item.label}</p>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* === KEUANGAN === */}
+      <div className="mx-3 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-3">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-50">
+          <span className="text-sm font-bold text-slate-800">Keuangan</span>
+          <Link href="/wallet" className="flex items-center gap-1 text-xs text-indigo-600 font-semibold">
+            Lihat Semua
+            <Icons.ChevronRight size={13} />
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3 p-3">
+          {[
+            { icon: "CreditCard", label: "PayLater", sub: "Cicilan ringan", href: "#" },
+            { icon: "PiggyBank", label: "Pinjaman", sub: "Bunga rendah", href: "#" },
+            { icon: "Landmark", label: "SeaBank", sub: "Transfer gratis", href: "#", badge: "Gratis Transfer" },
+            { icon: "Shield", label: "Asuransi", sub: "Proteksi aman", href: "#" },
+          ].map((item, i) => {
+            const Icon = (Icons as any)[item.icon] || Icons.Package
+            return (
+              <Link key={i} href={item.href} className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 border border-slate-100 active:bg-indigo-50 active:border-indigo-100 transition-colors group">
+                <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                  <Icon size={17} className="text-indigo-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-700 group-hover:text-indigo-700 truncate">{item.label}</p>
+                  {item.badge ? (
+                    <p className="text-[10px] text-indigo-500 font-semibold truncate">{item.badge}</p>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 truncate">{item.sub}</p>
+                  )}
+                </div>
+                <Icons.ChevronRight size={13} className="text-slate-300 ml-auto flex-shrink-0" />
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* === AKTIVITAS SAYA === */}
+      <div className="mx-3 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-3">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-50">
+          <span className="text-sm font-bold text-slate-800">Aktivitas Saya</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 p-3">
+          {activityMenu.map((item, i) => {
+            const Icon = (Icons as any)[item.icon] || Icons.Package
+            return (
+              <Link key={i} href={item.href} className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 border border-slate-100 active:bg-indigo-50 active:border-indigo-100 transition-colors group">
+                <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                  <Icon size={17} className="text-indigo-600" />
+                </div>
+                <span className="text-xs font-semibold text-slate-700 group-hover:text-indigo-700 flex-1 truncate">
+                  {item.label}
+                </span>
+                {item.badge && (
+                  <span className="bg-indigo-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">
+                    {item.badge}
+                  </span>
+                )}
+                <Icons.ChevronRight size={13} className="text-slate-300 flex-shrink-0" />
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* === DRIVER MODE === */}
+      {isDriver && (
+        <div className="mx-3 mb-3">
+          <Link
+            href="/driver"
+            className="w-full bg-emerald-500 p-4 rounded-2xl flex items-center justify-center gap-2 text-white active:bg-emerald-600 transition-all shadow-lg shadow-emerald-200 font-bold"
+          >
+            <Icons.Bike size={18} />
+            <span className="text-sm">Beralih ke Mode Driver</span>
+          </Link>
+        </div>
+      )}
+
+      {/* === LOGOUT === */}
+      <div className="mx-3 mb-3">
+        <button
+          onClick={handleLogout}
+          className="w-full bg-white p-4 rounded-2xl flex items-center justify-center gap-2 text-indigo-600 active:bg-indigo-50 transition-all border border-indigo-100 shadow-sm font-semibold"
+        >
+          <Icons.LogOut size={18} />
+          <span className="text-sm">Keluar Akun</span>
+        </button>
+      </div>
+
+      {/* === FOOTER === */}
+      <div className="text-center py-4">
+        <p className="text-[10px] text-slate-300 font-medium">Warung Kita App v1.0.4</p>
       </div>
     </div>
   )

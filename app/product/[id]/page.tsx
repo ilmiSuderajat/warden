@@ -140,38 +140,62 @@ export default function ProductDetail() {
   }
 
   const handleChatToko = async () => {
-    if (!product) return;
+    if (!product || isProcessing) return;
+    setIsProcessing(true);
+
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       router.push("/login");
+      setIsProcessing(false);
       return;
     }
-    
-    // Check if conversation already exists
-    let convId = null;
+
+    // Cek apakah user sudah punya alamat
+    const { data: address } = await supabase
+      .from("addresses")
+      .select("id")
+      .eq("user_id", session.user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (!address) {
+      toast.error("Tambahkan alamat terlebih dahulu untuk mulai chat.", {
+        description: "Hanya pengguna dengan alamat terdaftar yang bisa menghubungi toko.",
+        action: { label: "Tambah Alamat", onClick: () => router.push("/address/add") },
+      });
+      router.push("/address/add");
+      setIsProcessing(false);
+      return;
+    }
+
     try {
-       const shopId = shop?.id || product.shop_id;
-       const { data: existing } = await supabase.from("shop_conversations")
-         .select("id")
-         .eq("buyer_id", session.user.id)
-         .eq("shop_id", shopId)
-         .maybeSingle();
-         
-       if (existing) {
-         convId = existing.id;
-       } else {
-         // Create new conversation
-         const { data: newConv, error } = await supabase.from("shop_conversations").insert([{
-           buyer_id: session.user.id,
-           shop_id: shopId
-         }]).select('id').single();
-         if (error) throw error;
-         convId = newConv.id;
-       }
-       
-       router.push(`/chat/shop/${convId}?product_id=${product.id}`);
+      const shopId = shop?.id || product.shop_id;
+
+      // Cek conversation yang sudah ada
+      const { data: existing } = await supabase
+        .from("shop_conversations")
+        .select("id")
+        .eq("buyer_id", session.user.id)
+        .eq("shop_id", shopId)
+        .maybeSingle();
+
+      let convId: string;
+      if (existing) {
+        convId = existing.id;
+      } else {
+        const { data: newConv, error } = await supabase
+          .from("shop_conversations")
+          .insert([{ buyer_id: session.user.id, shop_id: shopId }])
+          .select("id")
+          .single();
+        if (error) throw error;
+        convId = newConv.id;
+      }
+
+      router.push(`/chat/shop/${convId}?product_id=${product.id}`);
     } catch {
-       toast.error("Gagal memulai percakapan");
+      toast.error("Gagal memulai percakapan");
+      setIsProcessing(false);
     }
   };
 
@@ -540,10 +564,15 @@ export default function ProductDetail() {
         >
           <div className="flex items-center gap-2.5 px-4 py-3 max-w-md mx-auto">
             <button
-              onClick={() => handleChatToko()}
-              className="flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 transition-colors w-[3.2rem] shrink-0"
+              onClick={handleChatToko}
+              disabled={isProcessing}
+              className="flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 disabled:opacity-50 transition-colors w-[3.2rem] shrink-0"
             >
-              <MessageCircle size={22} strokeWidth={1.8} />
+              {isProcessing ? (
+                <Loader2 size={22} className="animate-spin" />
+              ) : (
+                <MessageCircle size={22} strokeWidth={1.8} />
+              )}
               <span className="text-[9px] font-bold mt-0.5">Chat Toko</span>
             </button>
 

@@ -83,6 +83,22 @@ USING (
     )
 );
 
--- 7. Add Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.shop_messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.shop_conversations;
+-- 7. Add Realtime (Disembunyikan karena jika sudah dijalankan sebelumnya akan error)
+-- ALTER PUBLICATION supabase_realtime ADD TABLE public.shop_messages;
+-- ALTER PUBLICATION supabase_realtime ADD TABLE public.shop_conversations;
+
+-- 8. missing indexes for performance (fixes slow loading)
+CREATE INDEX IF NOT EXISTS idx_shop_messages_conversation_id ON public.shop_messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_shop_conversations_buyer_id ON public.shop_conversations(buyer_id);
+CREATE INDEX IF NOT EXISTS idx_addresses_user_id ON public.addresses(user_id);
+
+-- 9. Allow shop owner to view buyer addresses (fixes buyer name not showing)
+CREATE POLICY "Shop owners can view addresses of their buyers"
+ON public.addresses FOR SELECT
+USING (
+    EXISTS (
+        SELECT 1 FROM public.shop_conversations c
+        INNER JOIN public.shops s ON c.shop_id = s.id
+        WHERE c.buyer_id = addresses.user_id AND s.owner_id = auth.uid()
+    )
+);

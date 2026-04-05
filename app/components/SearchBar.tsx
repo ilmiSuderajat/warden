@@ -16,6 +16,7 @@ export default function SearchBar() {
   const [showSuggest, setShowSuggest] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [cartCount, setCartCount] = useState(0)
+  const [chatCount, setChatCount] = useState(0)
   const [productName, setProductName] = useState("")
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -76,8 +77,46 @@ export default function SearchBar() {
       return () => { supabase.removeChannel(channel) }
     }
 
+    const fetchChatCount = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Sum of unread_buyer and unread_shop (if user has a shop)
+      const { data: conversations } = await supabase
+        .from("shop_conversations")
+        .select("unread_buyer, unread_shop, shops!inner(owner_id)")
+        .or(`buyer_id.eq.${user.id},shops.owner_id.eq.${user.id}`)
+
+      let totalUnread = 0
+      conversations?.forEach((c: any) => {
+        const shop = Array.isArray(c.shops) ? c.shops[0] : c.shops
+        if (shop?.owner_id === user.id) {
+          totalUnread += (c.unread_shop || 0)
+        } else {
+          totalUnread += (c.unread_buyer || 0)
+        }
+      })
+
+      setChatCount(totalUnread)
+
+      // Realtime subscription for chat
+      const chatChannel = supabase
+        .channel('chat_count_sync')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'shop_conversations'
+        }, () => {
+          fetchChatCount()
+        })
+        .subscribe()
+
+      return () => { supabase.removeChannel(chatChannel) }
+    }
+
     fetchSuggestions()
     fetchCartCount()
+    fetchChatCount()
   }, [])
 
   useEffect(() => {
@@ -192,7 +231,11 @@ export default function SearchBar() {
           ) : (
             <Link href="/chat/shop" className="relative text-white hover:bg-white/10 rounded-xl transition-all active:scale-90">
               <MessageCircle size={24} strokeWidth={2.5} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500  border-indigo-600 rounded-full animate-pulse"></span>
+              {chatCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-indigo-600 animate-pulse">
+                  {chatCount}
+                </span>
+              )}
             </Link>
           )}
           <Link href="/cart" className="relative p-2 text-white hover:bg-white/10 rounded-xl transition-all active:scale-90">
@@ -206,5 +249,6 @@ export default function SearchBar() {
         </div>
       </div>
     </main>
+
   )
 }

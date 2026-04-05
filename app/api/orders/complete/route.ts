@@ -19,7 +19,30 @@ export async function POST(req: Request) {
 
   if (!order) return NextResponse.json({ error: "Pesanan tidak valid." }, { status: 404 })
 
+  // UPDATE STATUS PESANAN
   await supabase.from("orders").update({ status: "Selesai" }).eq("id", orderId)
 
-  return NextResponse.json({ success: true })
+  // LOGIKA POIN: Ambil item pesanan dan hitung poin
+  const { data: orderItems } = await supabase
+    .from("order_items")
+    .select("quantity, products(points_reward)")
+    .eq("order_id", orderId)
+
+  let earnedPoints = 0
+  if (orderItems) {
+    orderItems.forEach((item: any) => {
+      const reward = item.products?.points_reward || 0
+      earnedPoints += reward * item.quantity
+    })
+  }
+
+  // TAMBAH POIN KE WALLET USER (Atomic increment)
+  if (earnedPoints > 0) {
+    await supabase.rpc('increment_wallet_points', { 
+      p_user_id: user.id, 
+      p_amount: earnedPoints 
+    })
+  }
+
+  return NextResponse.json({ success: true, earnedPoints })
 }

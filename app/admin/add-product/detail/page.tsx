@@ -5,8 +5,9 @@ import { supabase } from "@/lib/supabase";
 import {
   ArrowLeft, ImagePlus, Loader2, Navigation,
   Check, Plus, Search, Map as MapIcon,
-  ExternalLink, MapPin, X, Info, ChevronDown, Package, ShoppingBag, Globe, Zap, Edit3
+  ExternalLink, MapPin, X, Info, ChevronDown, Package, ShoppingBag, Globe, Zap, Edit3, Coins
 } from "lucide-react";
+import * as Icons from "lucide-react";
 import imageCompression from 'browser-image-compression';
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -28,6 +29,7 @@ export default function AddProductPage() {
     description: "",
     location: "",
     stock: "",
+    points_reward: "",
     latitude: null as number | null,
     longitude: null as number | null
   });
@@ -154,6 +156,7 @@ export default function AddProductPage() {
           description: formData.description,
           location: formData.location,
           stock: parseInt(formData.stock),
+          points_reward: parseInt(formData.points_reward || "0"),
           category_id: selectedCategory,
           latitude: formData.latitude,
           longitude: formData.longitude,
@@ -305,10 +308,24 @@ export default function AddProductPage() {
                     <input
                         type="number"
                         placeholder="Limit pesanan"
-                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all"
+                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all font-sans"
                         onChange={e => setFormData({ ...formData, stock: e.target.value })}
                         required
                     />
+                </div>
+                <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Poin Reward Pembelian</label>
+                    <div className="relative">
+                        <Coins className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input
+                            type="number"
+                            placeholder="Contoh: 100"
+                            className="w-full pl-10 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all font-sans"
+                            onChange={e => setFormData({ ...formData, points_reward: e.target.value })}
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-indigo-500 uppercase tracking-widest">Poin</span>
+                    </div>
+                    <p className="text-[9px] text-slate-400 font-bold mt-1 px-1 italic">User akan mendapatkan poin ini setelah pesanan selesai.</p>
                 </div>
             </div>
         </div>
