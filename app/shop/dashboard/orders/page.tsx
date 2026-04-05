@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { supabase } from "@/lib/supabase"
 import * as Icons from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 
-export default function ShopOrdersPage() {
+function OrdersContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
 
@@ -319,5 +319,17 @@ export default function ShopOrdersPage() {
                 )}
             </div>
         </div>
+    )
+}
+
+export default function ShopOrdersPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-zinc-50 max-w-md mx-auto flex items-center justify-center">
+                <Icons.Loader2 className="w-8 h-8 text-zinc-300 animate-spin" />
+            </div>
+        }>
+            <OrdersContent />
+        </Suspense>
     )
 }
