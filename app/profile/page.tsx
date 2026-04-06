@@ -211,7 +211,7 @@ export default function ProfilePage() {
             <div className="w-16 h-16 rounded-full bg-white/30 animate-pulse" />
           ) : (
             <div className="relative">
-              <div className="w-16 h-16 rounded-full border-2 border-white/80 shadow-lg overflow-hidden bg-indigo-200 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full border-2 border-white/80 overflow-hidden bg-indigo-200 flex items-center justify-center">
                 {user?.user_metadata?.avatar_url ? (
                   <img src={user.user_metadata.avatar_url} className="w-full h-full object-cover" alt="Profile" />
                 ) : (
@@ -264,7 +264,7 @@ export default function ProfilePage() {
       </div>
 
       {/* === PESANAN SAYA === */}
-      <div className="mx-3 -mt-2 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-3">
+      <div className="mx-3 -mt-2 bg-white rounded-2xl border border-slate-100 overflow-hidden mb-3">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-50">
           <span className="text-sm font-bold text-slate-800">Pesanan Saya</span>
           <Link href="/orders" className="flex items-center gap-1 text-xs text-indigo-600 font-semibold">
@@ -296,7 +296,7 @@ export default function ProfilePage() {
 
       {/* === LAYANAN KHUSUS === */}
       <div className="mx-3 mb-3">
-        <Link href="/wallet" className="bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between px-4 py-3 active:bg-indigo-50 transition-colors">
+        <Link href="/wallet" className="bg-white rounded-2xl  border border-slate-100 flex items-center justify-between px-4 py-3 active:bg-indigo-50 transition-colors">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
               <Icons.Zap size={16} className="text-indigo-600" />
@@ -311,7 +311,7 @@ export default function ProfilePage() {
       </div>
 
       {/* === DOMPET SAYA === */}
-      <div className="mx-3 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-3">
+      <div className="mx-3 bg-white rounded-2xl border border-slate-100 overflow-hidden mb-3">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-50">
           <span className="text-sm font-bold text-slate-800">Dompet Saya</span>
         </div>
@@ -339,7 +339,7 @@ export default function ProfilePage() {
       </div>
 
       {/* === KEUANGAN === */}
-      <div className="mx-3 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-3">
+      <div className="mx-3 bg-white rounded-2xl border border-slate-100 overflow-hidden mb-3">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-50">
           <span className="text-sm font-bold text-slate-800">Keuangan</span>
           <Link href="/wallet" className="flex items-center gap-1 text-xs text-indigo-600 font-semibold">
@@ -376,7 +376,7 @@ export default function ProfilePage() {
       </div>
 
       {/* === AKTIVITAS SAYA === */}
-      <div className="mx-3 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-3">
+      <div className="mx-3 bg-white rounded-2xl border border-slate-100 overflow-hidden mb-3">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-50">
           <span className="text-sm font-bold text-slate-800">Aktivitas Saya</span>
         </div>
@@ -408,7 +408,7 @@ export default function ProfilePage() {
         <div className="mx-3 mb-3">
           <Link
             href="/driver"
-            className="w-full bg-emerald-500 p-4 rounded-2xl flex items-center justify-center gap-2 text-white active:bg-emerald-600 transition-all shadow-lg shadow-emerald-200 font-bold"
+            className="w-full bg-emerald-500 p-4 rounded-2xl flex items-center justify-center gap-2 text-white active:bg-emerald-600 transition-all font-bold"
           >
             <Icons.Bike size={18} />
             <span className="text-sm">Beralih ke Mode Driver</span>
@@ -420,7 +420,7 @@ export default function ProfilePage() {
       <div className="mx-3 mb-3">
         <button
           onClick={handleLogout}
-          className="w-full bg-white p-4 rounded-2xl flex items-center justify-center gap-2 text-indigo-600 active:bg-indigo-50 transition-all border border-indigo-100 shadow-sm font-semibold"
+          className="w-full bg-white p-4 rounded-2xl flex items-center justify-center gap-2 text-indigo-600 active:bg-indigo-50 transition-all border border-indigo-100 font-semibold"
         >
           <Icons.LogOut size={18} />
           <span className="text-sm">Keluar Akun</span>

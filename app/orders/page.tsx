@@ -254,19 +254,19 @@ function OrdersContent() {
           let urls: string[] = []
           if (rev.photos && Array.isArray(rev.photos)) {
             for (let i = 0; i < rev.photos.length; i++) {
-               const p = rev.photos[i]
-               if (p.file) {
-                 try {
-                   const compressed = await compressImage(p.file, 100)
-                   const fd = new FormData()
-                   fd.append("file", compressed); fd.append("orderId", reviewOrder.id); fd.append("productId", productId + "_" + i)
-                   const uploadRes = await fetch("/api/review/photo", { method: "POST", body: fd })
-                   const uploadData = await uploadRes.json()
-                   if (uploadRes.ok && uploadData.url) urls.push(uploadData.url)
-                 } catch { /* ignore */ }
-               } else if (p.url) {
-                 urls.push(p.url)
-               }
+              const p = rev.photos[i]
+              if (p.file) {
+                try {
+                  const compressed = await compressImage(p.file, 100)
+                  const fd = new FormData()
+                  fd.append("file", compressed); fd.append("orderId", reviewOrder.id); fd.append("productId", productId + "_" + i)
+                  const uploadRes = await fetch("/api/review/photo", { method: "POST", body: fd })
+                  const uploadData = await uploadRes.json()
+                  if (uploadRes.ok && uploadData.url) urls.push(uploadData.url)
+                } catch { /* ignore */ }
+              } else if (p.url) {
+                urls.push(p.url)
+              }
             }
           }
           return { productId, rating: rev.rating, comment: rev.comment, photoUrl: urls.length > 0 ? urls.join(',') : null, existingId: rev.id || undefined }
@@ -325,53 +325,53 @@ function OrdersContent() {
         </div>
 
         <div className="bg-white px-4 py-6 mb-2 flex justify-between items-center">
-           <div>
-             <h2 className="text-[#ee4d2d] text-lg font-medium">Pembatalan Berhasil</h2>
-             <p className="text-xs text-slate-500 mt-1">pada {formatDate(details.created_at)}</p>
-           </div>
-           <div className="w-10 h-10 rounded-full border border-[#ee4d2d] shrink-0 flex items-center justify-center">
-             <Icons.Check size={24} className="text-[#ee4d2d] stroke-[1.5px]" />
-           </div>
+          <div>
+            <h2 className="text-[#ee4d2d] text-lg font-medium">Pembatalan Berhasil</h2>
+            <p className="text-xs text-slate-500 mt-1">pada {formatDate(details.created_at)}</p>
+          </div>
+          <div className="w-10 h-10 rounded-full border border-[#ee4d2d] shrink-0 flex items-center justify-center">
+            <Icons.Check size={24} className="text-[#ee4d2d] stroke-[1.5px]" />
+          </div>
         </div>
 
         <div className="bg-white px-4 py-3 border-b border-slate-100 mt-2 flex items-center gap-2">
-           <div className="bg-[#ee4d2d] text-white text-[9px] font-bold px-1 rounded-sm">Star</div>
-           <span className="text-[13px] font-semibold text-slate-800">{details.shop_name || "Official Store"}</span>
-           <Icons.ChevronRight size={14} className="text-slate-400" />
+          <div className="bg-[#ee4d2d] text-white text-[9px] font-bold px-1 rounded-sm">Star</div>
+          <span className="text-[13px] font-semibold text-slate-800">{details.shop_name || "Official Store"}</span>
+          <Icons.ChevronRight size={14} className="text-slate-400" />
         </div>
         <div className="bg-white px-4 py-3 flex gap-3 border-b border-white">
-           <img src={firstItem?.image_url || "/placeholder.png"} className="w-[72px] h-[72px] object-cover border border-slate-200" alt="product" />
-           <div className="flex-1 min-w-0 flex flex-col justify-start pt-1">
-             <p className="text-[13px] text-slate-800 line-clamp-2 leading-snug">{firstItem?.product_name?.split(" | ")[0]}</p>
-           </div>
-           <div className="text-right shrink-0 flex flex-col justify-start pt-1">
-             <p className="text-[13px] text-slate-800 font-medium">Rp{firstItem?.price?.toLocaleString("id-ID")}</p>
-             <p className="text-xs text-slate-400 line-through">Rp{((firstItem?.price || 0) * 1.2)?.toLocaleString("id-ID")}</p>
-             <p className="text-xs text-slate-500 mt-1">x{firstItem?.quantity || 1}</p>
-           </div>
+          <img src={firstItem?.image_url || "/placeholder.png"} className="w-[72px] h-[72px] object-cover border border-slate-200" alt="product" />
+          <div className="flex-1 min-w-0 flex flex-col justify-start pt-1">
+            <p className="text-[13px] text-slate-800 line-clamp-2 leading-snug">{firstItem?.product_name?.split(" | ")[0]}</p>
+          </div>
+          <div className="text-right shrink-0 flex flex-col justify-start pt-1">
+            <p className="text-[13px] text-slate-800 font-medium">Rp{firstItem?.price?.toLocaleString("id-ID")}</p>
+            <p className="text-xs text-slate-400 line-through">Rp{((firstItem?.price || 0) * 1.2)?.toLocaleString("id-ID")}</p>
+            <p className="text-xs text-slate-500 mt-1">x{firstItem?.quantity || 1}</p>
+          </div>
         </div>
 
         <div className="bg-white px-4 py-4 mb-2">
           <div className="flex justify-between text-[13px] text-slate-500 mb-3">
-             <span className="w-1/3">Diminta oleh</span>
-             <span className="text-slate-800 text-right">Sistem / Pembeli</span>
+            <span className="w-1/3">Diminta oleh</span>
+            <span className="text-slate-800 text-right">Sistem / Pembeli</span>
           </div>
           <div className="flex justify-between text-[13px] text-slate-500 mb-3">
-             <span className="w-1/3">Diminta pada</span>
-             <span className="text-slate-800 text-right">{formatDate(details.created_at)}</span>
+            <span className="w-1/3">Diminta pada</span>
+            <span className="text-slate-800 text-right">{formatDate(details.created_at)}</span>
           </div>
           <div className="flex justify-between text-[13px] text-slate-500 mb-3">
-             <span className="w-1/3">Alasan</span>
-             <span className="text-slate-800 text-right max-w-[60%] ml-auto">{details.cancel_reason || "Tidak ada pembayaran / Dibatalkan"}</span>
+            <span className="w-1/3">Alasan</span>
+            <span className="text-slate-800 text-right max-w-[60%] ml-auto">{details.cancel_reason || "Tidak ada pembayaran / Dibatalkan"}</span>
           </div>
           <div className="flex justify-between text-[13px] text-slate-500">
-             <span className="w-1/3">Metode pembayaran</span>
-             <span className="text-slate-800 text-right">Belum Bayar</span>
+            <span className="w-1/3">Metode pembayaran</span>
+            <span className="text-slate-800 text-right">Belum Bayar</span>
           </div>
         </div>
-        
+
         <div className="bg-[#f5f5f5] px-4 py-4">
-           <button onClick={() => { setExpandedOrderId(details.id); setViewCancelOrder(null); }} className="w-full py-2.5 bg-white border border-slate-300 rounded text-sm text-slate-700 font-medium tracking-wide">Rincian Pesanan</button>
+          <button onClick={() => { setExpandedOrderId(details.id); setViewCancelOrder(null); }} className="w-full py-2.5 bg-white border border-slate-300 rounded text-sm text-slate-700 font-medium tracking-wide">Rincian Pesanan</button>
         </div>
       </div>
     )
@@ -399,11 +399,11 @@ function OrdersContent() {
                   <div className="flex gap-3 mb-4">
                     <img src={item.image_url || "/placeholder.png"} className="w-12 h-12 object-cover rounded border border-slate-100" alt="product" />
                     <div>
-                       <p className="text-[13px] font-semibold text-slate-800 line-clamp-1">{item.product_name?.split(" | ")[0]}</p>
-                       <p className="text-[11px] text-slate-400">Variasi: -</p>
+                      <p className="text-[13px] font-semibold text-slate-800 line-clamp-1">{item.product_name?.split(" | ")[0]}</p>
+                      <p className="text-[11px] text-slate-400">Variasi: -</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex flex-col gap-2 mb-4">
                     <p className="text-[13px] text-slate-500">Nilai Produk</p>
                     <div className="flex items-center gap-3">
@@ -416,88 +416,88 @@ function OrdersContent() {
                   </div>
 
                   <div className="mb-4">
-                     <div className="flex justify-between items-center mb-2">
-                       <p className="text-[12px] text-slate-600">Tambahkan 2 foto dan video</p>
-                       <span className="text-[11px] text-amber-500 font-medium flex items-center">+30 <Icons.CircleDollarSign size={10} className="ml-1" /></span>
-                     </div>
-                     <div className="flex gap-2 overflow-x-auto no-scrollbar snap-x pb-2">
-                       {revState.photos?.map((p: any, idx: number) => (
-                           <div key={idx} className="relative w-20 h-20 shrink-0 snap-start rounded border border-slate-200 bg-white">
-                             <img src={p.url} className="w-full h-full object-cover rounded" alt="preview" />
-                             <button onClick={() => {
-                                 const newPhotos = [...(revState.photos || [])];
-                                 newPhotos.splice(idx, 1);
-                                 setReviewsState(prev => ({ ...prev, [PId]: { ...prev[PId], photos: newPhotos } }))
-                             }} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slate-700/80 text-white rounded-full flex items-center justify-center shadow backdrop-blur-sm z-10 transition-transform active:scale-95">
-                               <Icons.X size={10} strokeWidth={3} />
-                             </button>
-                           </div>
-                       ))}
-                       {(revState.photos?.length || 0) < 2 && (
-                         <label className="cursor-pointer shrink-0 w-20 h-20 border-2 border-dashed border-slate-300 rounded bg-white flex flex-col items-center justify-center gap-1.5 hover:border-indigo-400 hover:bg-slate-50 transition-colors snap-start relative overflow-hidden">
-                            <Icons.Camera size={26} className="text-slate-400" strokeWidth={1} />
-                            <span className="text-[9px] font-medium text-slate-500 text-center leading-tight">Video/Foto</span>
-                            <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
-                              const files = Array.from(e.target.files || []);
-                              if (!files.length) return;
-                              const currentCount = revState.photos?.length || 0;
-                              let added = 0;
-                              files.forEach(file => {
-                                if (currentCount + added < 2) {
-                                  if (file.size > 5 * 1024 * 1024) { toast.error("Ukuran foto maksimal 5MB"); return; }
-                                  const reader = new FileReader();
-                                  reader.onload = (ev) => {
-                                      setReviewsState(prev => {
-                                          const prevPhotos = prev[PId]?.photos || [];
-                                          return { ...prev, [PId]: { ...prev[PId], photos: [...prevPhotos, { file, url: ev.target?.result as string }] } }
-                                      })
-                                  };
-                                  reader.readAsDataURL(file);
-                                  added++;
-                                }
-                              });
-                            }} />
-                         </label>
-                       )}
-                     </div>
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-[12px] text-slate-600">Tambahkan 2 foto dan video</p>
+                      <span className="text-[11px] text-amber-500 font-medium flex items-center">+30 <Icons.CircleDollarSign size={10} className="ml-1" /></span>
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar snap-x pb-2">
+                      {revState.photos?.map((p: any, idx: number) => (
+                        <div key={idx} className="relative w-20 h-20 shrink-0 snap-start rounded border border-slate-200 bg-white">
+                          <img src={p.url} className="w-full h-full object-cover rounded" alt="preview" />
+                          <button onClick={() => {
+                            const newPhotos = [...(revState.photos || [])];
+                            newPhotos.splice(idx, 1);
+                            setReviewsState(prev => ({ ...prev, [PId]: { ...prev[PId], photos: newPhotos } }))
+                          }} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slate-700/80 text-white rounded-full flex items-center justify-center shadow backdrop-blur-sm z-10 transition-transform active:scale-95">
+                            <Icons.X size={10} strokeWidth={3} />
+                          </button>
+                        </div>
+                      ))}
+                      {(revState.photos?.length || 0) < 2 && (
+                        <label className="cursor-pointer shrink-0 w-20 h-20 border-2 border-dashed border-slate-300 rounded bg-white flex flex-col items-center justify-center gap-1.5 hover:border-indigo-400 hover:bg-slate-50 transition-colors snap-start relative overflow-hidden">
+                          <Icons.Camera size={26} className="text-slate-400" strokeWidth={1} />
+                          <span className="text-[9px] font-medium text-slate-500 text-center leading-tight">Video/Foto</span>
+                          <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            if (!files.length) return;
+                            const currentCount = revState.photos?.length || 0;
+                            let added = 0;
+                            files.forEach(file => {
+                              if (currentCount + added < 2) {
+                                if (file.size > 5 * 1024 * 1024) { toast.error("Ukuran foto maksimal 5MB"); return; }
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  setReviewsState(prev => {
+                                    const prevPhotos = prev[PId]?.photos || [];
+                                    return { ...prev, [PId]: { ...prev[PId], photos: [...prevPhotos, { file, url: ev.target?.result as string }] } }
+                                  })
+                                };
+                                reader.readAsDataURL(file);
+                                added++;
+                              }
+                            });
+                          }} />
+                        </label>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mb-4 bg-slate-50 rounded-lg p-3 relative">
-                     <div className="flex justify-between items-center mb-1">
-                       <p className="text-[12px] text-slate-600">Tulis ulasan minimal 50 karakter</p>
-                       <span className="text-[11px] text-amber-500 font-medium flex items-center">+10 <Icons.CircleDollarSign size={10} className="ml-1" /></span>
-                     </div>
-                     <textarea
-                       placeholder="Desain: 
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="text-[12px] text-slate-600">Tulis ulasan minimal 50 karakter</p>
+                      <span className="text-[11px] text-amber-500 font-medium flex items-center">+10 <Icons.CircleDollarSign size={10} className="ml-1" /></span>
+                    </div>
+                    <textarea
+                      placeholder="Desain: 
 Bahan: 
 
 Bagikan penilaianmu dan bantu Pengguna lain membuat pilihan yang lebih baik!"
-                       value={revState.comment}
-                       onChange={(e) => setReviewsState(prev => ({ ...prev, [PId]: { ...prev[PId], comment: e.target.value } }))}
-                       className="w-full bg-transparent text-[13px] border-none outline-none resize-none h-32 placeholder:text-slate-300 mt-1 text-slate-700 focus:ring-0 leading-relaxed"
-                     />
-                     <span className="absolute bottom-2 right-3 text-[10px] text-slate-300">{(revState.comment || "").length} karakter</span>
+                      value={revState.comment}
+                      onChange={(e) => setReviewsState(prev => ({ ...prev, [PId]: { ...prev[PId], comment: e.target.value } }))}
+                      className="w-full bg-transparent text-[13px] border-none outline-none resize-none h-32 placeholder:text-slate-300 mt-1 text-slate-700 focus:ring-0 leading-relaxed"
+                    />
+                    <span className="absolute bottom-2 right-3 text-[10px] text-slate-300">{(revState.comment || "").length} karakter</span>
                   </div>
 
                   <label className="flex items-center gap-2 cursor-pointer mt-2 pt-2">
-                     <input type="checkbox" className="w-4 h-4 rounded text-indigo-600 accent-indigo-600 border-slate-300" />
-                     <span className="text-[12px] text-slate-600">Sembunyikan username pada penilaian</span>
+                    <input type="checkbox" className="w-4 h-4 rounded text-indigo-600 accent-indigo-600 border-slate-300" />
+                    <span className="text-[12px] text-slate-600">Sembunyikan username pada penilaian</span>
                   </label>
                 </div>
 
                 {/* Section 2: Seller & Shipping Ratings */}
                 <div className="bg-white p-4 mt-2">
                   <div className="flex justify-between items-center mb-4">
-                     <span className="text-[13px] text-slate-800">Pelayanan Penjual</span>
-                     <div className="flex items-center gap-2">
-                        {[1, 2, 3, 4, 5].map((star) => <Icons.Star key={star} size={24} className="text-amber-400 fill-amber-400" />)}
-                     </div>
+                    <span className="text-[13px] text-slate-800">Pelayanan Penjual</span>
+                    <div className="flex items-center gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => <Icons.Star key={star} size={24} className="text-amber-400 fill-amber-400" />)}
+                    </div>
                   </div>
                   <div className="flex justify-between items-center">
-                     <span className="text-[13px] text-slate-800">Kecepatan Jasa Kirim</span>
-                     <div className="flex items-center gap-2">
-                        {[1, 2, 3, 4, 5].map((star) => <Icons.Star key={star} size={24} className="text-amber-400 fill-amber-400" />)}
-                     </div>
+                    <span className="text-[13px] text-slate-800">Kecepatan Jasa Kirim</span>
+                    <div className="flex items-center gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => <Icons.Star key={star} size={24} className="text-amber-400 fill-amber-400" />)}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -506,10 +506,10 @@ Bagikan penilaianmu dan bantu Pengguna lain membuat pilihan yang lebih baik!"
         </div>
 
         <div className="fixed bottom-0 w-full max-w-md bg-white p-3 z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] border-t border-slate-100">
-           <button disabled={isSubmittingReview} onClick={submitReviews} className="w-full py-3 bg-[#ee4d2d] text-white rounded-[2px] font-medium text-[15px] flex justify-center items-center">
-             {isSubmittingReview ? <Icons.Loader2 className="animate-spin mr-2" size={18} /> : null}
-             KIRIM
-           </button>
+          <button disabled={isSubmittingReview} onClick={submitReviews} className="w-full py-3 bg-[#ee4d2d] text-white rounded-[2px] font-medium text-[15px] flex justify-center items-center">
+            {isSubmittingReview ? <Icons.Loader2 className="animate-spin mr-2" size={18} /> : null}
+            KIRIM
+          </button>
         </div>
       </div>
     )
@@ -762,7 +762,7 @@ Bagikan penilaianmu dan bantu Pengguna lain membuat pilihan yang lebih baik!"
             const isTimeExpired = unpaid && diff <= 0
 
             return (
-              <div key={order.id} className="bg-white shadow-sm mt-2">
+              <div key={order.id} className="bg-white mt-2">
                 {/* Card Header */}
                 <div className="flex items-center gap-2 px-3 py-5 border-b border-slate-50">
                   {order.shop_image_url ? (
