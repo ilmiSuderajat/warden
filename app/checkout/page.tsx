@@ -594,7 +594,7 @@ export default function CheckoutPage() {
       {/* ── STICKY FOOTER ── */}
 
       {/* BOTTOM BAR */}
-      <div className="sticky bottom-0 z-50 bg-white border-t border-slate-200">
+      <div className="sticky bottom-0 z-50 bg-white mt-6 border-t border-slate-200">
         <div className="flex items-center">
           <div className="flex-1 pl-4">
             <div className="flex items-baseline gap-1">

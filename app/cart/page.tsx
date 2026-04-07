@@ -106,15 +106,34 @@ export default function CartPage() {
     if (!item) return;
 
     const newVariants = { ...item.variants_saved, [groupName]: option };
-    
+
+    // Optimistic Update locally
+    setCartItems(prev => prev.map(i => {
+      if (i.id === cartId) {
+        let variantPrice = 0;
+        let variantLabels: string[] = [];
+        Object.values(newVariants).forEach((opt: any) => {
+          variantPrice += (opt.price || 0);
+          variantLabels.push(opt.label);
+        });
+        return {
+          ...i,
+          variants_saved: newVariants,
+          variant_labels: variantLabels,
+          price: i.base_price + variantPrice
+        };
+      }
+      return i;
+    }));
+
     setUpdatingCartId(cartId);
     const { error } = await supabase
       .from("cart")
       .update({ variants: newVariants })
       .eq("id", cartId);
 
-    if (!error) {
-      // Refresh to update prices and labels
+    if (error) {
+      // Revert if error
       await fetchCart();
     }
     setUpdatingCartId(null);
@@ -126,7 +145,7 @@ export default function CartPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-100 max-w-md mx-auto">
+      <div className="min-h-[100dvh] flex flex-col bg-slate-100 max-w-md mx-auto">
         <div className="bg-white p-4 flex items-center justify-between border-b">
           <Skeleton className="w-8 h-8 rounded-full" />
           <Skeleton className="w-32 h-6" />
@@ -148,7 +167,7 @@ export default function CartPage() {
   }, {} as Record<string, any[]>);
 
   return (
-    <div className="h-screen bg-slate-100 max-w-md mx-auto font-sans pb-32 text-slate-800">
+    <div className="min-h-[100dvh] flex flex-col bg-slate-100 max-w-md mx-auto font-sans pb-32 text-slate-800">
 
       {/* ── HEADER ── */}
       <div className="sticky top-0 z-40 bg-white border-b border-slate-200">
@@ -244,11 +263,10 @@ export default function CartPage() {
                                           key={oIdx}
                                           disabled={isUpdating}
                                           onClick={() => updateVariantInline(item.id, group.name, opt)}
-                                          className={`px-2 py-1 rounded text-[10px] font-semibold border transition-all flex items-center gap-1 ${
-                                            isSelected
-                                              ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
-                                              : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
-                                          } ${isUpdating ? "opacity-50 cursor-not-allowed" : ""}`}
+                                          className={`px-2 py-1 rounded text-[10px] font-semibold border transition-all flex items-center gap-1 ${isSelected
+                                            ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                                            : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
+                                            } ${isUpdating ? "opacity-50 cursor-not-allowed" : ""}`}
                                         >
                                           {isSelected && <Icons.Check size={10} strokeWidth={3} />}
                                           {opt.label}
