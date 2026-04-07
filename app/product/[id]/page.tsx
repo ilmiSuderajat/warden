@@ -701,7 +701,7 @@ export default function ProductDetail() {
 
             {/* Product info row */}
             <div className="flex items-start gap-3 px-5 pb-4 border-b border-slate-100">
-              <div className="w-20 h-20 rounded-xl border border-slate-100 overflow-hidden shrink-0 bg-slate-50">
+              <div className="w-20 h-20 rounded-xl border border-slate-100 bg-slate-50">
                 <img
                   src={imageList[0]}
                   alt={product?.name}
