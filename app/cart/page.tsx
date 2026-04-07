@@ -145,7 +145,7 @@ export default function CartPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[100dvh] flex flex-col bg-slate-100 max-w-md mx-auto">
+      <div className="min-h-[100dvh] flex flex-col max-w-md mx-auto bg-slate-100 font-sans text-slate-800">
         <div className="bg-white p-4 flex items-center justify-between border-b">
           <Skeleton className="w-8 h-8 rounded-full" />
           <Skeleton className="w-32 h-6" />
@@ -167,7 +167,7 @@ export default function CartPage() {
   }, {} as Record<string, any[]>);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-slate-100 max-w-md mx-auto font-sans pb-32 text-slate-800">
+    <div className="min-h-[100dvh] flex flex-col bg-slate-100 max-w-md mx-auto font-sans text-slate-800">
 
       {/* ── HEADER ── */}
       <div className="sticky top-0 z-40 bg-white border-b border-slate-200">
@@ -193,7 +193,7 @@ export default function CartPage() {
       </div>
 
       {/* ── CART ITEMS ── */}
-      <div className="mt-2 space-y-2">
+      <div className="mt-2 space-y-2 flex-1 overflow-y-auto pb-24">
         {cartItems.length > 0 ? (
           Object.entries(groupedItems).map(([shopName, itemsObj]) => {
             const items = itemsObj as any[];
@@ -212,7 +212,7 @@ export default function CartPage() {
             };
 
             return (
-              <div key={shopName} className="bg-white px-0 border-y border-slate-200">
+              <div key={shopName} className="bg-white px-0  border-y border-slate-200">
                 {/* Shop Header */}
                 <div className="flex items-center justify-between px-3 py-3 border-b border-slate-100">
                   <div className="flex items-center gap-3">
@@ -231,7 +231,7 @@ export default function CartPage() {
                 </div>
 
                 {/* Products */}
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y  divide-slate-100">
                   {items.map((item: any) => {
                     const isSelected = selectedIds.has(item.id);
                     return (
@@ -322,7 +322,7 @@ export default function CartPage() {
 
       {/* ── FOOTER CHECKOUT ── */}
       {cartItems.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 max-w-md mx-auto bg-white border-t border-slate-200 divide-y divide-slate-100">
+        <div className="sticky bottom-0 z-50 bg-white border-t border-slate-200 divide-y divide-slate-100 pb-[env(safe-area-inset-bottom)]">
 
           <div className="flex items-center justify-between p-3">
             <div className="flex items-center gap-2">
