@@ -23,7 +23,9 @@ export default function ProductDetail() {
   const [shop, setShop] = useState<any>(null)
   const [reviews, setReviews] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [isLoadingChat, setIsLoadingChat] = useState(false)
+  const [isLoadingCart, setIsLoadingCart] = useState(false)
+  const [isLoadingBuy, setIsLoadingBuy] = useState(false)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [isWishlisted, setIsWishlisted] = useState(false)
   const [wishlistLoading, setWishlistLoading] = useState(false)
@@ -164,13 +166,13 @@ export default function ProductDetail() {
   }
 
   const handleChatToko = async () => {
-    if (!product || isProcessing) return;
-    setIsProcessing(true);
+    if (!product || isLoadingChat) return;
+    setIsLoadingChat(true);
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       router.push("/login");
-      setIsProcessing(false);
+      setIsLoadingChat(false);
       return;
     }
 
@@ -188,7 +190,7 @@ export default function ProductDetail() {
         action: { label: "Tambah Alamat", onClick: () => router.push("/address/add") },
       });
       router.push("/address/add");
-      setIsProcessing(false);
+      setIsLoadingChat(false);
       return;
     }
 
@@ -219,7 +221,7 @@ export default function ProductDetail() {
       router.push(`/chat/shop/${convId}?product_id=${product.id}`);
     } catch {
       toast.error("Gagal memulai percakapan");
-      setIsProcessing(false);
+      setIsLoadingChat(false);
     }
   };
 
@@ -243,13 +245,13 @@ export default function ProductDetail() {
     }
   }
 
-  const handleAddToCart = async (silent = false, qty?: number, variants?: Record<string, any>) => {
-    setIsProcessing(true)
+  const handleAddToCart = async (silent = false, qty?: number, variants?: Record<string, any>, skipLoading = false) => {
+    if (!skipLoading) setIsLoadingCart(true)
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
       router.push("/login")
-      setIsProcessing(false)
+      if (!skipLoading) setIsLoadingCart(false)
       return
     }
 
@@ -280,13 +282,15 @@ export default function ProductDetail() {
     } catch (error) {
       console.error(error)
     } finally {
-      setIsProcessing(false)
+      if (!skipLoading) setIsLoadingCart(false)
     }
   }
 
   const handleBuyNow = async (qty?: number, variants?: Record<string, any>) => {
-    await handleAddToCart(true, qty, variants)
+    setIsLoadingBuy(true)
+    await handleAddToCart(true, qty, variants, true)
     router.push("/checkout")
+    setIsLoadingBuy(false)
   }
 
   const openVariantSheet = (action: "cart" | "buy") => {
@@ -629,13 +633,13 @@ export default function ProductDetail() {
           <div className="flex items-center gap-2.5 px-4 py-3 max-w-md mx-auto">
             <button
               onClick={handleChatToko}
-              disabled={isProcessing}
-              className="flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 disabled:opacity-50 transition-colors w-[3.2rem] shrink-0"
+              disabled={isLoadingChat || isLoadingCart || isLoadingBuy}
+              className="flex flex-col items-center justify-center text-indigo-800 hover:bg-indigo-50 disabled:opacity-50 transition-colors w-[3.2rem] shrink-0"
             >
-              {isProcessing ? (
+              {isLoadingChat ? (
                 <Loader2 size={22} className="animate-spin" />
               ) : (
-                <MessageCircle size={22} strokeWidth={1.8} />
+                <MessageCircle size={20} strokeWidth={1.8} />
               )}
               <span className="text-[9px] font-bold mt-0.5">Chat Toko</span>
             </button>
@@ -643,15 +647,15 @@ export default function ProductDetail() {
             {/* KERANJANG */}
             <button
               onClick={handleSheetCartClick}
-              disabled={isProcessing}
-              className="flex items-center justify-center bg-white border-2 border-indigo-800 text-indigo-800 w-[3.2rem] h-12 rounded-xl active:scale-95 transition-all disabled:opacity-50 shrink-0 gap-0.5 hover:bg-indigo-50"
+              disabled={isLoadingChat || isLoadingCart || isLoadingBuy}
+              className="flex items-center justify-center bg-white  text-indigo-800 w-[3.2rem] h-12 rounded-xl active:scale-95 transition-all disabled:opacity-50 shrink-0 gap-0.5 hover:bg-indigo-50"
             >
-              {isProcessing ? (
+              {isLoadingCart ? (
                 <Loader2 size={18} className="animate-spin" />
               ) : (
                 <>
                   <Plus size={13} strokeWidth={3} className="-mr-1" />
-                  <ShoppingCart size={17} strokeWidth={1.8} />
+                  <ShoppingCart size={22} strokeWidth={1.8} />
                 </>
               )}
             </button>
@@ -659,10 +663,10 @@ export default function ProductDetail() {
             {/* BELI SEKARANG */}
             <button
               onClick={handleSheetBuyClick}
-              disabled={isProcessing}
+              disabled={isLoadingChat || isLoadingCart || isLoadingBuy}
               className="flex-1 bg-indigo-800 hover:bg-indigo-900 active:bg-indigo-950 text-white h-12 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-400 shadow-lg shadow-indigo-800/25 flex items-center justify-center"
             >
-              {isProcessing ? (
+              {isLoadingBuy ? (
                 <Loader2 size={18} className="animate-spin" />
               ) : (
                 "Beli Sekarang"
@@ -735,8 +739,8 @@ export default function ProductDetail() {
                             key={oIdx}
                             onClick={() => setSelectedVariants(prev => ({ ...prev, [group.name]: opt }))}
                             className={`px-3 py-1.5 rounded border text-xs font-semibold transition-all ${isSelected
-                                ? 'border-red-500 text-red-600 bg-red-50'
-                                : 'border-slate-200 text-slate-600 bg-white'
+                              ? 'border-red-500 text-red-600 bg-red-50'
+                              : 'border-slate-200 text-slate-600 bg-white'
                               }`}
                           >
                             {opt.label}
@@ -778,10 +782,10 @@ export default function ProductDetail() {
             <div className="px-5">
               <button
                 onClick={handleSheetConfirm}
-                disabled={isProcessing}
+                disabled={isLoadingBuy || isLoadingCart}
                 className="w-full h-12 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-300 flex items-center justify-center"
               >
-                {isProcessing ? (
+                {(sheetAction === 'buy' ? isLoadingBuy : isLoadingCart) ? (
                   <Loader2 size={18} className="animate-spin" />
                 ) : sheetAction === 'buy' ? 'Beli Sekarang' : 'Tambah ke Keranjang'}
               </button>

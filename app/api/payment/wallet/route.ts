@@ -57,7 +57,7 @@ export async function POST(req: Request) {
             .single()
 
         if (order) {
-            // Notify user
+            // Notify user: order payment
             await createNotification({
                 userId: user.id,
                 type: 'order',
@@ -65,6 +65,18 @@ export async function POST(req: Request) {
                 message: `Pesanan #${orderId.slice(0, 8)} telah dibayar dari Wallet. Kami sedang mencari kurir.`,
                 link: `/orders/${orderId}`
             })
+
+            // Fetch total for finance notification
+            const { data: fullOrder } = await supabase.from("orders").select("total_amount").eq("id", orderId).single()
+            if (fullOrder) {
+                await createNotification({
+                    userId: user.id,
+                    type: 'finance',
+                    title: 'Pembayaran dari Wallet',
+                    message: `Rp${Number(fullOrder.total_amount).toLocaleString('id-ID')} telah dipotong dari Wallet untuk pesanan #${orderId.slice(0, 8).toUpperCase()}.`,
+                    link: '/wallet'
+                })
+            }
 
             // Notify shop — use shop_id directly from orders, fallback to extractShopId
             const shopId = (order as any).shop_id || extractShopId((order as any).order_items || [])

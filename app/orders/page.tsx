@@ -287,23 +287,17 @@ function OrdersContent() {
     if (!cancelReason.trim()) { toast.error("Alasan pembatalan wajib diisi"); return }
     setIsCanceling(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error("Unauthorized")
-      const { error } = await supabase.rpc('cancel_order_by_user', { _order_id: cancelOrderObj.id, _reason: cancelReason, _user_id: user.id })
-      if (error) throw new Error(error.message)
-      toast.success("Pesanan berhasil dibatalkan")
+      const res = await fetch("/api/orders/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: cancelOrderObj.id, reason: cancelReason }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Gagal membatalkan pesanan")
+      toast.success("Pesanan berhasil dibatalkan" + (cancelOrderObj.payment_status === "paid" ? " dan saldo dikembalikan ke Wallet." : "."))
       setCancelOrderObj(null); setCancelReason(""); fetchOrders()
     } catch (err: any) {
-      if (err.message.includes("cancel_order_by_user")) {
-        // Fallback to JS if RPC fails
-        try {
-          await cancelOrder(cancelOrderObj.id, cancelReason)
-          toast.success("Pesanan berhasil dibatalkan")
-          setCancelOrderObj(null); setCancelReason(""); fetchOrders()
-        } catch (fallbackErr: any) {
-          toast.error(fallbackErr.message || "Gagal membatalkan pesanan")
-        }
-      } else toast.error(err.message || "Gagal membatalkan pesanan")
+      toast.error(err.message || "Gagal membatalkan pesanan")
     }
     finally { setIsCanceling(false) }
   }
@@ -354,19 +348,21 @@ function OrdersContent() {
         <div className="bg-white px-4 py-4 mb-2">
           <div className="flex justify-between text-[13px] text-slate-500 mb-3">
             <span className="w-1/3">Diminta oleh</span>
-            <span className="text-slate-800 text-right">Sistem / Pembeli</span>
+            <span className="text-slate-800 text-right">{details.canceled_by === 'admin' ? 'Admin / Sistem' : 'Pembeli'}</span>
           </div>
           <div className="flex justify-between text-[13px] text-slate-500 mb-3">
             <span className="w-1/3">Diminta pada</span>
-            <span className="text-slate-800 text-right">{formatDate(details.created_at)}</span>
+            <span className="text-slate-800 text-right">{formatDate(details.canceled_at || details.created_at)}</span>
           </div>
           <div className="flex justify-between text-[13px] text-slate-500 mb-3">
             <span className="w-1/3">Alasan</span>
             <span className="text-slate-800 text-right max-w-[60%] ml-auto">{details.cancel_reason || "Tidak ada pembayaran / Dibatalkan"}</span>
           </div>
           <div className="flex justify-between text-[13px] text-slate-500">
-            <span className="w-1/3">Metode pembayaran</span>
-            <span className="text-slate-800 text-right">Belum Bayar</span>
+            <span className="w-1/3">Refund Dana</span>
+            <span className="text-slate-800 text-right">
+              {details.is_refunded ? "Telah dikembalikan ke Wallet" : details.payment_status === 'paid' ? "Diproses ke Wallet" : "Tidak ada dana (Belum / Gagal dibayar)"}
+            </span>
           </div>
         </div>
 
@@ -661,7 +657,16 @@ Bagikan penilaianmu dan bantu Pengguna lain membuat pilihan yang lebih baik!"
 
         {/* Footer sticky detail button */}
         <div className="fixed bottom-0 w-full max-w-md bg-white border-t border-slate-100 p-3 flex gap-2 z-50">
-          <button onClick={() => router.push(`/product/${details.order_items?.[0]?.product_id}`)} className="flex-1 py-2.5 border border-slate-300 rounded text-sm font-medium text-slate-700 bg-white shadow-sm">Beli Lagi</button>
+          {/* Beli Lagi only if done or cancelled */}
+          {(isSelesai || details.status === "Dibatalkan") && (
+            <button onClick={() => router.push(`/product/${details.order_items?.[0]?.product_id}`)} className="flex-1 py-2.5 border border-slate-300 rounded text-sm font-medium text-slate-700 bg-white shadow-sm">Beli Lagi</button>
+          )}
+
+          {/* Cancel button — shown if order can still be cancelled */}
+          {!isSelesai && details.status !== "Dibatalkan" && !["Dikirim", "Kurir di Lokasi", "Kurir Menuju Lokasi"].includes(details.status) && (
+            <button onClick={() => setCancelOrderObj(details)} className="flex-1 py-2.5 border border-red-500 text-red-500 rounded text-sm font-medium bg-white shadow-sm">Batalkan</button>
+          )}
+
           {isSelesai && <button className="flex-[1.5] py-2.5 border border-indigo-600 rounded text-sm font-medium text-indigo-600 bg-white shadow-sm" onClick={() => openReviewModal(details)}>Nilai</button>}
           {isUnpaidOrder && !isTimeExpiredDetail && <button className="flex-[1.5] py-2.5 bg-indigo-600 rounded text-sm font-medium text-white shadow-sm" onClick={() => router.push(`/checkout/payment?order_id=${details.id}`)}>Bayar Sekarang</button>}
         </div>
@@ -684,7 +689,7 @@ Bagikan penilaianmu dan bantu Pengguna lain membuat pilihan yang lebih baik!"
       {/* Shopee Style Top Navbar */}
       <div className="bg-white sticky top-0 z-40">
         <div className="flex items-center gap-3 px-4 pt-12 pb-3 h-14">
-          <button onClick={() => router.back()} className="p-1 -ml-1 text-indigo-600 shrink-0">
+          <button onClick={() => router.push('/profile')} className="p-1 -ml-1 text-indigo-600 shrink-0">
             <Icons.ArrowLeft size={24} strokeWidth={2} />
           </button>
 
@@ -827,7 +832,12 @@ Bagikan penilaianmu dan bantu Pengguna lain membuat pilihan yang lebih baik!"
                 <div className="px-3 py-3 flex justify-end gap-2 text-[13px]">
                   <button onClick={() => setExpandedOrderId(order.id)} className="px-5 py-1.5 border border-slate-300 rounded text-slate-700 bg-white">Detail</button>
                   {unpaid && !isTimeExpired ? (
-                    <button onClick={() => router.push(`/checkout/payment?order_id=${order.id}`)} className="px-5 py-1.5 bg-indigo-600 text-white rounded font-medium">Bayar Sekarang</button>
+                    <>
+                      <button onClick={() => setCancelOrderObj(order)} className="px-5 py-1.5 border border-slate-300 rounded text-slate-700 bg-white">Batalkan</button>
+                      <button onClick={() => router.push(`/checkout/payment?order_id=${order.id}`)} className="px-5 py-1.5 bg-indigo-600 text-white rounded font-medium">Bayar Sekarang</button>
+                    </>
+                  ) : ["Perlu Dikemas", "Diproses", "Mencari Kurir"].includes(order.status) ? (
+                    <button onClick={() => setCancelOrderObj(order)} className="px-5 py-1.5 border border-slate-300 rounded text-slate-700 bg-white">Batalkan</button>
                   ) : order.status === "Selesai" ? (
                     <>
                       <button onClick={() => router.push(`/product/${firstItem?.product_id}`)} className="px-5 py-1.5 border border-slate-300 rounded text-slate-700 bg-white">Beli Lagi</button>

@@ -33,6 +33,17 @@ export async function POST(req: Request) {
 
         const supabase = createAdminClient()
 
+        // Verify cart is not empty before creating order (prevents double checkout)
+        const { data: cartData, error: cartErr } = await supabase
+            .from("cart")
+            .select("id")
+            .eq("user_id", user.id)
+            .limit(1)
+
+        if (cartErr || !cartData || cartData.length === 0) {
+            return NextResponse.json({ error: "Keranjang kosong atau pesanan sudah pernah diproses." }, { status: 400 })
+        }
+
         // Insert order (admin client bypasses RLS and column restrictions)
         const { data: order, error: orderErr } = await supabase
             .from("orders")

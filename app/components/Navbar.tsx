@@ -34,9 +34,13 @@ export default function Navbar() {
   useEffect(() => {
     if (!isLoggedIn) return;
 
+    let userId: string | null = null;
+    let notifChannel: ReturnType<typeof supabase.channel> | null = null;
+
     const fetchNotifCount = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      userId = user.id;
 
       const { count } = await supabase
         .from("notifications")
@@ -46,22 +50,27 @@ export default function Navbar() {
 
       setNotifCount(count || 0);
 
-      const notifChannel = supabase
-        .channel('navbar_notif_sync')
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        }, () => {
-          fetchNotifCount();
-        })
-        .subscribe();
-
-      return () => { supabase.removeChannel(notifChannel); }
+      // Subscribe once
+      if (!notifChannel) {
+        notifChannel = supabase
+          .channel('navbar_notif_sync')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`
+          }, () => {
+            fetchNotifCount();
+          })
+          .subscribe();
+      }
     };
 
     fetchNotifCount();
+
+    return () => {
+      if (notifChannel) supabase.removeChannel(notifChannel);
+    };
   }, [isLoggedIn]);
 
   // Tentukan apakah ini halaman admin berdasarkan URL saja
