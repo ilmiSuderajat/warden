@@ -18,6 +18,17 @@ export async function POST(req: Request) {
       fraud_status,
     } = body
 
+    if (order_id && order_id.includes("TOPUP-")) {
+        console.log(`[Webhook] 🔄 Forwarding to topup-webhook: ${order_id}`)
+        const topupReq = new Request(req.url, {
+            method: 'POST',
+            headers: req.headers,
+            body: JSON.stringify(body)
+        })
+        const { POST: topupWebhook } = await import("../topup-webhook/route")
+        return topupWebhook(topupReq)
+    }
+
     // ── 1. Validate Midtrans signature (anti-spoofing) ────────────
     const serverKey = process.env.MIDTRANS_SERVER_KEY!
     const expectedHash = crypto
