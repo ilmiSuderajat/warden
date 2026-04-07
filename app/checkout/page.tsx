@@ -345,7 +345,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className=" bg-slate-100 max-w-md mx-auto pb-44 font-sans text-slate-800">
+    <div className="min-h-[100dvh] bg-slate-100 max-w-md mx-auto pb-44 font-sans text-slate-800">
 
       {/* ── HEADER ── */}
       <div className="sticky top-0 z-40 bg-white border-b border-slate-200">
