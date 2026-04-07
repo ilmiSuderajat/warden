@@ -345,7 +345,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 max-w-md mx-auto pb-44 font-sans text-slate-800">
+    <div className="h-screen bg-slate-100 max-w-md mx-auto pb-44 font-sans text-slate-800">
 
       {/* ── HEADER ── */}
       <div className="sticky top-0 z-40 bg-white border-b border-slate-200">
@@ -477,15 +477,13 @@ export default function CheckoutPage() {
           {/* Wallet */}
           <button
             onClick={() => setSelectedPayment("wallet")}
-            className={`w-full p-3.5 rounded-xl flex items-center gap-3 transition-all border-2 ${
-              selectedPayment === "wallet"
-                ? "bg-indigo-50 border-indigo-400"
-                : "bg-slate-50 border-transparent hover:border-slate-200"
-            }`}
+            className={`w-full p-3.5 rounded-xl flex items-center gap-3 transition-all border-2 ${selectedPayment === "wallet"
+              ? "bg-indigo-50 border-indigo-400"
+              : "bg-slate-50 border-transparent hover:border-slate-200"
+              }`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              selectedPayment === "wallet" ? "bg-indigo-600 text-white" : "bg-white text-slate-400 border border-slate-200"
-            }`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${selectedPayment === "wallet" ? "bg-indigo-600 text-white" : "bg-white text-slate-400 border border-slate-200"
+              }`}>
               <Wallet size={18} />
             </div>
             <div className="flex-1 text-left">
@@ -505,15 +503,13 @@ export default function CheckoutPage() {
           {/* Online / Midtrans */}
           <button
             onClick={() => setSelectedPayment("online")}
-            className={`w-full p-3.5 rounded-xl flex items-center gap-3 transition-all border-2 ${
-              selectedPayment === "online"
-                ? "bg-indigo-50 border-indigo-400"
-                : "bg-slate-50 border-transparent hover:border-slate-200"
-            }`}
+            className={`w-full p-3.5 rounded-xl flex items-center gap-3 transition-all border-2 ${selectedPayment === "online"
+              ? "bg-indigo-50 border-indigo-400"
+              : "bg-slate-50 border-transparent hover:border-slate-200"
+              }`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              selectedPayment === "online" ? "bg-indigo-600 text-white" : "bg-white text-slate-400 border border-slate-200"
-            }`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${selectedPayment === "online" ? "bg-indigo-600 text-white" : "bg-white text-slate-400 border border-slate-200"
+              }`}>
               <CreditCard size={18} />
             </div>
             <div className="flex-1 text-left">
@@ -527,21 +523,19 @@ export default function CheckoutPage() {
           <button
             onClick={() => !codUnavailable && setSelectedPayment("cod")}
             disabled={codUnavailable}
-            className={`w-full p-3.5 rounded-xl flex items-center gap-3 transition-all border-2 ${
-              codUnavailable
-                ? "bg-slate-50 border-dashed border-slate-200 opacity-60 cursor-not-allowed"
-                : selectedPayment === "cod"
-                  ? "bg-indigo-50 border-indigo-400"
-                  : "bg-slate-50 border-transparent hover:border-slate-200"
-            }`}
+            className={`w-full p-3.5 rounded-xl flex items-center gap-3 transition-all border-2 ${codUnavailable
+              ? "bg-slate-50 border-dashed border-slate-200 opacity-60 cursor-not-allowed"
+              : selectedPayment === "cod"
+                ? "bg-indigo-50 border-indigo-400"
+                : "bg-slate-50 border-transparent hover:border-slate-200"
+              }`}
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              codUnavailable
-                ? "bg-white text-slate-300 border border-slate-200"
-                : selectedPayment === "cod"
-                  ? "bg-indigo-600 text-white"
-                  : "bg-white text-slate-400 border border-slate-200"
-            }`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${codUnavailable
+              ? "bg-white text-slate-300 border border-slate-200"
+              : selectedPayment === "cod"
+                ? "bg-indigo-600 text-white"
+                : "bg-white text-slate-400 border border-slate-200"
+              }`}>
               <Truck size={18} />
             </div>
             <div className="flex-1 text-left">

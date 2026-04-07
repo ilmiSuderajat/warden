@@ -739,7 +739,7 @@ export default function ProductDetail() {
                             key={oIdx}
                             onClick={() => setSelectedVariants(prev => ({ ...prev, [group.name]: opt }))}
                             className={`px-3 py-1.5 rounded border text-xs font-semibold transition-all ${isSelected
-                              ? 'border-red-500 text-red-600 bg-red-50'
+                              ? 'border-indigo-500 text-indigo-600 bg-indigo-50'
                               : 'border-slate-200 text-slate-600 bg-white'
                               }`}
                           >
@@ -783,7 +783,7 @@ export default function ProductDetail() {
               <button
                 onClick={handleSheetConfirm}
                 disabled={isLoadingBuy || isLoadingCart}
-                className="w-full h-12 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-300 flex items-center justify-center"
+                className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-300 flex items-center justify-center"
               >
                 {(sheetAction === 'buy' ? isLoadingBuy : isLoadingCart) ? (
                   <Loader2 size={18} className="animate-spin" />

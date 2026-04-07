@@ -11,11 +11,8 @@ export default function CartPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  
-  // Variant Edit Modal
-  const [editingVariantItem, setEditingVariantItem] = useState<any>(null);
-  const [tempVariants, setTempVariants] = useState<Record<string, any>>({});
-  const [isUpdatingVariant, setIsUpdatingVariant] = useState(false);
+
+  const [updatingCartId, setUpdatingCartId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCart();
@@ -32,16 +29,16 @@ export default function CartPage() {
       .from("cart")
       .select("*, products(*, shops(id, name))")
       .eq("user_id", user.id);
-      
+
     if (data) {
       const items = data.map((item) => {
         let variantPrice = 0;
         let variantLabels: string[] = [];
         if (item.variants) {
-           Object.values(item.variants).forEach((opt: any) => {
-              variantPrice += (opt.price || 0);
-              variantLabels.push(opt.label);
-           });
+          Object.values(item.variants).forEach((opt: any) => {
+            variantPrice += (opt.price || 0);
+            variantLabels.push(opt.label);
+          });
         }
         return {
           id: item.id,
@@ -61,7 +58,7 @@ export default function CartPage() {
         };
       });
       setCartItems(items);
-      
+
       // Select all by default
       setSelectedIds(new Set(items.map((i: any) => i.id)));
     }
@@ -104,21 +101,25 @@ export default function CartPage() {
     }
   };
 
-  const handleOpenVariantEdit = (item: any) => {
-    setEditingVariantItem(item);
-    setTempVariants(item.variants_saved || {});
+  const updateVariantInline = async (cartId: string, groupName: string, option: any) => {
+    const item = cartItems.find((i) => i.id === cartId);
+    if (!item) return;
+
+    const newVariants = { ...item.variants_saved, [groupName]: option };
+    
+    setUpdatingCartId(cartId);
+    const { error } = await supabase
+      .from("cart")
+      .update({ variants: newVariants })
+      .eq("id", cartId);
+
+    if (!error) {
+      // Refresh to update prices and labels
+      await fetchCart();
+    }
+    setUpdatingCartId(null);
   };
 
-  const saveVariants = async () => {
-    if (!editingVariantItem) return;
-    setIsUpdatingVariant(true);
-    const { error } = await supabase.from("cart").update({ variants: tempVariants }).eq("id", editingVariantItem.cart_id);
-    if (!error) {
-       await fetchCart();
-       setEditingVariantItem(null);
-    }
-    setIsUpdatingVariant(false);
-  };
 
   const selectedItems = cartItems.filter((i) => selectedIds.has(i.id));
   const subtotal = selectedItems.reduce((acc, item) => acc + item.price * (item.quantity || 1), 0);
@@ -147,8 +148,8 @@ export default function CartPage() {
   }, {} as Record<string, any[]>);
 
   return (
-    <div className="min-h-screen bg-slate-100 max-w-md mx-auto font-sans pb-32 text-slate-800">
-      
+    <div className="h-screen bg-slate-100 max-w-md mx-auto font-sans pb-32 text-slate-800">
+
       {/* ── HEADER ── */}
       <div className="sticky top-0 z-40 bg-white border-b border-slate-200">
         <div className="flex items-center justify-between px-4 py-3.5">
@@ -178,7 +179,7 @@ export default function CartPage() {
           Object.entries(groupedItems).map(([shopName, itemsObj]) => {
             const items = itemsObj as any[];
             const isAllShopSelected = items.every((i: any) => selectedIds.has(i.id));
-            
+
             const toggleShop = () => {
               setSelectedIds((prev) => {
                 const next = new Set(prev);
@@ -228,17 +229,46 @@ export default function CartPage() {
 
                         <div className="flex-1 flex flex-col min-w-0 pb-1">
                           <h3 className="text-[13px] leading-tight text-slate-800 line-clamp-2 mb-1 pr-4">{item.name}</h3>
-                          
-                          {item.variant_labels && item.variant_labels.length > 0 && (
-                            <button onClick={() => handleOpenVariantEdit(item)} className="self-start mt-0.5 mb-2 bg-slate-50 border border-slate-100 px-2 py-0.5 flex items-center gap-1 rounded text-[11px] text-slate-500 hover:bg-slate-100 transition-colors">
-                              <span>Variasi: {item.variant_labels.join(', ')}</span>
-                              <Icons.ChevronDown size={10} />
-                            </button>
+
+                          {item.product_variants && Array.isArray(item.product_variants) && item.product_variants.length > 0 && (
+                            <div className="mt-1 mb-3 space-y-2">
+                              {item.product_variants.map((group: any, gIdx: number) => (
+                                <div key={gIdx} className="space-y-1">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{group.name}</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {group.options.map((opt: any, oIdx: number) => {
+                                      const isSelected = item.variants_saved?.[group.name]?.label === opt.label;
+                                      const isUpdating = updatingCartId === item.id;
+                                      return (
+                                        <button
+                                          key={oIdx}
+                                          disabled={isUpdating}
+                                          onClick={() => updateVariantInline(item.id, group.name, opt)}
+                                          className={`px-2 py-1 rounded text-[10px] font-semibold border transition-all flex items-center gap-1 ${
+                                            isSelected
+                                              ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                                              : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
+                                          } ${isUpdating ? "opacity-50 cursor-not-allowed" : ""}`}
+                                        >
+                                          {isSelected && <Icons.Check size={10} strokeWidth={3} />}
+                                          {opt.label}
+                                          {opt.price > 0 && (
+                                            <span className={`text-[8px] font-normal ${isSelected ? "text-indigo-100" : "text-slate-400"}`}>
+                                              (+{opt.price.toLocaleString("id-ID")})
+                                            </span>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           )}
 
                           <div className="mt-auto flex items-end justify-between">
                             <span className="text-sm font-semibold text-indigo-600">Rp{item.price.toLocaleString("id-ID")}</span>
-                            
+
                             <div className="flex items-center border border-slate-200 rounded-sm overflow-hidden h-7">
                               <button onClick={() => updateQuantity(item.id, -1, item.quantity)} className="w-7 h-full flex items-center justify-center bg-white text-slate-500 active:bg-slate-100 border-r border-slate-200">
                                 <Icons.Minus size={12} />
@@ -252,7 +282,7 @@ export default function CartPage() {
                             </div>
                           </div>
                           <button onClick={() => removeItem(item.id)} className="absolute top-4 right-3 text-slate-300 hover:text-red-500 transition-colors">
-                              <Icons.X size={16} />
+                            <Icons.X size={16} />
                           </button>
                         </div>
                       </div>
@@ -275,36 +305,36 @@ export default function CartPage() {
       {/* ── FOOTER CHECKOUT ── */}
       {cartItems.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-50 max-w-md mx-auto bg-white border-t border-slate-200 divide-y divide-slate-100">
-          
+
           <div className="flex items-center justify-between p-3">
-             <div className="flex items-center gap-2">
-                <Icons.TicketPercent size={18} className="text-indigo-600" />
-                <span className="text-[13px] text-slate-800">Voucher</span>
-             </div>
-             <div className="flex items-center gap-1 cursor-pointer">
-                <span className="text-[12px] text-slate-400">Gunakan/masukkan kode</span>
-                <Icons.ChevronRight size={14} className="text-slate-400" />
-             </div>
+            <div className="flex items-center gap-2">
+              <Icons.TicketPercent size={18} className="text-indigo-600" />
+              <span className="text-[13px] text-slate-800">Voucher</span>
+            </div>
+            <div className="flex items-center gap-1 cursor-pointer">
+              <span className="text-[12px] text-slate-400">Gunakan/masukkan kode</span>
+              <Icons.ChevronRight size={14} className="text-slate-400" />
+            </div>
           </div>
 
           <div className="flex items-center justify-between p-3">
-             <div className="flex items-center gap-2">
-                <Icons.Coins size={18} className="text-amber-500" />
-                <span className="text-[13px] text-slate-500">Tidak ada produk yang dipilih</span>
-             </div>
-             <div className="w-8 h-4 bg-slate-200 rounded-full cursor-not-allowed"></div>
+            <div className="flex items-center gap-2">
+              <Icons.Coins size={18} className="text-amber-500" />
+              <span className="text-[13px] text-slate-500">Tidak ada produk yang dipilih</span>
+            </div>
+            <div className="w-8 h-4 bg-slate-200 rounded-full cursor-not-allowed"></div>
           </div>
 
           <div className="flex items-center justify-between h-14 pl-3">
             <div className="flex items-center gap-3">
               <button onClick={toggleSelectAll} className="flex items-center gap-2">
                 <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${selectedIds.size === cartItems.length && cartItems.length > 0 ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
-                    {selectedIds.size === cartItems.length && cartItems.length > 0 && <Icons.Check size={14} className="text-white" />}
+                  {selectedIds.size === cartItems.length && cartItems.length > 0 && <Icons.Check size={14} className="text-white" />}
                 </div>
                 <span className="text-[14px]">Semua</span>
               </button>
             </div>
-            
+
             <div className="flex items-center h-full">
               <div className="text-right pr-3 flex items-center gap-1">
                 <span className="text-[14px]">Total</span>
@@ -324,66 +354,6 @@ export default function CartPage() {
         </div>
       )}
 
-      {/* VARIANT EDIT MODAL */}
-      {editingVariantItem && editingVariantItem.product_variants && (
-        <>
-          <div className="fixed inset-0 bg-black/40 z-[90] animate-in fade-in" onClick={() => setEditingVariantItem(null)}></div>
-          <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-3xl p-5 animate-in slide-in-from-bottom flex flex-col shadow-2xl max-w-md mx-auto" style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg text-slate-800">Ubah Variasi</h3>
-              <button onClick={() => setEditingVariantItem(null)} className="p-2 -mr-2 text-slate-400 hover:bg-slate-50 rounded-full">
-                <Icons.X size={20} />
-              </button>
-            </div>
-            
-            <div className="flex gap-3 mb-5 pb-5 border-b border-slate-100">
-              <img src={editingVariantItem.image_url} className="w-16 h-16 object-cover rounded-lg border border-slate-100" alt="" />
-              <div>
-                <p className="text-xl font-bold text-indigo-600">
-                  Rp {(() => {
-                    let price = editingVariantItem.base_price;
-                    Object.values(tempVariants).forEach(v => { price += (v.price || 0) });
-                    return price.toLocaleString('id-ID');
-                  })()}
-                </p>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-2">{editingVariantItem.name}</p>
-              </div>
-            </div>
-
-            <div className="space-y-4 max-h-[50vh] overflow-y-auto no-scrollbar pb-4">
-              {editingVariantItem.product_variants.map((group: any, idx: number) => (
-                <div key={idx}>
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{group.name}</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {group.options.map((opt: any, oIdx: number) => {
-                      const isSelected = tempVariants[group.name]?.label === opt.label;
-                      return (
-                        <button
-                          key={oIdx}
-                          onClick={() => setTempVariants(prev => ({ ...prev, [group.name]: opt }))}
-                          className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
-                            isSelected ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button
-              disabled={isUpdatingVariant}
-              onClick={saveVariants}
-              className="mt-4 w-full h-12 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl font-bold transition-all active:scale-[0.98] disabled:opacity-70 flex items-center justify-center"
-            >
-              {isUpdatingVariant ? <Icons.Loader2 className="animate-spin" size={20} /> : 'Konfirmasi'}
-            </button>
-          </div>
-        </>
-      )}
 
     </div>
   );
