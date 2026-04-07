@@ -614,40 +614,23 @@ Bagikan penilaianmu dan bantu Pengguna lain membuat pilihan yang lebih baik!"
               </div>
             </div>
           ))}
-          <div className="px-4 py-3 bg-[#f8fbfa] border-b border-slate-100 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Icons.ShieldCheck size={16} className="text-indigo-500" />
-              <div>
-                <p className="text-[12px] font-medium text-slate-800">Proteksi Pesanan</p>
-                <p className="text-[11px] text-indigo-600">Active till {(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)).toLocaleDateString('id-ID')}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <p className="text-[12px] text-slate-500">Rp2.000 x1</p>
-            </div>
-          </div>
+
 
           {/* Financials */}
           <div className="px-4 pt-4 pb-2 space-y-2.5">
             <div className="flex justify-between text-[13px] text-slate-500">
               <span>Subtotal Produk</span><span>Rp{details.subtotal_amount?.toLocaleString("id-ID")}</span>
             </div>
-            <div className="flex justify-between text-[13px] text-slate-500">
-              <span>Total Proteksi Produk</span><span>Rp2.000</span>
-            </div>
-            <div className="flex justify-between text-[13px] text-slate-500">
-              <span>Subtotal Pengiriman</span><span>Rp{details.shipping_amount?.toLocaleString("id-ID")}</span>
-            </div>
-            <div className="flex justify-between text-[13px] text-slate-500">
-              <span className="flex items-center gap-1">Diskon Pengiriman <Icons.Info size={11} /></span>
-              <span>-Rp0</span>
-            </div>
-            <div className="flex justify-between text-[13px] text-slate-500">
-              <span>Voucher Digunakan</span><span>-Rp{details.discount_amount?.toLocaleString("id-ID") || 0}</span>
-            </div>
-            <div className="flex justify-between text-[13px] text-slate-500">
-              <span className="flex items-center gap-1">Biaya Layanan <Icons.Info size={11} /></span><span>Rp1.000</span>
-            </div>
+            {(details.shipping_amount || 0) > 0 && (
+              <div className="flex justify-between text-[13px] text-slate-500">
+                <span>Total Pengiriman</span><span>Rp{details.shipping_amount?.toLocaleString("id-ID")}</span>
+              </div>
+            )}
+            {(details.discount_amount || 0) > 0 && (
+              <div className="flex justify-between text-[13px] text-slate-500">
+                <span>Voucher Digunakan</span><span className="text-emerald-500">-Rp{details.discount_amount?.toLocaleString("id-ID")}</span>
+              </div>
+            )}
             <div className="pt-4 pb-2 flex justify-end items-center gap-2">
               <span className="text-[13px] text-slate-800">Total Pesanan:</span>
               <span className="text-[15px] font-bold text-indigo-600">Rp{(details.total_amount).toLocaleString("id-ID")}</span>

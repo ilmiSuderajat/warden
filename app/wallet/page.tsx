@@ -400,9 +400,27 @@ export default function WalletPage() {
                                  <span className="text-[13px] font-medium text-slate-800 pl-4">{formatCurrency(item.price * item.quantity)}</span>
                                </div>
                              ))}
-                             <div className="pt-3 mt-1 border-t border-dashed border-slate-200 flex justify-between items-center text-[13px]">
-                               <span className="font-medium text-slate-600">Subtotal</span>
-                               <span className="font-semibold text-slate-900">{formatCurrency(orderDetail.subtotal_amount)}</span>
+                             <div className="pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5">
+                               <div className="flex justify-between items-center text-[12px] text-slate-500">
+                                 <span>Subtotal Produk</span>
+                                 <span>{formatCurrency(orderDetail.subtotal_amount ?? 0)}</span>
+                               </div>
+                               {(orderDetail.shipping_amount ?? 0) > 0 && (
+                                 <div className="flex justify-between items-center text-[12px] text-slate-500">
+                                   <span>Ongkos Kirim</span>
+                                   <span>{formatCurrency(orderDetail.shipping_amount)}</span>
+                                 </div>
+                               )}
+                               {(orderDetail.discount_amount ?? 0) > 0 && (
+                                 <div className="flex justify-between items-center text-[12px] text-slate-500">
+                                   <span>Diskon</span>
+                                   <span className="text-emerald-600">-{formatCurrency(orderDetail.discount_amount)}</span>
+                                 </div>
+                               )}
+                               <div className="flex justify-between items-center text-[13px] font-semibold text-slate-900 pt-1.5 border-t border-slate-100">
+                                 <span>Total {selectedTrx?.type === 'refund' ? 'Dikembalikan' : 'Dibayar'}</span>
+                                 <span>{formatCurrency(orderDetail.total_amount ?? 0)}</span>
+                               </div>
                              </div>
                            </div>
                          ) : (
