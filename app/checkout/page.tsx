@@ -345,7 +345,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-slate-100 max-w-md mx-auto pb-44 font-sans text-slate-800">
+    <div className="min-h-[100dvh] max-w-md mx-auto flex flex-col bg-slate-100 font-sans text-slate-800">
 
       {/* ── HEADER ── */}
       <div className="sticky top-0 z-40 bg-white border-b border-slate-200">
@@ -592,13 +592,18 @@ export default function CheckoutPage() {
       </div>
 
       {/* ── STICKY FOOTER ── */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-50">
-        <div className="bg-white border-t border-slate-200 flex items-center">
+
+      {/* BOTTOM BAR */}
+      <div className="sticky bottom-0 z-50 bg-white border-t border-slate-200">
+        <div className="flex items-center">
           <div className="flex-1 pl-4">
             <div className="flex items-baseline gap-1">
               <span className="text-[12px] text-slate-500">Total</span>
-              <span className="text-[17px] font-bold text-indigo-600">Rp{fmt(grandTotal)}</span>
+              <span className="text-[17px] font-bold text-indigo-600">
+                Rp{fmt(grandTotal)}
+              </span>
             </div>
+
             {discountAmount > 0 && (
               <div className="text-[11px] text-emerald-500 font-medium">
                 Hemat Rp{fmt(discountAmount)}
@@ -609,12 +614,13 @@ export default function CheckoutPage() {
           <button
             onClick={handlePlaceOrder}
             disabled={isProcessing || !address || cartItems.length === 0 || multiShopError}
-            className="h-14 flex items-center justify-center bg-indigo-600 text-white font-semibold text-[14px] transition-colors disabled:bg-slate-300 px-6"
+            className="h-14 flex items-center justify-center bg-indigo-600 text-white font-semibold text-[14px] disabled:bg-slate-300 px-6"
           >
             {isProcessing ? <Loader2 size={16} className="animate-spin" /> : "Buat Pesanan"}
           </button>
         </div>
       </div>
+
     </div>
   );
 }
