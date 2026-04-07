@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
-import { getWalletBalance, processPayment } from "@/lib/wallet"
+import { getWalletBalance } from "@/lib/wallet"
 import Link from "next/link"
 
 const isValidUUID = (value: string) =>
@@ -155,7 +155,13 @@ function PaymentContent() {
 
         try {
           const idempotencyKey = crypto.randomUUID()
-          await processPayment(orderInfo.id, idempotencyKey)
+          const res = await fetch("/api/payment/wallet", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderId: orderInfo.id, idempotencyKey }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || "Gagal memproses pembayaran Wallet.")
           router.push(`/checkout/success?method=wallet&order_id=${orderInfo.id}`)
           return
         } catch (walletErr: any) {

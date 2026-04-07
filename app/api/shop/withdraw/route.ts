@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getAuthenticatedUser, createAdminClient } from "@/lib/serverAuth"
 import { MIN_WITHDRAW_AMOUNT } from "@/lib/constants"
+import { createNotification } from "@/lib/notifications"
 
 export async function POST(req: Request) {
     try {
@@ -50,6 +51,15 @@ export async function POST(req: Request) {
                 error: isBalanceErr ? "Saldo tidak mencukupi" : "Gagal memproses penarikan" 
             }, { status: isBalanceErr ? 400 : 500 })
         }
+
+        // Send Notification
+        await createNotification({
+            userId: user.id,
+            type: 'finance',
+            title: 'Permintaan Penarikan Dana Warung',
+            message: `Penarikan sebesar Rp ${withdrawAmount.toLocaleString("id-ID")} sedang diproses.`,
+            forShop: true
+        })
 
         return NextResponse.json({ success: true, requestId })
     } catch (err: any) {

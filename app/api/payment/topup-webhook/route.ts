@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import crypto from "crypto"
+import { createNotification } from "@/lib/notifications"
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -74,18 +75,7 @@ async function handleDriverTopup(order_id: string, transaction_status: string) {
     }
 
     if (transaction_status === "settlement" || transaction_status === "capture") {
-        // 1. Insert secure transaction via RPC (Unified Ledger)
-        // Note: Call this first so it reads the balance before increment
-        const { error: ledgerErr } = await supabase.rpc('create_transaction', {
-            p_user_id: topupReq.driver_id,
-            p_order_id: null,
-            p_type: 'topup',
-            p_amount: topupReq.amount,
-            p_description: `Topup Saldo Driver via Midtrans (${order_id})`
-        })
-        if (ledgerErr) throw ledgerErr
-
-        // 2. Update wallet balance via RPC (Unified)
+        // 1. Update wallet balance FIRST so that create_transaction captures the correct post-topup balance_after
         const { error: updateErr } = await supabase.rpc('increment_wallet_balance', {
             p_user_id: topupReq.driver_id,
             p_amount: topupReq.amount
@@ -98,10 +88,28 @@ async function handleDriverTopup(order_id: string, transaction_status: string) {
             await supabase.from("wallets").update({ balance: (wallet?.balance || 0) + topupReq.amount }).eq("user_id", topupReq.driver_id)
         }
 
+        // 2. Record ledger AFTER balance is updated so balance_after is correct
+        const { error: ledgerErr } = await supabase.rpc('create_transaction', {
+            p_user_id: topupReq.driver_id,
+            p_order_id: null,
+            p_type: 'topup',
+            p_amount: topupReq.amount,
+            p_description: `Topup Saldo Driver via Midtrans (${order_id})`
+        })
+        if (ledgerErr) throw ledgerErr
+
         // 3. Mark request as paid
         await supabase.from("driver_topup_requests")
             .update({ status: "paid" })
             .eq("id", topupReq.id)
+
+        // 4. Send Notification
+        await createNotification({
+            userId: topupReq.driver_id,
+            type: 'finance',
+            title: 'Top Up Driver Berhasil',
+            message: `Dana sebesar Rp ${topupReq.amount.toLocaleString("id-ID")} telah ditambahkan ke saldo driver Anda.`
+        })
 
         console.log(`✅ [Topup Webhook DRV] Driver ${topupReq.driver_id} wallet topped up by ${topupReq.amount}`)
     } else if (["cancel", "deny", "expire"].includes(transaction_status)) {
@@ -135,17 +143,7 @@ async function handleShopTopup(order_id: string, transaction_status: string) {
         const { data: shop } = await supabase.from("shops").select("owner_id, balance").eq("id", topupReq.shop_id).single()
         if (!shop) throw new Error("Shop not found")
 
-        // 2. Insert secure transaction via RPC (Unified Ledger)
-        const { error: ledgerErr } = await supabase.rpc('create_transaction', {
-            p_user_id: shop.owner_id,
-            p_order_id: null,
-            p_type: 'topup',
-            p_amount: topupReq.amount,
-            p_description: `Topup Saldo Warung via Midtrans (${order_id})`
-        })
-        if (ledgerErr) throw ledgerErr
-
-        // 3. Update wallet balance via RPC (Unified)
+        // 2. Update wallet balance FIRST so that create_transaction captures correct post-topup balance_after
         const { error: updateErr } = await supabase.rpc('increment_wallet_balance', {
             p_user_id: shop.owner_id,
             p_amount: topupReq.amount
@@ -158,9 +156,28 @@ async function handleShopTopup(order_id: string, transaction_status: string) {
             await supabase.from("wallets").update({ balance: (wallet?.balance || 0) + topupReq.amount }).eq("user_id", shop.owner_id)
         }
 
+        // 3. Record ledger AFTER balance is updated so balance_after is correct
+        const { error: ledgerErr } = await supabase.rpc('create_transaction', {
+            p_user_id: shop.owner_id,
+            p_order_id: null,
+            p_type: 'topup',
+            p_amount: topupReq.amount,
+            p_description: `Topup Saldo Warung via Midtrans (${order_id})`
+        })
+        if (ledgerErr) throw ledgerErr
+
         await supabase.from("shop_topup_requests")
             .update({ status: "paid" })
             .eq("id", topupReq.id)
+
+        // 4. Send Notification
+        await createNotification({
+            userId: shop.owner_id,
+            type: 'finance',
+            title: 'Top Up Warung Berhasil',
+            message: `Dana sebesar Rp ${topupReq.amount.toLocaleString("id-ID")} telah ditambahkan ke saldo warung Anda.`,
+            forShop: true
+        })
 
         console.log(`✅ [Topup Webhook SHP] Shop owner ${shop.owner_id} wallet topped up by ${topupReq.amount}`)
     } else if (["cancel", "deny", "expire"].includes(transaction_status)) {
@@ -190,17 +207,7 @@ async function handleUserTopup(order_id: string, transaction_status: string) {
     }
 
     if (transaction_status === "settlement" || transaction_status === "capture") {
-        // 1. Insert secure transaction via RPC
-        const { error: ledgerErr } = await supabase.rpc('create_transaction', {
-            p_user_id: topupReq.user_id,
-            p_order_id: null,
-            p_type: 'topup',
-            p_amount: topupReq.amount,
-            p_description: `Topup Saldo Wallet via Midtrans (${order_id})`
-        })
-        if (ledgerErr) throw ledgerErr
-
-        // 2. Update wallet balance
+        // 1. Update wallet balance FIRST so that create_transaction captures correct post-topup balance_after
         const { error: updateErr } = await supabase.rpc('increment_wallet_balance', {
             p_user_id: topupReq.user_id,
             p_amount: topupReq.amount
@@ -213,10 +220,28 @@ async function handleUserTopup(order_id: string, transaction_status: string) {
             if (manualErr) throw manualErr
         }
 
+        // 2. Record ledger AFTER balance is updated so balance_after is correct
+        const { error: ledgerErr } = await supabase.rpc('create_transaction', {
+            p_user_id: topupReq.user_id,
+            p_order_id: null,
+            p_type: 'topup',
+            p_amount: topupReq.amount,
+            p_description: `Topup Saldo Wallet via Midtrans (${order_id})`
+        })
+        if (ledgerErr) throw ledgerErr
+
         // 3. Mark request as paid
         await supabase.from("user_topup_requests")
             .update({ status: "paid" })
             .eq("id", topupReq.id)
+
+        // 4. Send Notification
+        await createNotification({
+            userId: topupReq.user_id,
+            type: 'finance',
+            title: 'Top Up Wallet Berhasil',
+            message: `Dana sebesar Rp ${topupReq.amount.toLocaleString("id-ID")} telah ditambahkan ke wallet Anda.`
+        })
 
         console.log(`✅ [Topup Webhook USR] User ${topupReq.user_id} balance += ${topupReq.amount}`)
     } else if (["cancel", "deny", "expire"].includes(transaction_status)) {

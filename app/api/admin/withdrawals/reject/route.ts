@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getAuthenticatedUser, createAdminClient } from "@/lib/serverAuth"
+import { createNotification } from "@/lib/notifications"
 
 export async function POST(req: Request) {
     try {
@@ -102,6 +103,21 @@ export async function POST(req: Request) {
                 p_desc: `Refund Penarikan Ditolak`
             })
         }
+
+        // 5. Send Notification
+        let notificationUserId = targetId
+        if (type === "shop") {
+            const { data: shop } = await supabaseAdmin.from("shops").select("owner_id").eq("id", targetId).single()
+            if (shop) notificationUserId = shop.owner_id
+        }
+
+        await createNotification({
+            userId: notificationUserId,
+            type: 'finance',
+            title: 'Penarikan Dana Ditolak',
+            message: `Permintaan penarikan Rp ${parseInt(amount).toLocaleString("id-ID")} ditolak. Saldo telah dikembalikan ke akun Anda.`,
+            forShop: type === "shop"
+        })
 
         return NextResponse.json({ success: true, message: "Penarikan dana ditolak dan saldo dikembalikan" })
     } catch (err: any) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getAuthenticatedUser, createAdminClient } from "@/lib/serverAuth"
 import { dispatchOrder } from "@/lib/driverOrders"
 import { PLATFORM_COMMISSION_RATE, COD_DISABLE_THRESHOLD, COD_MAX_DISTANCE_KM } from "@/lib/constants"
+import { createNotification } from "@/lib/notifications"
 
 const isValidUUID = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     // ── 2. Fetch order + enforce ownership ────────────────────────
     const { data: order, error: fetchError } = await supabase
       .from("orders")
-      .select("id, payment_status, user_id, total_amount, subtotal_amount, distance_km, order_items(*)")
+      .select("id, payment_status, user_id, total_amount, subtotal_amount, distance_km, shop_id, order_items(*)")
       .eq("id", orderId)
       .eq("user_id", user.id)  // ✅ ownership enforcement
       .maybeSingle()
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
     }
 
     // ── 5. COD shop eligibility check ─────────────────────────────
-    const shopId = extractShopId(order.order_items)
+    const shopId = (order as any).shop_id || extractShopId(order.order_items)
     if (shopId) {
       const { data: shop, error: shopErr } = await supabase
         .from("shops")
@@ -96,6 +97,28 @@ export async function POST(req: Request) {
 
     // ── 8. Trigger driver dispatch ────────────────────────────────
     await dispatchOrder(orderId)
+
+    // ── 9. Notifications ──────────────────────────────────────────
+    await createNotification({
+      userId: user.id,
+      type: 'order',
+      title: 'Pesanan COD Dikonfirmasi',
+      message: `Pesanan #${orderId.slice(0, 8)} dikonfirmasi dengan bayar di tempat. Kurir sedang dicari.`,
+      link: `/orders/${orderId}`
+    })
+    if (shopId) {
+      const { data: shop } = await supabase.from("shops").select("owner_id").eq("id", shopId).single()
+      if (shop) {
+        await createNotification({
+          userId: shop.owner_id,
+          type: 'order',
+          title: 'Pesanan COD Masuk',
+          message: `Ada pesanan COD baru #${orderId.slice(0, 8)} yang telah dikonfirmasi oleh pelanggan.`,
+          forShop: true,
+          link: `/shop/orders/${orderId}`
+        })
+      }
+    }
 
     console.log(`[COD] ✅ Order ${orderId} confirmed via COD. distance=${distanceKm.toFixed(1)}km`)
     return NextResponse.json({ success: true })

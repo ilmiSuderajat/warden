@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getAuthenticatedUser, createAuthClient } from "@/lib/serverAuth"
+import { createNotification } from "@/lib/notifications"
 
 const MIN_WITHDRAW = 10000
 
@@ -40,6 +41,14 @@ export async function POST(req: Request) {
             }
             return NextResponse.json({ error: "Gagal memproses penarikan." }, { status: 500 })
         }
+
+        // Send Notification
+        await createNotification({
+            userId: user.id,
+            type: 'finance',
+            title: 'Permintaan Penarikan Dana',
+            message: `Penarikan sebesar Rp ${withdrawAmount.toLocaleString("id-ID")} sedang diproses.`
+        })
 
         return NextResponse.json({ success: true, requestId })
     } catch (err: any) {

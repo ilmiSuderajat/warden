@@ -32,8 +32,21 @@ export default function ProductDetail() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
   const [previewIndex, setPreviewIndex] = useState(0)
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, any>>({})
+  const [isVariantSheetOpen, setIsVariantSheetOpen] = useState(false)
+  const [sheetAction, setSheetAction] = useState<"cart" | "buy">("buy")
+  const [sheetQuantity, setSheetQuantity] = useState(1)
   const previewScrollRef = useRef<HTMLDivElement>(null)
   const { location: userLoc } = useUserLocation()
+
+  // Calculate dynamic price based on variants
+  const getDynamicPrice = () => {
+    let base = product?.price || 0
+    Object.values(selectedVariants).forEach(v => {
+      base += (v.price || 0)
+    })
+    return base
+  }
 
   // <-- TAMBAHAN: Pastikan hanya jalan di client
   useEffect(() => {
@@ -82,6 +95,17 @@ export default function ProductDetail() {
           .order("created_at", { ascending: false })
         if (revData && !error) {
           setReviews(revData)
+        }
+
+        // Initialize default variants
+        if (data.variants && Array.isArray(data.variants)) {
+          const initial: Record<string, any> = {}
+          data.variants.forEach((group: any) => {
+            if (group.options && group.options.length > 0) {
+              initial[group.name] = group.options[0]
+            }
+          })
+          setSelectedVariants(initial)
         }
       }
       setLoading(false)
@@ -219,7 +243,7 @@ export default function ProductDetail() {
     }
   }
 
-  const handleAddToCart = async (silent = false) => {
+  const handleAddToCart = async (silent = false, qty?: number, variants?: Record<string, any>) => {
     setIsProcessing(true)
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -228,6 +252,9 @@ export default function ProductDetail() {
       setIsProcessing(false)
       return
     }
+
+    const finalVariants = variants ?? selectedVariants
+    const finalQty = qty ?? 1
 
     try {
       const { data: existingItem } = await supabase
@@ -240,15 +267,15 @@ export default function ProductDetail() {
       if (existingItem) {
         await supabase
           .from("cart")
-          .update({ quantity: existingItem.quantity + 1 })
+          .update({ quantity: existingItem.quantity + finalQty, variants: finalVariants })
           .eq("id", existingItem.id)
       } else {
         await supabase
           .from("cart")
-          .insert([{ user_id: user.id, product_id: product.id, quantity: 1 }])
+          .insert([{ user_id: user.id, product_id: product.id, quantity: finalQty, variants: finalVariants }])
       }
 
-      setCartCount(prev => prev + 1)
+      setCartCount(prev => prev + finalQty)
       if (!silent) toast.success("Ditambahkan ke keranjang!")
     } catch (error) {
       console.error(error)
@@ -257,9 +284,42 @@ export default function ProductDetail() {
     }
   }
 
-  const handleBuyNow = async () => {
-    await handleAddToCart(true)
+  const handleBuyNow = async (qty?: number, variants?: Record<string, any>) => {
+    await handleAddToCart(true, qty, variants)
     router.push("/checkout")
+  }
+
+  const openVariantSheet = (action: "cart" | "buy") => {
+    setSheetAction(action)
+    setSheetQuantity(1)
+    setIsVariantSheetOpen(true)
+  }
+
+  const handleSheetCartClick = () => {
+    const hasVariants = product?.variants && Array.isArray(product.variants) && product.variants.length > 0
+    if (hasVariants) {
+      openVariantSheet("cart")
+    } else {
+      handleAddToCart()
+    }
+  }
+
+  const handleSheetBuyClick = () => {
+    const hasVariants = product?.variants && Array.isArray(product.variants) && product.variants.length > 0
+    if (hasVariants) {
+      openVariantSheet("buy")
+    } else {
+      handleBuyNow()
+    }
+  }
+
+  const handleSheetConfirm = async () => {
+    setIsVariantSheetOpen(false)
+    if (sheetAction === "buy") {
+      await handleBuyNow(sheetQuantity, selectedVariants)
+    } else {
+      await handleAddToCart(false, sheetQuantity, selectedVariants)
+    }
   }
 
   // Lock scroll when preview open
@@ -438,7 +498,7 @@ export default function ProductDetail() {
           <div className="mt-5 pt-4 border-t border-slate-100/80 flex items-end justify-between gap-4">
             <div>
               <p className="text-2xl font-bold text-red-600 tracking-tight">
-                Rp {product.price?.toLocaleString('id-ID')}
+                Rp {getDynamicPrice().toLocaleString('id-ID')}
               </p>
               {product.original_price && (
                 <p className="text-sm text-slate-400 line-through mt-1">
@@ -480,6 +540,7 @@ export default function ProductDetail() {
             </div>
           </div>
         </div>
+
 
         {/* DESKRIPSI */}
         <div className="mt-2 bg-white p-5">
@@ -581,7 +642,7 @@ export default function ProductDetail() {
 
             {/* KERANJANG */}
             <button
-              onClick={() => handleAddToCart()}
+              onClick={handleSheetCartClick}
               disabled={isProcessing}
               className="flex items-center justify-center bg-white border-2 border-indigo-800 text-indigo-800 w-[3.2rem] h-12 rounded-xl active:scale-95 transition-all disabled:opacity-50 shrink-0 gap-0.5 hover:bg-indigo-50"
             >
@@ -597,7 +658,7 @@ export default function ProductDetail() {
 
             {/* BELI SEKARANG */}
             <button
-              onClick={handleBuyNow}
+              onClick={handleSheetBuyClick}
               disabled={isProcessing}
               className="flex-1 bg-indigo-800 hover:bg-indigo-900 active:bg-indigo-950 text-white h-12 rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-400 shadow-lg shadow-indigo-800/25 flex items-center justify-center"
             >
@@ -609,6 +670,124 @@ export default function ProductDetail() {
             </button>
           </div>
         </div>,
+        document.body
+      )}
+
+      {/* VARIANT SELECTION BOTTOM SHEET */}
+      {isVariantSheetOpen && isMounted && createPortal(
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-[90] animate-in fade-in"
+            onClick={() => setIsVariantSheetOpen(false)}
+          />
+          <div
+            className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-3xl animate-in slide-in-from-bottom shadow-2xl max-w-md mx-auto"
+            style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}
+          >
+            {/* Handle bar */}
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-4" />
+
+            {/* Close button */}
+            <button
+              onClick={() => setIsVariantSheetOpen(false)}
+              className="absolute top-4 right-4 p-1.5 bg-slate-100 rounded-full text-slate-400 hover:bg-slate-200"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Product info row */}
+            <div className="flex items-start gap-3 px-5 pb-4 border-b border-slate-100">
+              <div className="w-20 h-20 rounded-xl border border-slate-100 overflow-hidden shrink-0 bg-slate-50">
+                <img
+                  src={imageList[0]}
+                  alt={product?.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex-1">
+                <p className="text-red-600 font-bold text-xl leading-tight">
+                  Rp {getDynamicPrice().toLocaleString('id-ID')}
+                </p>
+                {product?.original_price && (
+                  <p className="text-xs text-slate-400 line-through mt-0.5">
+                    Rp {product.original_price.toLocaleString('id-ID')}
+                  </p>
+                )}
+                <p className="text-xs text-slate-500 mt-1">
+                  Stok: <span className="font-medium text-slate-700">{product?.stock ?? product?.stok ?? '∞'}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Variant groups */}
+            {product?.variants && Array.isArray(product.variants) && product.variants.length > 0 && (
+              <div className="px-5 pt-4 space-y-4 max-h-[35vh] overflow-y-auto no-scrollbar">
+                {product.variants.map((group: any, gIdx: number) => (
+                  <div key={gIdx}>
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                      {group.name}
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {group.options.map((opt: any, oIdx: number) => {
+                        const isSelected = selectedVariants[group.name]?.label === opt.label
+                        return (
+                          <button
+                            key={oIdx}
+                            onClick={() => setSelectedVariants(prev => ({ ...prev, [group.name]: opt }))}
+                            className={`px-3 py-1.5 rounded border text-xs font-semibold transition-all ${isSelected
+                                ? 'border-red-500 text-red-600 bg-red-50'
+                                : 'border-slate-200 text-slate-600 bg-white'
+                              }`}
+                          >
+                            {opt.label}
+                            {opt.price > 0 && (
+                              <span className="text-[10px] ml-1 font-normal">(+Rp {opt.price.toLocaleString('id-ID')})</span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Quantity stepper */}
+            <div className="flex items-center justify-between px-5 py-4">
+              <span className="text-sm font-medium text-slate-700">Jumlah</span>
+              <div className="flex items-center border border-slate-200 rounded overflow-hidden">
+                <button
+                  onClick={() => setSheetQuantity(q => Math.max(1, q - 1))}
+                  className="w-8 h-8 flex items-center justify-center text-slate-500 active:bg-slate-100 border-r border-slate-200 text-lg leading-none"
+                >
+                  −
+                </button>
+                <span className="w-10 h-8 flex items-center justify-center text-sm font-medium text-slate-800">
+                  {sheetQuantity}
+                </span>
+                <button
+                  onClick={() => setSheetQuantity(q => q + 1)}
+                  className="w-8 h-8 flex items-center justify-center text-slate-500 active:bg-slate-100 border-l border-slate-200"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Action button */}
+            <div className="px-5">
+              <button
+                onClick={handleSheetConfirm}
+                disabled={isProcessing}
+                className="w-full h-12 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-xl font-bold text-sm transition-all active:scale-[0.98] disabled:bg-slate-300 flex items-center justify-center"
+              >
+                {isProcessing ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : sheetAction === 'buy' ? 'Beli Sekarang' : 'Tambah ke Keranjang'}
+              </button>
+            </div>
+          </div>
+        </>,
         document.body
       )}
 

@@ -23,14 +23,18 @@ export async function POST(req: Request) {
     if (error) throw error
     if (!data.success) throw new Error(data.error)
 
-    // Log the transaction in wallet_transactions
-    await supabase.from("wallet_transactions").insert({
-      user_id: user.id,
-      amount: points * CONVERSION_RATE,
-      type: "topup", // Use topup or a new 'exchange' type if available
-      description: `Penukaran ${points} poin menjadi saldo`,
-      balance_after: 0, // This will be handled by the trigger/RPC if exists, or we leave it for now
+    // Log the transaction in the unified ledger via RPC so balance_after is correctly captured automatically
+    const { error: ledgerErr } = await supabase.rpc('create_transaction', {
+      p_user_id: user.id,
+      p_order_id: null,
+      p_type: 'points_exchange',
+      p_amount: points * CONVERSION_RATE,
+      p_description: `Penukaran ${points} poin menjadi saldo`
     })
+
+    if (ledgerErr) {
+      console.error("[Points Exchange] Failed to log ledger:", ledgerErr)
+    }
 
     return NextResponse.json({ 
       success: true, 

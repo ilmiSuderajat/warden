@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { supabaseAdmin } from "@/lib/driverOrders"
+import { createNotification } from "@/lib/notifications"
 
 const STATUS_MAP: Record<string, string> = {
     arrived_at_store: "Kurir di Toko",
@@ -72,6 +73,74 @@ export async function POST(req: Request) {
         // Mirror to orders table
         const orderUpdatePayload: any = { status: STATUS_MAP[status] }
         await supabaseAdmin.from("orders").update(orderUpdatePayload).eq("id", orderId)
+
+        // Send Notifications
+        const { data: order } = await supabaseAdmin
+            .from("orders")
+            .select("id, user_id, order_items(product_name)")
+            .eq("id", orderId)
+            .single()
+
+        if (order) {
+            let userTitle = ""
+            let userMsg = ""
+
+            if (status === "arrived_at_store") {
+                userTitle = "Kurir Tiba di Toko"
+                userMsg = `Driver sedang mengambil pesanan Anda di toko.`
+            } else if (status === "picked_up") {
+                userTitle = "Pesanan Dikirim"
+                userMsg = `Pesanan Anda sedang dalam perjalanan oleh driver.`
+            } else if (status === "arrived_at_customer") {
+                userTitle = "Kurir Tiba di Lokasi"
+                userMsg = `Driver sudah sampai di lokasi tujuan. Silakan temui driver.`
+            } else if (status === "delivered") {
+                userTitle = "Pesanan Telah Sampai"
+                userMsg = `Pesanan #${orderId.slice(0, 8)} telah sampai. Silakan konfirmasi penerimaan.`
+            }
+
+            if (userTitle && userMsg) {
+                await createNotification({
+                    userId: order.user_id,
+                    type: 'order',
+                    title: userTitle,
+                    message: userMsg,
+                    link: `/orders/${orderId}`
+                })
+            }
+
+            // Also notify shop when arrived_at_store or picked_up? 
+            // Maybe just picked_up to let shop know it's gone
+            if (status === "picked_up") {
+                // Extract shopId from items (it's in the name "Product | ID")
+                const extractShopId_internal = (orderItems: any[]) => {
+                    for (const item of orderItems) {
+                        const parts = item.product_name?.split(" | ")
+                        if (parts && parts.length >= 2) {
+                            const potentialId = parts[parts.length - 1].trim()
+                            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(potentialId)) {
+                                return potentialId
+                            }
+                        }
+                    }
+                    return null
+                }
+                const shopId = extractShopId_internal(order.order_items)
+                if (shopId) {
+                    const { data: shop } = await supabaseAdmin.from("shops").select("owner_id").eq("id", shopId).single()
+                    if (shop) {
+                        await createNotification({
+                            userId: shop.owner_id,
+                            type: 'order',
+                            title: 'Pesanan Diambil Kurir',
+                            message: `Pesanan #${orderId.slice(0, 8)} telah diambil oleh kurir.`,
+                            forShop: true,
+                            link: `/shop/orders/${orderId}`
+                        })
+                    }
+                }
+            }
+        }
 
         // Commission: credit wallets automatically via RPC
         let commission = 0

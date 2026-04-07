@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Home, ShoppingCart, LayoutGrid, Users, Zap,
-  Package, FolderPlus, LayoutDashboard, Heart, MessageCircle,
+  Package, FolderPlus, LayoutDashboard, Heart, MessageCircle, Bell,
   type LucideIcon
 } from "lucide-react";
 
@@ -29,6 +29,41 @@ export default function Navbar() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const [notifCount, setNotifCount] = useState(0);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const fetchNotifCount = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("is_read", false);
+
+      setNotifCount(count || 0);
+
+      const notifChannel = supabase
+        .channel('navbar_notif_sync')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        }, () => {
+          fetchNotifCount();
+        })
+        .subscribe();
+
+      return () => { supabase.removeChannel(notifChannel); }
+    };
+
+    fetchNotifCount();
+  }, [isLoggedIn]);
+
   // Tentukan apakah ini halaman admin berdasarkan URL saja
   const isAdminPage = pathname.startsWith("/admin");
 
@@ -36,7 +71,7 @@ export default function Navbar() {
 
   const userMenu: MenuItem[] = [
     { href: "/", label: "Beranda", icon: Home, match: pathname === "/" },
-    { href: "/wishlist", label: "Wishlist", icon: Heart, match: pathname === "/wishlist" },
+    { href: "/notifications", label: "Notifikasi", icon: Bell, match: pathname === "/notifications" },
   ];
 
   // Menu Admin
@@ -64,10 +99,16 @@ export default function Navbar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${isActive ? 'text-indigo-600' : 'text-gray-600'
-                }`}
+              className={`relative flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${isActive ? 'text-indigo-600' : 'text-gray-600'}`}
             >
-              <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+              <div className="relative">
+                <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                {item.href === "/notifications" && notifCount > 0 && (
+                  <span className="absolute -top-1 -right-2 bg-rose-500 text-white text-[9px] font-black min-w-[14px] h-[14px] rounded-full flex items-center justify-center px-0.5 shadow-sm">
+                    {notifCount > 99 ? '99+' : notifCount}
+                  </span>
+                )}
+              </div>
               <span className={`text-[10px] font-semibold`}>{item.label}</span>
 
               {/* Indikator Garis Bawah saat Aktif */}

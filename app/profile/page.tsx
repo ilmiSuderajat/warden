@@ -17,6 +17,10 @@ export default function ProfilePage() {
   const [cartCount, setCartCount] = useState(0)
   const [chatCount, setChatCount] = useState(0)
   const [points, setPoints] = useState(0)
+  
+  const [unpaidCount, setUnpaidCount] = useState(0)
+  const [packingCount, setPackingCount] = useState(0)
+  const [shippingCount, setShippingCount] = useState(0)
 
   useEffect(() => {
     const getProfile = async () => {
@@ -112,12 +116,39 @@ export default function ProfilePage() {
       return chatChannel
     }
 
+    const fetchOrderCounts = async () => {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) return
+
+      const { data: orders } = await supabase
+        .from("orders")
+        .select("payment_status, status")
+        .eq("user_id", authUser.id)
+
+      if (orders) {
+        let unpaid = 0
+        let packing = 0
+        let shipping = 0
+
+        for (const order of orders) {
+          if (order.payment_status === "pending" || order.status === "Menunggu Pembayaran") unpaid++
+          else if ((order.payment_status === "paid" || order.payment_status === "online" || order.payment_status === "cod" || order.payment_status === "wallet") && ["Perlu Dikemas", "Diproses"].includes(order.status || "")) packing++
+          else if (["Mencari Kurir", "Kurir Menuju Lokasi", "Kurir di Toko", "Dikirim", "Kurir di Lokasi", "Kurir Tidak Tersedia"].includes(order.status || "")) shipping++
+        }
+
+        setUnpaidCount(unpaid)
+        setPackingCount(packing)
+        setShippingCount(shipping)
+      }
+    }
+
     getProfile()
     let cartChannel: any
     let chatChannel: any
 
     fetchCartCount().then(ch => cartChannel = ch)
     fetchChatCount().then(ch => chatChannel = ch)
+    fetchOrderCounts()
 
     return () => {
       if (cartChannel) supabase.removeChannel(cartChannel)
@@ -132,9 +163,9 @@ export default function ProfilePage() {
   }
 
   const orderStatuses = [
-    { icon: "Wallet", label: "Belum Bayar", href: "/orders?status=unpaid&tab=pending", badge: null },
-    { icon: "Package", label: "Dikemas", href: "/orders?status=packing&tab=dikemas", badge: null },
-    { icon: "Truck", label: "Dikirim", href: "/orders?status=shipping&tab=dikirim", badge: null },
+    { icon: "Wallet", label: "Belum Bayar", href: "/orders?status=unpaid&tab=pending", badge: unpaidCount > 0 ? unpaidCount : null },
+    { icon: "Package", label: "Dikemas", href: "/orders?status=packing&tab=dikemas", badge: packingCount > 0 ? packingCount : null },
+    { icon: "Truck", label: "Dikirim", href: "/orders?status=shipping&tab=dikirim", badge: shippingCount > 0 ? shippingCount : null },
     { icon: "Star", label: "Beri Penilaian", href: "/reviews", badge: null },
   ]
 

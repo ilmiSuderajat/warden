@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { supabaseAdmin, dispatchOrder } from "@/lib/driverOrders"
+import { createNotification } from "@/lib/notifications"
 
 export async function POST(req: Request) {
     try {
@@ -55,6 +56,29 @@ export async function POST(req: Request) {
                     driver_id: driverId
                 } as any)
                 .eq("id", driverOrder.order_id)
+
+            // Send Notification to User
+            const { data: order } = await supabaseAdmin
+                .from("orders")
+                .select("user_id")
+                .eq("id", driverOrder.order_id)
+                .single()
+            
+            const { data: driver } = await supabaseAdmin
+                .from("users")
+                .select("full_name")
+                .eq("id", driverId)
+                .single()
+
+            if (order && driver) {
+                await createNotification({
+                    userId: order.user_id,
+                    type: 'order',
+                    title: 'Kurir Sedang Menuju Toko',
+                    message: `Driver ${driver.full_name} telah menerima pesanan Anda dan sedang menuju ke toko.`,
+                    link: `/orders/${driverOrder.order_id}`
+                })
+            }
 
             return NextResponse.json({ success: true, message: "Accepted", orderId: driverOrder.order_id })
         }

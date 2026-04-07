@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getAuthenticatedUser, createAdminClient } from "@/lib/serverAuth"
+import { createNotification } from "@/lib/notifications"
 
 export async function POST(req: Request) {
     try {
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json()
-        const { id, type } = body
+        const { id, type, targetId, amount } = body
 
         if (!id || !type) {
             return NextResponse.json({ error: "Data tidak lengkap" }, { status: 400 })
@@ -61,6 +62,21 @@ export async function POST(req: Request) {
             .eq("id", id)
 
         if (updateErr) throw updateErr
+
+        // 4. Send Notification
+        let notificationUserId = targetId
+        if (type === "shop") {
+            const { data: shop } = await supabaseAdmin.from("shops").select("owner_id").eq("id", targetId).single()
+            if (shop) notificationUserId = shop.owner_id
+        }
+
+        await createNotification({
+            userId: notificationUserId,
+            type: 'finance',
+            title: 'Penarikan Dana Disetujui',
+            message: `Dana sebesar Rp ${parseInt(amount).toLocaleString("id-ID")} telah ditransfer ke rekening Anda.`,
+            forShop: type === "shop"
+        })
 
         return NextResponse.json({ success: true, message: "Penarikan dana disetujui" })
     } catch (err: any) {

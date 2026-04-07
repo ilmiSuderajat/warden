@@ -6,67 +6,16 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import Skeleton from "@/app/components/Skeleton";
 
-// ── Inline Confirmation Modal (Clean Version) ──────────────────────────────
-function ConfirmModal({
-  open,
-  title,
-  description,
-  onConfirm,
-  onCancel,
-}: {
-  open: boolean;
-  title: string;
-  description: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  if (!open) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-end justify-center max-w-md mx-auto bg-slate-900/40 backdrop-blur-sm transition-opacity"
-      onClick={onCancel}
-    >
-      <div
-        className="w-full max-w-md rounded-t-3xl p-6 pb-10 bg-white animate-slide-up shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="w-12 h-1.5 rounded-full bg-slate-200 mx-auto mb-8" />
-
-        <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-5 border border-red-100">
-            <Icons.Trash2 size={28} className="text-red-500" />
-          </div>
-          <h3 className="text-slate-900 font-bold text-xl mb-2">{title}</h3>
-          <p className="text-slate-500 text-sm leading-relaxed">{description}</p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <button
-            onClick={onCancel}
-            className="h-14 rounded-2xl font-semibold text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95"
-          >
-            Batal
-          </button>
-          <button
-            onClick={onConfirm}
-            className="h-14 rounded-2xl font-semibold text-sm text-white bg-red-500 hover:bg-red-600 transition-all active:scale-95 shadow-lg shadow-red-500/20"
-          >
-            Hapus Semua
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Main Component ─────────────────────────────────────────────────────────
 export default function CartPage() {
   const router = useRouter();
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showClearModal, setShowClearModal] = useState(false);
-  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  
+  // Variant Edit Modal
+  const [editingVariantItem, setEditingVariantItem] = useState<any>(null);
+  const [tempVariants, setTempVariants] = useState<Record<string, any>>({});
+  const [isUpdatingVariant, setIsUpdatingVariant] = useState(false);
 
   useEffect(() => {
     fetchCart();
@@ -74,44 +23,47 @@ export default function CartPage() {
 
   const fetchCart = async () => {
     setLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       router.push("/login");
       return;
     }
     const { data } = await supabase
       .from("cart")
-      .select("*, products(*)")
+      .select("*, products(*, shops(id, name))")
       .eq("user_id", user.id);
+      
     if (data) {
-      setCartItems(
-        data.map((item) => {
-          let variantPrice = 0;
-          let variantLabels: string[] = [];
-          
-          if (item.variants) {
-             Object.values(item.variants).forEach((opt: any) => {
-                variantPrice += (opt.price || 0);
-                variantLabels.push(opt.label);
-             });
-          }
-
-          return {
-            id: item.id,
-            product_id: item.product_id,
-            name: item.products.name,
-            price: item.products.price + variantPrice,
-            base_price: item.products.price,
-            variant_labels: variantLabels,
-            image_url: Array.isArray(item.products.image_url)
-              ? item.products.image_url[0]
-              : item.products.image_url,
-            quantity: item.quantity,
-          };
-        })
-      );
+      const items = data.map((item) => {
+        let variantPrice = 0;
+        let variantLabels: string[] = [];
+        if (item.variants) {
+           Object.values(item.variants).forEach((opt: any) => {
+              variantPrice += (opt.price || 0);
+              variantLabels.push(opt.label);
+           });
+        }
+        return {
+          id: item.id,
+          cart_id: item.id,
+          product_id: item.product_id,
+          name: item.products.name,
+          price: item.products.price + variantPrice,
+          base_price: item.products.price,
+          variants_saved: item.variants || {},
+          variant_labels: variantLabels,
+          image_url: Array.isArray(item.products.image_url)
+            ? item.products.image_url[0]
+            : item.products.image_url,
+          quantity: item.quantity,
+          shop_name: item.products.shops?.name || "Toko",
+          product_variants: item.products.variants || null,
+        };
+      });
+      setCartItems(items);
+      
+      // Select all by default
+      setSelectedIds(new Set(items.map((i: any) => i.id)));
     }
     setLoading(false);
   };
@@ -121,205 +73,200 @@ export default function CartPage() {
     setCartItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, quantity: newQty } : item))
     );
-    const { error } = await supabase
-      .from("cart")
-      .update({ quantity: newQty })
-      .eq("id", id);
+    const { error } = await supabase.from("cart").update({ quantity: newQty }).eq("id", id);
     if (error) fetchCart();
   };
 
   const removeItem = async (id: string) => {
-    setRemovingId(id);
-    setTimeout(async () => {
-      setCartItems((prev) => prev.filter((item) => item.id !== id));
-      setRemovingId(null);
-      const { error } = await supabase.from("cart").delete().eq("id", id);
-      if (error) fetchCart();
-    }, 200);
+    setCartItems((prev) => prev.filter((item) => item.id !== id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    await supabase.from("cart").delete().eq("id", id);
   };
 
-  const handleClearConfirm = async () => {
-    setShowClearModal(false);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    await supabase.from("cart").delete().eq("user_id", user?.id);
-    setCartItems([]);
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
-  const subtotal = cartItems.reduce(
-    (acc, item) => acc + item.price * (item.quantity || 1),
-    0
-  );
-
-  // Simple CSS animation for modal
-  const style = `
-    @keyframes slide-up {
-      from { transform: translateY(100%); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
+  const toggleSelectAll = () => {
+    if (selectedIds.size === cartItems.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(cartItems.map((i) => i.id)));
     }
-    .animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-  `;
+  };
 
-  // ── Loading skeleton (Clean Mode) ────────────────────────────────────────
-  if (loading)
+  const handleOpenVariantEdit = (item: any) => {
+    setEditingVariantItem(item);
+    setTempVariants(item.variants_saved || {});
+  };
+
+  const saveVariants = async () => {
+    if (!editingVariantItem) return;
+    setIsUpdatingVariant(true);
+    const { error } = await supabase.from("cart").update({ variants: tempVariants }).eq("id", editingVariantItem.cart_id);
+    if (!error) {
+       await fetchCart();
+       setEditingVariantItem(null);
+    }
+    setIsUpdatingVariant(false);
+  };
+
+  const selectedItems = cartItems.filter((i) => selectedIds.has(i.id));
+  const subtotal = selectedItems.reduce((acc, item) => acc + item.price * (item.quantity || 1), 0);
+
+  if (loading) {
     return (
-      <div className="min-h-screen max-w-md mx-auto bg-slate-50 pb-36">
-        <style>{style}</style>
-        <div className="sticky top-0 z-40 px-5 pt-14 pb-4 bg-white/80 backdrop-blur-xl border-b border-slate-200">
-          <div className="flex items-center justify-between">
-            <Skeleton className="w-10 h-10 rounded-full bg-slate-200" />
-            <Skeleton className="h-5 w-28 rounded-lg bg-slate-200" />
-            <div className="w-10" />
-          </div>
+      <div className="min-h-screen bg-slate-100 max-w-md mx-auto">
+        <div className="bg-white p-4 flex items-center justify-between border-b">
+          <Skeleton className="w-8 h-8 rounded-full" />
+          <Skeleton className="w-32 h-6" />
+          <Skeleton className="w-8 h-8 rounded-full" />
         </div>
-        <div className="p-5 space-y-4">
-          {Array(3)
-            .fill(0)
-            .map((_, i) => (
-              <div key={i} className="rounded-2xl p-4 flex gap-4 bg-white border border-slate-100 shadow-sm">
-                <Skeleton className="w-24 h-24 rounded-xl shrink-0 bg-slate-100" />
-                <div className="flex-1 space-y-3 py-1">
-                  <Skeleton className="h-4 w-full rounded-lg bg-slate-100" />
-                  <Skeleton className="h-4 w-1/2 rounded-lg bg-slate-100" />
-                  <Skeleton className="h-6 w-20 rounded-lg mt-4 bg-slate-100" />
-                </div>
-              </div>
-            ))}
+        <div className="p-4 space-y-3">
+          <Skeleton className="w-full h-32" />
+          <Skeleton className="w-full h-32" />
         </div>
       </div>
     );
+  }
 
-  // ── Main render ───────────────────────────────────────────────────────────
+  // Grupping by shop name
+  const groupedItems = cartItems.reduce((acc, item) => {
+    if (!acc[item.shop_name]) acc[item.shop_name] = [];
+    acc[item.shop_name].push(item);
+    return acc;
+  }, {} as Record<string, any[]>);
+
   return (
-    <div className="min-h-screen font-sans max-w-md mx-auto relative pb-36 bg-slate-50 text-slate-900">
-      <style>{style}</style>
+    <div className="min-h-screen bg-slate-100 max-w-md mx-auto font-sans pb-32 text-slate-800">
       
-      <ConfirmModal
-        open={showClearModal}
-        title="Hapus Semua Item?"
-        description="Tindakan ini akan menghapus semua produk di keranjang belanja kamu."
-        onConfirm={handleClearConfirm}
-        onCancel={() => setShowClearModal(false)}
-      />
-
       {/* ── HEADER ── */}
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200">
-        <div className="flex items-center justify-between px-5 pt-14 pb-4">
-          <button
-            onClick={() => router.back()}
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 transition-colors active:scale-90"
-          >
-            <Icons.ArrowLeft size={20} className="text-slate-700" strokeWidth={2.5} />
+      <div className="sticky top-0 z-40 bg-white border-b border-slate-200">
+        <div className="flex items-center justify-between px-4 py-3.5">
+          <button onClick={() => router.back()} className="text-indigo-600">
+            <Icons.ArrowLeft size={24} strokeWidth={2} />
           </button>
 
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold text-slate-900 tracking-tight">Keranjang</h1>
-            {cartItems.length > 0 && (
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                {cartItems.length}
-              </span>
-            )}
+          <div className="flex-1 px-4">
+            <h1 className="text-lg font-medium text-slate-900">
+              Keranjang Saya <span className="text-slate-500 font-normal">({cartItems.length})</span>
+            </h1>
           </div>
 
-          {cartItems.length > 0 ? (
-            <button
-              onClick={() => setShowClearModal(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors group active:scale-90"
-            >
-              <Icons.Trash2 size={18} className="text-slate-400 group-hover:text-red-500 transition-colors" />
-            </button>
-          ) : (
-            <div className="w-10" />
-          )}
+          <div className="flex items-center gap-4">
+            <button className="text-slate-600 text-[14px]">Ubah</button>
+            <div className="relative text-indigo-600">
+              <Icons.MessageSquare size={22} strokeWidth={2} />
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white flex items-center justify-center text-[9px] rounded-full font-bold">1</div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* ── CART ITEMS ── */}
-      <div className="p-5 space-y-4">
+      <div className="mt-2 space-y-2">
         {cartItems.length > 0 ? (
-          cartItems.map((item) => (
-            <div
-              key={item.id}
-              className="bg-white rounded-2xl overflow-hidden transition-all duration-300 border border-slate-100 shadow-sm"
-              style={{
-                opacity: removingId === item.id ? 0.5 : 1,
-                transform: removingId === item.id ? "scale(0.96)" : "scale(1)",
-              }}
-            >
-              <div className="flex gap-4 p-4">
-                {/* Product image */}
-                <div className="w-24 h-24 rounded-xl overflow-hidden shrink-0 bg-slate-100 border border-slate-50">
-                  <img
-                    src={item.image_url}
-                    alt={item.name}
-                    className="w-full h-full object-cover"
-                  />
+          Object.entries(groupedItems).map(([shopName, itemsObj]) => {
+            const items = itemsObj as any[];
+            const isAllShopSelected = items.every((i: any) => selectedIds.has(i.id));
+            
+            const toggleShop = () => {
+              setSelectedIds((prev) => {
+                const next = new Set(prev);
+                if (isAllShopSelected) {
+                  items.forEach((i) => next.delete(i.id));
+                } else {
+                  items.forEach((i) => next.add(i.id));
+                }
+                return next;
+              });
+            };
+
+            return (
+              <div key={shopName} className="bg-white px-0 border-y border-slate-200">
+                {/* Shop Header */}
+                <div className="flex items-center justify-between px-3 py-3 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <button onClick={toggleShop} className="shrink-0 flex items-center justify-center">
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isAllShopSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                        {isAllShopSelected && <Icons.Check size={14} className="text-white" />}
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-1.5 cursor-pointer">
+                      <span className="bg-red-600 text-white text-[10px] px-1 rounded font-bold uppercase tracking-wider">Mall | Ori</span>
+                      <Icons.Store size={14} className="text-slate-600" />
+                      <span className="text-sm font-semibold">{shopName}</span>
+                      <Icons.ChevronRight size={14} className="text-slate-400" />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Detail */}
-                <div className="flex-1 flex flex-col justify-between min-w-0 py-0.5">
-                  <div>
-                    <h3 className="text-sm font-semibold text-slate-800 line-clamp-2 leading-snug mb-1">
-                      {item.name}
-                    </h3>
-                    {item.variant_labels && item.variant_labels.length > 0 && (
-                      <p className="text-[11px] font-medium text-slate-500 mb-1 line-clamp-1">
-                        Varian: {item.variant_labels.join(', ')}
-                      </p>
-                    )}
-                    <p className="text-base font-bold text-indigo-600">
-                      Rp {item.price.toLocaleString("id-ID")}
-                    </p>
-                  </div>
+                {/* Products */}
+                <div className="divide-y divide-slate-100">
+                  {items.map((item: any) => {
+                    const isSelected = selectedIds.has(item.id);
+                    return (
+                      <div key={item.id} className="relative flex gap-3 p-3 pt-4">
+                        <button onClick={() => toggleSelect(item.id)} className="shrink-0 flex pt-6">
+                          <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                            {isSelected && <Icons.Check size={14} className="text-white" />}
+                          </div>
+                        </button>
 
-                  <div className="flex items-center justify-between mt-3">
-                    {/* Modern Quantity Selector */}
-                    <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
-                      <button
-                        onClick={() => updateQuantity(item.id, -1, item.quantity)}
-                        className="w-9 h-9 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors active:bg-slate-300"
-                      >
-                        <Icons.Minus size={14} strokeWidth={2.5} />
-                      </button>
-                      <span className="w-8 text-center text-sm font-bold text-slate-700 select-none">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() => updateQuantity(item.id, 1, item.quantity)}
-                        className="w-9 h-9 flex items-center justify-center text-indigo-600 hover:bg-indigo-100 transition-colors bg-indigo-50"
-                      >
-                        <Icons.Plus size={14} strokeWidth={2.5} />
-                      </button>
-                    </div>
+                        <div className="w-[84px] h-[84px] rounded border border-slate-100 overflow-hidden shrink-0">
+                          <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                        </div>
 
-                    {/* Remove button */}
-                    <button
-                      onClick={() => removeItem(item.id)}
-                      className="p-2 rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors active:scale-90"
-                    >
-                      <Icons.Trash2 size={18} strokeWidth={2} />
-                    </button>
-                  </div>
+                        <div className="flex-1 flex flex-col min-w-0 pb-1">
+                          <h3 className="text-[13px] leading-tight text-slate-800 line-clamp-2 mb-1 pr-4">{item.name}</h3>
+                          
+                          {item.variant_labels && item.variant_labels.length > 0 && (
+                            <button onClick={() => handleOpenVariantEdit(item)} className="self-start mt-0.5 mb-2 bg-slate-50 border border-slate-100 px-2 py-0.5 flex items-center gap-1 rounded text-[11px] text-slate-500 hover:bg-slate-100 transition-colors">
+                              <span>Variasi: {item.variant_labels.join(', ')}</span>
+                              <Icons.ChevronDown size={10} />
+                            </button>
+                          )}
+
+                          <div className="mt-auto flex items-end justify-between">
+                            <span className="text-sm font-semibold text-indigo-600">Rp{item.price.toLocaleString("id-ID")}</span>
+                            
+                            <div className="flex items-center border border-slate-200 rounded-sm overflow-hidden h-7">
+                              <button onClick={() => updateQuantity(item.id, -1, item.quantity)} className="w-7 h-full flex items-center justify-center bg-white text-slate-500 active:bg-slate-100 border-r border-slate-200">
+                                <Icons.Minus size={12} />
+                              </button>
+                              <span className="w-9 h-full flex items-center justify-center text-[13px] font-medium text-slate-700 bg-white">
+                                {item.quantity}
+                              </span>
+                              <button onClick={() => updateQuantity(item.id, 1, item.quantity)} className="w-7 h-full flex items-center justify-center bg-white text-slate-500 active:bg-slate-100 border-l border-slate-200">
+                                <Icons.Plus size={12} />
+                              </button>
+                            </div>
+                          </div>
+                          <button onClick={() => removeItem(item.id)} className="absolute top-4 right-3 text-slate-300 hover:text-red-500 transition-colors">
+                              <Icons.X size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
-            </div>
-          ))
+            )
+          })
         ) : (
-          /* ── EMPTY STATE ── */
-          <div className="flex flex-col items-center justify-center py-20 text-center px-8">
-            <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mb-6 border border-slate-200">
-              <Icons.ShoppingBag size={32} className="text-slate-400" />
-            </div>
-            <h3 className="text-slate-900 font-bold text-xl mb-2">Keranjang Kosong</h3>
-            <p className="text-slate-500 text-sm leading-relaxed mb-8 max-w-xs">
-              Yah, keranjangmu masih kosong. Yuk mulai belanja dan temukan produk favoritmu!
-            </p>
-            <Link
-              href="/"
-              className="px-8 py-3.5 rounded-2xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-600/30"
-            >
-              Mulai Belanja
+          <div className="flex flex-col items-center justify-center py-20 bg-white">
+            <h3 className="text-slate-900 font-medium text-lg mb-2">Keranjang Kosong</h3>
+            <Link href="/" className="px-6 py-2 border border-indigo-600 text-indigo-600 rounded text-sm font-medium mt-4">
+              Belanja Sekarang
             </Link>
           </div>
         )}
@@ -327,32 +274,117 @@ export default function CartPage() {
 
       {/* ── FOOTER CHECKOUT ── */}
       {cartItems.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 max-w-md mx-auto bg-white border-t border-slate-200 p-5 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+        <div className="fixed bottom-0 left-0 right-0 z-50 max-w-md mx-auto bg-white border-t border-slate-200 divide-y divide-slate-100">
           
-          {/* Summary Details */}
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Total Pembayaran</p>
-              <p className="text-2xl font-extrabold text-slate-900 tracking-tight">
-                Rp {subtotal.toLocaleString("id-ID")}
-              </p>
+          <div className="flex items-center justify-between p-3">
+             <div className="flex items-center gap-2">
+                <Icons.TicketPercent size={18} className="text-indigo-600" />
+                <span className="text-[13px] text-slate-800">Voucher</span>
+             </div>
+             <div className="flex items-center gap-1 cursor-pointer">
+                <span className="text-[12px] text-slate-400">Gunakan/masukkan kode</span>
+                <Icons.ChevronRight size={14} className="text-slate-400" />
+             </div>
+          </div>
+
+          <div className="flex items-center justify-between p-3">
+             <div className="flex items-center gap-2">
+                <Icons.Coins size={18} className="text-amber-500" />
+                <span className="text-[13px] text-slate-500">Tidak ada produk yang dipilih</span>
+             </div>
+             <div className="w-8 h-4 bg-slate-200 rounded-full cursor-not-allowed"></div>
+          </div>
+
+          <div className="flex items-center justify-between h-14 pl-3">
+            <div className="flex items-center gap-3">
+              <button onClick={toggleSelectAll} className="flex items-center gap-2">
+                <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${selectedIds.size === cartItems.length && cartItems.length > 0 ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                    {selectedIds.size === cartItems.length && cartItems.length > 0 && <Icons.Check size={14} className="text-white" />}
+                </div>
+                <span className="text-[14px]">Semua</span>
+              </button>
             </div>
-            <div className="text-right">
-               <p className="text-xs font-medium text-slate-700">{cartItems.length} Item</p>
-               <p className="text-xs text-slate-400">Belum termasuk ongkir</p>
+            
+            <div className="flex items-center h-full">
+              <div className="text-right pr-3 flex items-center gap-1">
+                <span className="text-[14px]">Total</span>
+                <span className="text-[15px] font-semibold text-indigo-600">Rp{subtotal.toLocaleString("id-ID")}</span>
+              </div>
+              <button
+                disabled={selectedItems.length === 0}
+                onClick={() => router.push("/checkout")}
+                className="h-full px-6 bg-indigo-600 disabled:bg-slate-300 text-white font-medium text-[14px] transition-colors"
+                style={{ width: "130px" }}
+              >
+                Checkout ({selectedItems.length})
+              </button>
             </div>
           </div>
 
-          {/* Checkout CTA */}
-          <button
-            onClick={() => router.push("/checkout")}
-            className="w-full h-14 rounded-2xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98] bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/30"
-          >
-            <span>Lanjut ke Pembayaran</span>
-            <Icons.ArrowRight size={18} strokeWidth={2.5} />
-          </button>
         </div>
       )}
+
+      {/* VARIANT EDIT MODAL */}
+      {editingVariantItem && editingVariantItem.product_variants && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-[90] animate-in fade-in" onClick={() => setEditingVariantItem(null)}></div>
+          <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-3xl p-5 animate-in slide-in-from-bottom flex flex-col shadow-2xl max-w-md mx-auto" style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-lg text-slate-800">Ubah Variasi</h3>
+              <button onClick={() => setEditingVariantItem(null)} className="p-2 -mr-2 text-slate-400 hover:bg-slate-50 rounded-full">
+                <Icons.X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex gap-3 mb-5 pb-5 border-b border-slate-100">
+              <img src={editingVariantItem.image_url} className="w-16 h-16 object-cover rounded-lg border border-slate-100" alt="" />
+              <div>
+                <p className="text-xl font-bold text-indigo-600">
+                  Rp {(() => {
+                    let price = editingVariantItem.base_price;
+                    Object.values(tempVariants).forEach(v => { price += (v.price || 0) });
+                    return price.toLocaleString('id-ID');
+                  })()}
+                </p>
+                <p className="text-xs text-slate-500 mt-1 line-clamp-2">{editingVariantItem.name}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 max-h-[50vh] overflow-y-auto no-scrollbar pb-4">
+              {editingVariantItem.product_variants.map((group: any, idx: number) => (
+                <div key={idx}>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{group.name}</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {group.options.map((opt: any, oIdx: number) => {
+                      const isSelected = tempVariants[group.name]?.label === opt.label;
+                      return (
+                        <button
+                          key={oIdx}
+                          onClick={() => setTempVariants(prev => ({ ...prev, [group.name]: opt }))}
+                          className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                            isSelected ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              disabled={isUpdatingVariant}
+              onClick={saveVariants}
+              className="mt-4 w-full h-12 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl font-bold transition-all active:scale-[0.98] disabled:opacity-70 flex items-center justify-center"
+            >
+              {isUpdatingVariant ? <Icons.Loader2 className="animate-spin" size={20} /> : 'Konfirmasi'}
+            </button>
+          </div>
+        </>
+      )}
+
     </div>
   );
 }

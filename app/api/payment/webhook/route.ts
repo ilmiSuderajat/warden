@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/serverAuth"
 import { dispatchOrder } from "@/lib/driverOrders"
 import { PLATFORM_COMMISSION_RATE } from "@/lib/constants"
 import crypto from "crypto"
+import { createNotification } from "@/lib/notifications"
 
 export async function POST(req: Request) {
   try {
@@ -115,7 +116,42 @@ export async function POST(req: Request) {
     if (isPaid) {
       await creditShopBalance(supabase, realOrderId)
       await dispatchOrder(realOrderId)
-      console.log(`[Webhook] ✅ Order ${realOrderId} PAID → driver dispatch triggered`)
+
+      // 7. Send Notifications
+      const { data: order } = await supabase
+        .from("orders")
+        .select("id, user_id, order_items(product_name)")
+        .eq("id", realOrderId)
+        .single()
+
+      if (order) {
+        // To User
+        await createNotification({
+          userId: order.user_id,
+          type: 'order',
+          title: 'Pembayaran Berhasil',
+          message: `Pesanan #${realOrderId.slice(0, 8)} telah dibayar. Kami sedang mencari kurir untuk Anda.`,
+          link: `/orders/${realOrderId}`
+        })
+
+        // To Shop
+        const shopId = extractShopId(order.order_items)
+        if (shopId) {
+          const { data: shop } = await supabase.from("shops").select("owner_id").eq("id", shopId).single()
+          if (shop) {
+             await createNotification({
+                userId: shop.owner_id,
+                type: 'order',
+                title: 'Pesanan Baru Masuk',
+                message: `Ada pesanan baru #${realOrderId.slice(0, 8)} yang telah dibayar. Silakan siapkan produknya.`,
+                forShop: true,
+                link: `/shop/orders/${realOrderId}`
+             })
+          }
+        }
+      }
+
+      console.log(`[Webhook] ✅ Order ${realOrderId} PAID → notifications sent and driver dispatch triggered`)
     }
 
     console.log(`[Webhook] ✅ Order ${realOrderId} → payment_status=${paymentStatus}`)
@@ -175,7 +211,7 @@ async function creditShopBalance(supabase: any, orderId: string) {
 
     const { data: shop } = await supabase
       .from("shops")
-      .select("id, balance")
+      .select("id, owner_id, balance")
       .eq("id", shopId)
       .single()
 
@@ -186,8 +222,10 @@ async function creditShopBalance(supabase: any, orderId: string) {
     const shopEarnings = subtotal - commission
     const newBalance = (shop.balance || 0) + shopEarnings
 
+    // 1. Update legacy shops.balance column
     await supabase.from("shops").update({ balance: newBalance }).eq("id", shopId)
 
+    // 2. Log to shop_balance_logs
     await supabase.from("shop_balance_logs").insert({
       shop_id: shopId,
       type: "commission",
@@ -196,6 +234,26 @@ async function creditShopBalance(supabase: any, orderId: string) {
       description: `Pembayaran online pesanan #${orderId.slice(0, 8)} (komisi ${PLATFORM_COMMISSION_RATE * 100}% = Rp ${commission.toLocaleString("id-ID")})`,
       order_id: orderId,
     })
+
+    // 3. Sync to unified wallet system (increment THEN log so balance_after is correct)
+    if (shop.owner_id) {
+      const { error: walletErr } = await supabase.rpc('increment_wallet_balance', {
+        p_user_id: shop.owner_id,
+        p_amount: shopEarnings
+      })
+
+      if (walletErr) {
+        console.error(`[creditShopBalance] increment_wallet_balance failed for owner ${shop.owner_id}:`, walletErr.message)
+      } else {
+        await supabase.rpc('create_transaction', {
+          p_user_id: shop.owner_id,
+          p_order_id: orderId,
+          p_type: 'commission',
+          p_amount: shopEarnings,
+          p_description: `Komisi pesanan #${orderId.slice(0, 8)} (setelah potongan ${PLATFORM_COMMISSION_RATE * 100}%)`
+        })
+      }
+    }
 
     console.log(`[Webhook] 💰 Shop ${shopId} +${shopEarnings} (komisi ${commission}) → ${newBalance}`)
   } catch (err) {

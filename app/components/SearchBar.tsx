@@ -81,21 +81,29 @@ export default function SearchBar() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Sum of unread_buyer and unread_shop (if user has a shop)
-      const { data: conversations } = await supabase
-        .from("shop_conversations")
-        .select("unread_buyer, unread_shop, shops!inner(owner_id)")
-        .or(`buyer_id.eq.${user.id},shops.owner_id.eq.${user.id}`)
-
       let totalUnread = 0
-      conversations?.forEach((c: any) => {
-        const shop = Array.isArray(c.shops) ? c.shops[0] : c.shops
-        if (shop?.owner_id === user.id) {
-          totalUnread += (c.unread_shop || 0)
-        } else {
-          totalUnread += (c.unread_buyer || 0)
-        }
-      })
+
+      // a. As buyer
+      const { data: asBuyer } = await supabase
+        .from("shop_conversations")
+        .select("unread_buyer")
+        .eq("buyer_id", user.id)
+      asBuyer?.forEach((c: any) => totalUnread += (c.unread_buyer || 0))
+
+      // b. As shop owner
+      const { data: myShops } = await supabase
+        .from("shops")
+        .select("id")
+        .eq("owner_id", user.id)
+        
+      if (myShops && myShops.length > 0) {
+        const shopIds = myShops.map((s: any) => s.id)
+        const { data: asShop } = await supabase
+          .from("shop_conversations")
+          .select("unread_shop")
+          .in("shop_id", shopIds)
+        asShop?.forEach((c: any) => totalUnread += (c.unread_shop || 0))
+      }
 
       setChatCount(totalUnread)
 
@@ -233,7 +241,7 @@ export default function SearchBar() {
               <MessageSquareMore size={22} />
               {chatCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-white text-indigo-700 text-[9px] font-black min-w-[16px] h-4 rounded-full flex items-center justify-center px-1 shadow">
-                  {chatCount}
+                  {chatCount > 99 ? '99+' : chatCount}
                 </span>
               )}
             </Link>

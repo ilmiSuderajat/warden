@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin, dispatchOrder } from "@/lib/driverOrders"
+import { createNotification } from "@/lib/notifications"
 
 export async function POST(req: Request) {
     try {
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
             // Check if the order is still "Dikirim" (meaning user hasn't clicked Selesaikan)
             const { data: order } = await supabaseAdmin
                 .from("orders")
-                .select("id, status")
+                .select("id, status, user_id")
                 .eq("id", ddo.order_id)
                 .eq("status", "Dikirim")
                 .maybeSingle() as { data: any }
@@ -52,6 +53,46 @@ export async function POST(req: Request) {
                     .from("orders")
                     .update({ status: "Selesai" } as any)
                     .eq("id", order.id)
+                
+                // Send Notifications
+                // To User
+                await createNotification({
+                    userId: order.user_id,
+                    type: 'order',
+                    title: 'Pesanan Selesai Otomatis',
+                    message: `Pesanan #${order.id.slice(0, 8)} telah diselesaikan secara otomatis oleh sistem.`,
+                    link: `/orders/${order.id}`
+                })
+
+                // To Shop (simplified fetch for cron)
+                const { data: orderItems } = await supabaseAdmin.from("order_items").select("product_name").eq("order_id", order.id)
+                if (orderItems) {
+                    const extractShopId_cron = (items: any[]) => {
+                        for (const item of items) {
+                            const parts = item.product_name?.split(" | ")
+                            if (parts && parts.length >= 2) {
+                                const id = parts[parts.length - 1].trim()
+                                if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return id
+                            }
+                        }
+                        return null
+                    }
+                    const shopId = extractShopId_cron(orderItems)
+                    if (shopId) {
+                        const { data: shop } = await supabaseAdmin.from("shops").select("owner_id").eq("id", shopId).single()
+                        if (shop) {
+                            await createNotification({
+                                userId: shop.owner_id,
+                                type: 'order',
+                                title: 'Pesanan Selesai Otomatis',
+                                message: `Pesanan #${order.id.slice(0, 8)} telah diselesaikan secara otomatis oleh sistem.`,
+                                forShop: true,
+                                link: `/shop/orders/${order.id}`
+                            })
+                        }
+                    }
+                }
+
                 autoCompleteCount++
             }
         }
