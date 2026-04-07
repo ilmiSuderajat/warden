@@ -685,7 +685,7 @@ export default function ProductDetail() {
             onClick={() => setIsVariantSheetOpen(false)}
           />
           <div
-            className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-3xl animate-in slide-in-from-bottom shadow-2xl max-w-md mx-auto"
+            className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-3xl max-w-md mx-auto"
             style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}
           >
             {/* Handle bar */}
