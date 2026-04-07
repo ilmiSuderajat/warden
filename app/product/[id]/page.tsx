@@ -725,7 +725,7 @@ export default function ProductDetail() {
 
             {/* Variant groups */}
             {product?.variants && Array.isArray(product.variants) && product.variants.length > 0 && (
-              <div className="px-5 pt-4 space-y-4 max-h-[35vh] overflow-y-auto no-scrollbar">
+              <div className="px-5 pt-4 space-y-4  overflow-y-auto no-scrollbar">
                 {product.variants.map((group: any, gIdx: number) => (
                   <div key={gIdx}>
                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
