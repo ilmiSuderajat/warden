@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     // 1. Fetch the order to verify ownership and current state
     const { data: order, error: orderErr } = await supabase
       .from("orders")
-      .select("id, user_id, status, payment_status, total_amount, is_refunded")
+      .select("id, user_id, status, payment_status, total_amount, is_refunded, payment_method")
       .eq("id", orderId)
       .single()
 
@@ -63,19 +63,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Gagal membatalkan pesanan: " + cancelErr.message }, { status: 500 })
     }
 
-    // 3. Issue refund if order was paid via Wallet and not yet refunded
+    // 3. Issue refund if order was paid (wallet or Midtrans online) and not yet refunded
     if (order.payment_status === "paid" && !order.is_refunded) {
       try {
-        // Check if a wallet payment transaction exists for this order
-        const { data: paymentTx } = await supabase
-          .from("transactions")
-          .select("id, amount")
-          .eq("order_id", orderId)
-          .eq("type", "payment")
-          .maybeSingle()
+        // For wallet payments: verify a wallet transaction exists
+        // For Midtrans (online) payments: no wallet transaction is created, refund directly
+        let shouldRefund = false
 
-        // Only refund if there's actually a wallet payment
-        if (paymentTx) {
+        if (order.payment_method === "online") {
+          // Midtrans-paid order — always eligible for wallet refund
+          shouldRefund = true
+        } else {
+          // Wallet-paid order — only refund if a wallet payment transaction exists
+          const { data: paymentTx } = await supabase
+            .from("transactions")
+            .select("id, amount")
+            .eq("order_id", orderId)
+            .eq("type", "payment")
+            .maybeSingle()
+          shouldRefund = !!paymentTx
+        }
+
+        if (shouldRefund) {
           const refundAmount = order.total_amount
 
           // Get or create the wallet

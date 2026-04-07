@@ -167,7 +167,7 @@ export default function CartPage() {
   }, {} as Record<string, any[]>);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-slate-100 max-w-md mx-auto font-sans text-slate-800">
+    <div className="h-screen flex flex-col bg-slate-100 max-w-md mx-auto font-sans text-slate-800">
 
       {/* ── HEADER ── */}
       <div className="sticky top-0 z-40 bg-white border-b border-slate-200">
