@@ -41,6 +41,14 @@ export default function ShopPerformancePage() {
             setShop(shopData)
 
             try {
+                // Fetch the shop's products
+                const { data: shopProducts } = await supabase
+                    .from("products")
+                    .select("id")
+                    .eq("shop_id", shopData.id)
+
+                const shopProductIds = new Set(shopProducts?.map(p => p.id) || [])
+
                 const { data: allOrders } = await supabase
                     .from("orders")
                     .select("*, order_items(*)")
@@ -49,7 +57,7 @@ export default function ShopPerformancePage() {
 
                 const shopOrders = allOrders.filter(order =>
                     order.order_items?.some((item: any) =>
-                        item.product_name?.includes(`| ${shopData.id}`)
+                        shopProductIds.has(item.product_id)
                     )
                 )
 
@@ -62,7 +70,7 @@ export default function ShopPerformancePage() {
 
                 validOrders.forEach((o: any) => {
                     const shopItems = o.order_items?.filter((item: any) =>
-                        item.product_name?.includes(`| ${shopData.id}`)
+                        shopProductIds.has(item.product_id)
                     ) || []
                     
                     totalSales += shopItems.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0)

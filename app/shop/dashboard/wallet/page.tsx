@@ -52,13 +52,7 @@ export default function ShopWalletPage() {
             return
         }
 
-        const { data: walletData } = await supabase
-            .from("wallets")
-            .select("balance")
-            .eq("user_id", session.user.id)
-            .maybeSingle()
-
-        setShop({ ...shopData, balance: walletData?.balance ?? shopData.balance })
+        setShop(shopData)
         setLoading(false)
     }, [router])
 
@@ -193,13 +187,13 @@ export default function ShopWalletPage() {
                         <span className="text-3xl font-semibold text-indigo-600">{Math.abs(balance).toLocaleString("id-ID")}</span>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors -mx-4 px-4 pb-1">
+                    <Link href="/shop/dashboard/wallet/history" className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center hover:bg-slate-50 transition-colors -mx-4 px-4 pb-1">
                         <div className="flex gap-2 items-center">
                             <Icons.CreditCard size={18} className="text-indigo-500" />
                             <span className="text-sm font-medium text-slate-800">Penghasilan Saya</span>
                         </div>
                         <Icons.ChevronRight size={16} className="text-slate-400" />
-                    </div>
+                    </Link>
                 </div>
 
                 {/* Fitur Keuangan Card */}

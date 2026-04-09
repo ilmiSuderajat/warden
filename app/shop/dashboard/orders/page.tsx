@@ -81,6 +81,14 @@ function OrdersContent() {
         setShop(shopData)
 
         try {
+            // Fetch the shop's products
+            const { data: shopProducts } = await supabase
+                .from("products")
+                .select("id")
+                .eq("shop_id", shopData.id)
+
+            const shopProductIds = new Set(shopProducts?.map(p => p.id) || [])
+
             const { data: allOrders, error: orderError } = await supabase
                 .from("orders")
                 .select("*, order_items(*)")
@@ -89,18 +97,14 @@ function OrdersContent() {
 
             let filteredOrders = allOrders?.filter(order =>
                 order.order_items?.some((item: any) =>
-                    item.product_name?.includes(`| ${shopData.id}`)
+                    shopProductIds.has(item.product_id)
                 )
             ) || []
 
+            // Extract only the items that belong to this shop
             filteredOrders = filteredOrders.map(order => ({
                 ...order,
-                items: order.order_items
-                    ?.filter((item: any) => item.product_name?.includes(`| ${shopData.id}`))
-                    .map((item: any) => ({
-                        ...item,
-                        product_name: item.product_name?.split(" | ")[0]
-                    })) || []
+                items: order.order_items?.filter((item: any) => shopProductIds.has(item.product_id)) || []
             }))
 
             // Filtering based on tab logic

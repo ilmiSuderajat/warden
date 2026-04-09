@@ -50,6 +50,16 @@ export default function ShopDashboardPage() {
 
         const fetchOrderStats = async (shopId: string) => {
             try {
+                // First get all product IDs that belong to this shop
+                const { data: shopProducts } = await supabase
+                    .from("products")
+                    .select("id")
+                    .eq("shop_id", shopId)
+
+                if (!shopProducts) return
+
+                const shopProductIds = new Set(shopProducts.map(p => p.id))
+
                 const { data: allOrders } = await supabase
                     .from("orders")
                     .select("*, order_items(*)")
@@ -58,7 +68,7 @@ export default function ShopDashboardPage() {
 
                 const shopOrders = allOrders.filter(order =>
                     order.order_items?.some((item: any) =>
-                        item.product_name?.includes(`| ${shopId}`)
+                        shopProductIds.has(item.product_id)
                     )
                 )
 
