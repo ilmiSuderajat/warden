@@ -21,7 +21,7 @@ export default function TopUpPage() {
     if (document.querySelector('script[src*="snap.js"]')) return
     const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || ""
     const isSandbox = clientKey.startsWith('SB-')
-    const scriptSrc = isSandbox 
+    const scriptSrc = isSandbox
       ? "https://app.sandbox.midtrans.com/snap/snap.js"
       : "https://app.midtrans.com/snap/snap.js"
 
@@ -86,7 +86,7 @@ export default function TopUpPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 max-w-md mx-auto font-sans relative">
+    <div className="h-screen bg-slate-50 max-w-md mx-auto font-sans relative">
       {/* ── HEADER ─────────────────────────────────────────────── */}
       <div className="bg-indigo-600 px-4 pt-10 pb-6 relative">
         <header className="flex items-center justify-between text-white">

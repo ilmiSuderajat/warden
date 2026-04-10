@@ -43,7 +43,7 @@ export default function ShopWalletPage() {
 
         const { data: shopData } = await supabase
             .from("shops")
-            .select("id, name, balance, owner_id")
+            .select("id, name, owner_id")
             .eq("owner_id", session.user.id)
             .single()
 
@@ -52,7 +52,14 @@ export default function ShopWalletPage() {
             return
         }
 
-        setShop(shopData)
+        // Pull unified wallet balance (ShopeePay-style: one balance for all roles)
+        const { data: walletData } = await supabase
+            .from("wallets")
+            .select("balance")
+            .eq("user_id", session.user.id)
+            .maybeSingle()
+
+        setShop({ ...shopData, balance: walletData?.balance ?? 0 })
         setLoading(false)
     }, [router])
 
