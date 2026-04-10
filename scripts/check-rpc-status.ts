@@ -75,6 +75,9 @@ async function main() {
   await checkFunction('process_payment', { p_order_id: fakeUUID })
   await checkFunction('cancel_order', { p_order_id: fakeUUID, p_actor: 'user', p_reason: 'test' })
   await checkFunction('refund_order', { p_order_id: fakeUUID, p_internal: true })
+  await checkFunction('create_transaction', { p_user_id: fakeUUID, p_order_id: fakeUUID, p_type: 'commission', p_amount: 1000, p_description: 'Test' })
+  await checkFunction('create_wallet_transaction', { p_user_id: fakeUUID, p_order_id: fakeUUID, p_type: 'commission', p_amount: 1000, p_desc: 'Test' })
+  await checkFunction('distribute_commission', { p_order_id: fakeUUID })
 
   console.log()
   console.log('[Orders Table Columns]')
