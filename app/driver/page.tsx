@@ -337,12 +337,12 @@ export default function DriverDashboard() {
     } catch { toast.error("Terjadi error") } finally { setStatusLoading(false) }
   }
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-indigo-600" /></div>
+  if (loading) return <div className=" flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-indigo-600" /></div>
 
   const activeOrder = activeDriverOrder?.orders
 
   return (
-    <div className="h-screen bg-white font-sans max-w-md mx-auto relative overflow-hidden flex flex-col ">
+    <div className=" bg-white font-sans max-w-md mx-auto relative overflow-hidden flex flex-col" style={{ height: '100dvh' }}>
 
       {/* ─── MAP LAYER ─── */}
       <DriverMap
