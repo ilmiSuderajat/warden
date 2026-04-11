@@ -145,7 +145,7 @@ export default function CartPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[100dvh] flex flex-col max-w-md mx-auto bg-slate-100 font-sans text-slate-800">
+      <div className="min-h-dvh flex flex-col max-w-md mx-auto bg-slate-100 font-sans text-slate-800">
         <div className="bg-white p-4 flex items-center justify-between border-b">
           <Skeleton className="w-8 h-8 rounded-full" />
           <Skeleton className="w-32 h-6" />
@@ -167,10 +167,10 @@ export default function CartPage() {
   }, {} as Record<string, any[]>);
 
   return (
-    <div className="h-screen flex flex-col bg-slate-100 max-w-md mx-auto font-sans text-slate-800">
+    <div className="min-h-dvh flex flex-col bg-slate-100 max-w-md mx-auto font-sans text-slate-800">
 
       {/* ── HEADER ── */}
-      <div className="sticky top-0 z-40 bg-white border-b border-slate-200">
+      <div className="sticky top-0 z-40 bg-white border-b border-slate-200 flex-shrink-0">
         <div className="flex items-center justify-between px-4 py-3.5">
           <button onClick={() => router.back()} className="text-indigo-600">
             <Icons.ArrowLeft size={24} strokeWidth={2} />
@@ -193,136 +193,138 @@ export default function CartPage() {
       </div>
 
       {/* ── CART ITEMS ── */}
-      <div className="mt-2 space-y-2 flex-1 overflow-y-auto pb-24">
-        {cartItems.length > 0 ? (
-          Object.entries(groupedItems).map(([shopName, itemsObj]) => {
-            const items = itemsObj as any[];
-            const isAllShopSelected = items.every((i: any) => selectedIds.has(i.id));
+      <div className="flex-1 overflow-y-auto">
+        <div className="space-y-2 pb-4">
+          {cartItems.length > 0 ? (
+            Object.entries(groupedItems).map(([shopName, itemsObj]) => {
+              const items = itemsObj as any[];
+              const isAllShopSelected = items.every((i: any) => selectedIds.has(i.id));
 
-            const toggleShop = () => {
-              setSelectedIds((prev) => {
-                const next = new Set(prev);
-                if (isAllShopSelected) {
-                  items.forEach((i) => next.delete(i.id));
-                } else {
-                  items.forEach((i) => next.add(i.id));
-                }
-                return next;
-              });
-            };
+              const toggleShop = () => {
+                setSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  if (isAllShopSelected) {
+                    items.forEach((i) => next.delete(i.id));
+                  } else {
+                    items.forEach((i) => next.add(i.id));
+                  }
+                  return next;
+                });
+              };
 
-            return (
-              <div key={shopName} className="bg-white px-0  border-y border-slate-200">
-                {/* Shop Header */}
-                <div className="flex items-center justify-between px-3 py-3 border-b border-slate-100">
-                  <div className="flex items-center gap-3">
-                    <button onClick={toggleShop} className="shrink-0 flex items-center justify-center">
-                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isAllShopSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
-                        {isAllShopSelected && <Icons.Check size={14} className="text-white" />}
+              return (
+                <div key={shopName} className="bg-white px-0  border-y border-slate-200">
+                  {/* Shop Header */}
+                  <div className="flex items-center justify-between px-3 py-3 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <button onClick={toggleShop} className="shrink-0 flex items-center justify-center">
+                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isAllShopSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                          {isAllShopSelected && <Icons.Check size={14} className="text-white" />}
+                        </div>
+                      </button>
+                      <div className="flex items-center gap-1.5 cursor-pointer">
+                        <span className="bg-red-600 text-white text-[10px] px-1 rounded font-bold uppercase tracking-wider">Mall | Ori</span>
+                        <Icons.Store size={14} className="text-slate-600" />
+                        <span className="text-sm font-semibold">{shopName}</span>
+                        <Icons.ChevronRight size={14} className="text-slate-400" />
                       </div>
-                    </button>
-                    <div className="flex items-center gap-1.5 cursor-pointer">
-                      <span className="bg-red-600 text-white text-[10px] px-1 rounded font-bold uppercase tracking-wider">Mall | Ori</span>
-                      <Icons.Store size={14} className="text-slate-600" />
-                      <span className="text-sm font-semibold">{shopName}</span>
-                      <Icons.ChevronRight size={14} className="text-slate-400" />
                     </div>
                   </div>
-                </div>
 
-                {/* Products */}
-                <div className="divide-y  divide-slate-100">
-                  {items.map((item: any) => {
-                    const isSelected = selectedIds.has(item.id);
-                    return (
-                      <div key={item.id} className="relative flex gap-3 p-3 pt-4">
-                        <button onClick={() => toggleSelect(item.id)} className="shrink-0 flex pt-6">
-                          <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
-                            {isSelected && <Icons.Check size={14} className="text-white" />}
-                          </div>
-                        </button>
-
-                        <div className="w-[84px] h-[84px] rounded border border-slate-100 overflow-hidden shrink-0">
-                          <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-                        </div>
-
-                        <div className="flex-1 flex flex-col min-w-0 pb-1">
-                          <h3 className="text-[13px] leading-tight text-slate-800 line-clamp-2 mb-1 pr-4">{item.name}</h3>
-
-                          {item.product_variants && Array.isArray(item.product_variants) && item.product_variants.length > 0 && (
-                            <div className="mt-1 mb-3 space-y-2">
-                              {item.product_variants.map((group: any, gIdx: number) => (
-                                <div key={gIdx} className="space-y-1">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{group.name}</p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {group.options.map((opt: any, oIdx: number) => {
-                                      const isSelected = item.variants_saved?.[group.name]?.label === opt.label;
-                                      const isUpdating = updatingCartId === item.id;
-                                      return (
-                                        <button
-                                          key={oIdx}
-                                          disabled={isUpdating}
-                                          onClick={() => updateVariantInline(item.id, group.name, opt)}
-                                          className={`px-2 py-1 rounded text-[10px] font-semibold border transition-all flex items-center gap-1 ${isSelected
-                                            ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
-                                            : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
-                                            } ${isUpdating ? "opacity-50 cursor-not-allowed" : ""}`}
-                                        >
-                                          {isSelected && <Icons.Check size={10} strokeWidth={3} />}
-                                          {opt.label}
-                                          {opt.price > 0 && (
-                                            <span className={`text-[8px] font-normal ${isSelected ? "text-indigo-100" : "text-slate-400"}`}>
-                                              (+{opt.price.toLocaleString("id-ID")})
-                                            </span>
-                                          )}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              ))}
+                  {/* Products */}
+                  <div className="divide-y  divide-slate-100">
+                    {items.map((item: any) => {
+                      const isSelected = selectedIds.has(item.id);
+                      return (
+                        <div key={item.id} className="relative flex gap-3 p-3 pt-4">
+                          <button onClick={() => toggleSelect(item.id)} className="shrink-0 flex pt-6">
+                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                              {isSelected && <Icons.Check size={14} className="text-white" />}
                             </div>
-                          )}
-
-                          <div className="mt-auto flex items-end justify-between">
-                            <span className="text-sm font-semibold text-indigo-600">Rp{item.price.toLocaleString("id-ID")}</span>
-
-                            <div className="flex items-center border border-slate-200 rounded-sm overflow-hidden h-7">
-                              <button onClick={() => updateQuantity(item.id, -1, item.quantity)} className="w-7 h-full flex items-center justify-center bg-white text-slate-500 active:bg-slate-100 border-r border-slate-200">
-                                <Icons.Minus size={12} />
-                              </button>
-                              <span className="w-9 h-full flex items-center justify-center text-[13px] font-medium text-slate-700 bg-white">
-                                {item.quantity}
-                              </span>
-                              <button onClick={() => updateQuantity(item.id, 1, item.quantity)} className="w-7 h-full flex items-center justify-center bg-white text-slate-500 active:bg-slate-100 border-l border-slate-200">
-                                <Icons.Plus size={12} />
-                              </button>
-                            </div>
-                          </div>
-                          <button onClick={() => removeItem(item.id)} className="absolute top-4 right-3 text-slate-300 hover:text-red-500 transition-colors">
-                            <Icons.X size={16} />
                           </button>
+
+                          <div className="w-[84px] h-[84px] rounded border border-slate-100 overflow-hidden shrink-0">
+                            <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                          </div>
+
+                          <div className="flex-1 flex flex-col min-w-0 pb-1">
+                            <h3 className="text-[13px] leading-tight text-slate-800 line-clamp-2 mb-1 pr-4">{item.name}</h3>
+
+                            {item.product_variants && Array.isArray(item.product_variants) && item.product_variants.length > 0 && (
+                              <div className="mt-1 mb-3 space-y-2">
+                                {item.product_variants.map((group: any, gIdx: number) => (
+                                  <div key={gIdx} className="space-y-1">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{group.name}</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {group.options.map((opt: any, oIdx: number) => {
+                                        const isSelected = item.variants_saved?.[group.name]?.label === opt.label;
+                                        const isUpdating = updatingCartId === item.id;
+                                        return (
+                                          <button
+                                            key={oIdx}
+                                            disabled={isUpdating}
+                                            onClick={() => updateVariantInline(item.id, group.name, opt)}
+                                            className={`px-2 py-1 rounded text-[10px] font-semibold border transition-all flex items-center gap-1 ${isSelected
+                                              ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                                              : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300"
+                                              } ${isUpdating ? "opacity-50 cursor-not-allowed" : ""}`}
+                                          >
+                                            {isSelected && <Icons.Check size={10} strokeWidth={3} />}
+                                            {opt.label}
+                                            {opt.price > 0 && (
+                                              <span className={`text-[8px] font-normal ${isSelected ? "text-indigo-100" : "text-slate-400"}`}>
+                                                (+{opt.price.toLocaleString("id-ID")})
+                                              </span>
+                                            )}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="mt-auto flex items-end justify-between">
+                              <span className="text-sm font-semibold text-indigo-600">Rp{item.price.toLocaleString("id-ID")}</span>
+
+                              <div className="flex items-center border border-slate-200 rounded-sm overflow-hidden h-7">
+                                <button onClick={() => updateQuantity(item.id, -1, item.quantity)} className="w-7 h-full flex items-center justify-center bg-white text-slate-500 active:bg-slate-100 border-r border-slate-200">
+                                  <Icons.Minus size={12} />
+                                </button>
+                                <span className="w-9 h-full flex items-center justify-center text-[13px] font-medium text-slate-700 bg-white">
+                                  {item.quantity}
+                                </span>
+                                <button onClick={() => updateQuantity(item.id, 1, item.quantity)} className="w-7 h-full flex items-center justify-center bg-white text-slate-500 active:bg-slate-100 border-l border-slate-200">
+                                  <Icons.Plus size={12} />
+                                </button>
+                              </div>
+                            </div>
+                            <button onClick={() => removeItem(item.id)} className="absolute top-4 right-3 text-slate-300 hover:text-red-500 transition-colors">
+                              <Icons.X size={16} />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            )
-          })
-        ) : (
-          <div className="flex flex-col items-center justify-center py-20 bg-white">
-            <h3 className="text-slate-900 font-medium text-lg mb-2">Keranjang Kosong</h3>
-            <Link href="/" className="px-6 py-2 border border-indigo-600 text-indigo-600 rounded text-sm font-medium mt-4">
-              Belanja Sekarang
-            </Link>
-          </div>
-        )}
+              )
+            })
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 bg-white">
+              <h3 className="text-slate-900 font-medium text-lg mb-2">Keranjang Kosong</h3>
+              <Link href="/" className="px-6 py-2 border border-indigo-600 text-indigo-600 rounded text-sm font-medium mt-4">
+                Belanja Sekarang
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── FOOTER CHECKOUT ── */}
       {cartItems.length > 0 && (
-        <div className="sticky bottom-0 z-50 bg-white border-t border-slate-200 divide-y divide-slate-100 pb-[env(safe-area-inset-bottom)]">
+        <div className="bg-white border-t border-slate-200 divide-y divide-slate-100 pb-[env(safe-area-inset-bottom)] flex-shrink-0">
 
           <div className="flex items-center justify-between p-3">
             <div className="flex items-center gap-2">

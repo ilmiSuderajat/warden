@@ -10,12 +10,13 @@ import { supabase } from "@/lib/supabase"
 
 type WithdrawRequest = {
   id: string
+  user_id: string
   amount: number
   bank_name: string
-  bank_account: string
-  bank_holder: string
+  account_number: string
+  account_name: string
   status: "pending" | "approved" | "rejected"
-  requested_at: string
+  created_at: string
 }
 
 type AllTransaction = {
@@ -69,14 +70,24 @@ export default function WalletPage() {
       if (!user) { router.push("/login"); return }
 
       // Parallel fetch: wallet data, main ledger, withdraw requests
-      const [walletRes, ledgerRes, wdRes] = await Promise.all([
+      const [walletRes, ledgerRes, wdRes, shopRes] = await Promise.all([
         supabase.from("wallets").select("balance, points_balance").eq("user_id", user.id).maybeSingle(),
         getTransactionHistory(100).catch(() => [] as Transaction[]),
-        supabase.from("withdraw_requests")
+        supabase.from("user_withdraw_requests")
           .select("*")
           .eq("user_id", user.id)
-          .order("requested_at", { ascending: false })
+          .order("created_at", { ascending: false })
           .limit(30),
+        supabase.from("shops").select("id").eq("owner_id", user.id).maybeSingle()
+      ])
+
+      const shopId = shopRes?.data?.id
+      
+      const [shopLogsRes, driverLogsRes] = await Promise.all([
+        shopId 
+          ? supabase.from("shop_balance_logs").select("*").eq("shop_id", shopId).order("created_at", { ascending: false }).limit(50) 
+          : { data: [] },
+        supabase.from("driver_balance_logs").select("*").eq("driver_id", user.id).order("created_at", { ascending: false }).limit(50)
       ])
 
       if (walletRes.data) {
@@ -85,7 +96,35 @@ export default function WalletPage() {
       }
 
       const ledgerTxs: AllTransaction[] = (ledgerRes || []).map((t) => ({ ...t, source: "ledger" as const }))
-      const merged = ledgerTxs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      const ledgerKeys = new Set(ledgerTxs.map(t => `${t.order_id}-${Math.abs(t.amount)}`))
+
+      const legacyShopTxs: AllTransaction[] = (shopLogsRes.data || [])
+        .filter((s: any) => !ledgerKeys.has(`${s.order_id}-${Math.abs(s.amount)}`))
+        .map((s: any) => ({
+          id: s.id,
+          type: s.type,
+          amount: s.amount,
+          balance_after: s.balance_after,
+          description: s.description || "",
+          order_id: s.order_id,
+          created_at: s.created_at,
+          source: "ledger" as const
+        }))
+
+      const legacyDriverTxs: AllTransaction[] = (driverLogsRes.data || [])
+        .filter((d: any) => !ledgerKeys.has(`${d.order_id}-${Math.abs(d.amount)}`))
+        .map((d: any) => ({
+          id: d.id,
+          type: d.type.replace("commission_online", "commission").replace("commission_cod_debit", "refund"), // map to existing types
+          amount: d.amount,
+          balance_after: d.balance_after,
+          description: d.description || "",
+          order_id: d.order_id,
+          created_at: d.created_at,
+          source: "ledger" as const
+        }))
+
+      const merged = [...ledgerTxs, ...legacyShopTxs, ...legacyDriverTxs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       
       setAllTransactions(merged)
       setWithdrawRequests(wdRes.data || [])
@@ -331,8 +370,8 @@ export default function WalletPage() {
                               <p className="text-[13px] font-semibold text-slate-800 tracking-tight capitalize">Tarik Dana - {wd.bank_name}</p>
                               <p className={`text-[13px] font-semibold ${s.color}`}>{s.label}</p>
                             </div>
-                            <p className="text-xs text-slate-500 mb-1">{wd.bank_account} a.n. {wd.bank_holder}</p>
-                            <p className="text-[11px] text-slate-400">{formatDate(wd.requested_at)}</p>
+                            <p className="text-xs text-slate-500 mb-1">{wd.account_number} a.n. {wd.account_name}</p>
+                            <p className="text-[11px] text-slate-400">{formatDate(wd.created_at)}</p>
                           </div>
                         </div>
                       )

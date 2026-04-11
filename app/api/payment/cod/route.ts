@@ -164,26 +164,32 @@ async function deductShopCommission(
     const subtotal = order.subtotal_amount || order.total_amount || 0
     const commission = Math.round(subtotal * PLATFORM_COMMISSION_RATE)
     
-    // 1. Update unified wallet (Source of Truth)
+    // 1. Update unified wallet (Source of Truth) dengan atomic update
+    const { error: walletErr } = await supabase.rpc('increment_wallet_balance', {
+      p_user_id: shop.owner_id,
+      p_amount: -commission
+    })
+
+    if (walletErr) {
+      console.error("[COD] Error deducting wallet commission:", walletErr)
+    }
+
     const { data: wallet } = await supabase
       .from("wallets")
       .select("balance")
       .eq("user_id", shop.owner_id)
       .single()
 
-    const newWalletBalance = (wallet?.balance || 0) - commission
+    const newWalletBalance = wallet?.balance || 0
     const shouldDisableCod = newWalletBalance < COD_DISABLE_THRESHOLD
 
-    // a. Update wallet table
-    await supabase.from("wallets").update({ balance: newWalletBalance }).eq("user_id", shop.owner_id)
-
     // b. Create unified transaction record
-    await supabase.rpc('create_wallet_transaction', {
+    await supabase.rpc('create_transaction', {
       p_user_id: shop.owner_id,
       p_order_id: orderId,
-      p_type: 'refund', // or 'commission_debit' if it exists, using 'refund' as a generic debit type for now or 'withdraw'
+      p_type: 'commission',
       p_amount: -commission,
-      p_desc: `Debit Komisi COD 5% Order #${orderId.slice(0, 8)}`
+      p_description: `Debit Komisi COD 5% Order #${orderId.slice(0, 8)}`
     })
 
     // 2. Sync to legacy shops table and status (backward compatibility)

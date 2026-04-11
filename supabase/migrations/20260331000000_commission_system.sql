@@ -68,8 +68,9 @@ BEGIN
         RAISE EXCEPTION 'Toko untuk order ini tidak ditemukan atau tidak memiliki owner';
     END IF;
 
-    -- 5. Hitung shop_earning
-    v_shop_earning := v_total_amount - v_shipping_amount;
+    -- 5. Hitung shop_earning dan potongan platform
+    v_shop_earning := FLOOR((v_total_amount - v_shipping_amount) * 0.95); -- Merchant dipotong 5%
+    v_shipping_amount := FLOOR(v_shipping_amount * 0.80); -- Driver dipotong 20%
 
     -- 6. ATOMIC dalam satu transaksi
     -- a. Credit wallets[shop_user_id]

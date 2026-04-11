@@ -86,9 +86,9 @@ export default function TopUpPage() {
   }
 
   return (
-    <div className="h-screen bg-slate-50 max-w-md mx-auto font-sans relative">
+    <div className="min-h-dvh flex flex-col bg-slate-50 max-w-md mx-auto font-sans">
       {/* ── HEADER ─────────────────────────────────────────────── */}
-      <div className="bg-indigo-600 px-4 pt-10 pb-6 relative">
+      <div className="bg-indigo-600 px-4 pt-10 pb-6 flex-shrink-0">
         <header className="flex items-center justify-between text-white">
           <button onClick={() => router.back()} className="p-1 hover:bg-white/10 rounded-full transition-colors" disabled={isLoading}>
             <Icons.ArrowLeft size={24} />
@@ -99,48 +99,50 @@ export default function TopUpPage() {
       </div>
 
       {/* ── CONTENT ────────────────────────────────────────────── */}
-      <div className="px-4 py-6 space-y-6">
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">
-            Masukkan Nominal Top Up
-          </label>
-          <div className="relative bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <span className="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-lg">
-              Rp
-            </span>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0"
-              className="w-full pl-14 pr-5 py-5 text-2xl font-bold text-slate-900 outline-none transition-all placeholder:font-medium placeholder:text-slate-300"
-              disabled={isLoading}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 mb-3 ml-1 uppercase tracking-wider">
-            Pilihan Nominal Cepat
-          </label>
-          <div className="grid grid-cols-3 gap-3">
-            {[10000, 50000, 100000, 500000, 1000000, 2000000].map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => setAmount(preset.toString())}
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-4 py-6 space-y-6 pb-32">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">
+              Masukkan Nominal Top Up
+            </label>
+            <div className="relative bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <span className="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-lg">
+                Rp
+              </span>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0"
+                className="w-full pl-14 pr-5 py-5 text-2xl font-bold text-slate-900 outline-none transition-all placeholder:font-medium placeholder:text-slate-300"
                 disabled={isLoading}
-                className="py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:border-indigo-600 hover:text-indigo-600 transition-colors focus:border-indigo-600 disabled:opacity-50"
-              >
-                {preset >= 1000000 ? `${preset / 1000000} Jt` : `${preset / 1000} Rb`}
-              </button>
-            ))}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-3 ml-1 uppercase tracking-wider">
+              Pilihan Nominal Cepat
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              {[10000, 50000, 100000, 500000, 1000000, 2000000].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setAmount(preset.toString())}
+                  disabled={isLoading}
+                  className="py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:border-indigo-600 hover:text-indigo-600 transition-colors focus:border-indigo-600 disabled:opacity-50"
+                >
+                  {preset >= 1000000 ? `${preset / 1000000} Jt` : `${preset / 1000} Rb`}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
       {/* ── FIXED BOTTOM BAR ────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-slate-100 p-4">
+      <div className="bg-white border-t border-slate-100 p-4 flex-shrink-0">
         <button
           onClick={handleTopUp}
           disabled={isLoading || !amount || parseInt(amount, 10) < 10000}

@@ -6,34 +6,40 @@ import * as Icons from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-type TxType = "payment" | "refund" | "topup" | "commission" | "withdraw" | string
+type Tab = "shop" | "driver" | "semua"
 
-type Tab = "merchant" | "driver" | "semua"
-
-// Since backend uses "commission" for both shop and driver, we check description
-const isMerchantTx = (t: Transaction) => 
-    t.type === "withdraw" || (t.type === "commission" && !t.description?.toLowerCase().includes("ongkir"))
-
-const isDriverTx = (t: Transaction) => 
-    t.type === "withdraw" || (t.type === "commission" && t.description?.toLowerCase().includes("ongkir"))
-
-interface Transaction {
+interface ShopLog {
     id: string
-    type: TxType
+    type: string
     amount: number
+    balance_after: number
     description: string | null
-    created_at: string
     order_id: string | null
-    balance_after?: number
+    created_at: string | null
+    source: "shop"
 }
+
+interface DriverLog {
+    id: string
+    type: string
+    amount: number
+    balance_after: number
+    description: string | null
+    order_id: string | null
+    created_at: string | null
+    source: "driver"
+}
+
+type CombinedLog = ShopLog | DriverLog
 
 export default function ShopIncomeHistoryPage() {
     const router = useRouter()
     const [shop, setShop] = useState<any>(null)
     const [walletBalance, setWalletBalance] = useState(0)
-    const [logs, setLogs] = useState<Transaction[]>([])
+    const [shopLogs, setShopLogs] = useState<ShopLog[]>([])
+    const [driverLogs, setDriverLogs] = useState<DriverLog[]>([])
     const [loading, setLoading] = useState(true)
-    const [activeTab, setActiveTab] = useState<Tab>("merchant")
+    const [activeTab, setActiveTab] = useState<Tab>("shop")
     const [isDriver, setIsDriver] = useState(false)
 
     useEffect(() => {
@@ -41,19 +47,40 @@ export default function ShopIncomeHistoryPage() {
             const { data: { session } } = await supabase.auth.getSession()
             if (!session) { router.push("/login"); return }
 
-            const [{ data: shopData }, { data: userData }, { data: wallet }, { data: allTx }] = await Promise.all([
+            const [{ data: shopData }, { data: userData }, { data: wallet }] = await Promise.all([
                 supabase.from("shops").select("id, name").eq("owner_id", session.user.id).single(),
-                supabase.from("users").select("role").eq("id", session.user.id).single(),
-                supabase.from("wallets").select("balance").eq("user_id", session.user.id).single(),
-                supabase.from("transactions").select("*").eq("user_id", session.user.id).order("created_at", { ascending: false }),
+                supabase.from("users").select("id, role").eq("id", session.user.id).single(),
+                supabase.from("wallets").select("balance").eq("user_id", session.user.id).maybeSingle(),
             ])
 
             if (!shopData) { router.replace("/shop/create"); return }
 
             setShop(shopData)
             setWalletBalance(wallet?.balance ?? 0)
-            setLogs(allTx ?? [])
             setIsDriver(userData?.role === "driver")
+
+            // Fetch shop_balance_logs using shop_id
+            const { data: shopLogsData } = await supabase
+                .from("shop_balance_logs")
+                .select("*")
+                .eq("shop_id", shopData.id)
+                .order("created_at", { ascending: false })
+                .limit(100)
+
+            setShopLogs((shopLogsData ?? []).map(l => ({ ...l, source: "shop" as const })))
+
+            // If user is also a driver, fetch driver_balance_logs
+            if (userData?.role === "driver") {
+                const { data: driverLogsData } = await supabase
+                    .from("driver_balance_logs")
+                    .select("*")
+                    .eq("driver_id", session.user.id)
+                    .order("created_at", { ascending: false })
+                    .limit(100)
+
+                setDriverLogs((driverLogsData ?? []).map(l => ({ ...l, source: "driver" as const })))
+            }
+
             setLoading(false)
         }
 
@@ -65,24 +92,69 @@ export default function ShopIncomeHistoryPage() {
         return v < 0 ? `−${abs}` : abs
     }
 
-    const filteredLogs = (() => {
-        if (activeTab === "merchant") return logs.filter(isMerchantTx)
-        if (activeTab === "driver") return logs.filter(isDriverTx)
-        return logs // semua
+    const displayedLogs: CombinedLog[] = (() => {
+        if (activeTab === "shop") return shopLogs
+        if (activeTab === "driver") return driverLogs
+        // "semua": merge and sort by created_at desc
+        return [...shopLogs, ...driverLogs].sort((a, b) =>
+            new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        )
     })()
 
-    const typeInfo = (type: TxType, amount: number) => {
+    const typeInfo = (log: CombinedLog) => {
+        const { type, amount, source } = log
         const isIn = amount > 0
-        const map: Record<string, { label: string; icon: any; color: string }> = {
-            commission: { 
-                label: amount > 0 ? "Asal Penjualan" : "Komisi Penjualan", 
-                icon: Icons.ShoppingBag, 
-                color: "text-emerald-600" 
-            },
-            refund:     { label: "Refund / Pengembalian", icon: Icons.RefreshCcw, color: "text-amber-600" },
-            withdraw:   { label: "Penarikan Dana", icon: Icons.ArrowUpFromLine, color: "text-red-500" },
+
+        if (source === "shop") {
+            const shopMap: Record<string, { label: string; icon: any; color: string }> = {
+                commission: {
+                    label: "Komisi Penjualan",
+                    icon: Icons.ShoppingBag,
+                    color: "text-emerald-600"
+                },
+                topup: {
+                    label: "Isi Saldo Toko",
+                    icon: Icons.PlusCircle,
+                    color: "text-indigo-600"
+                },
+                withdraw: {
+                    label: "Penarikan Dana",
+                    icon: Icons.ArrowUpFromLine,
+                    color: "text-red-500"
+                },
+                refund: {
+                    label: "Refund / Pengembalian",
+                    icon: Icons.RefreshCcw,
+                    color: "text-amber-600"
+                },
+            }
+            return shopMap[type] ?? { label: type, icon: isIn ? Icons.ArrowDownLeft : Icons.ArrowUpRight, color: isIn ? "text-emerald-600" : "text-red-500" }
         }
-        return map[type] ?? { label: type, icon: isIn ? Icons.ArrowDownLeft : Icons.ArrowUpRight, color: isIn ? "text-emerald-600" : "text-red-500" }
+
+        // driver source
+        const driverMap: Record<string, { label: string; icon: any; color: string }> = {
+            commission_online: {
+                label: "Komisi Antar Online",
+                icon: Icons.TrendingUp,
+                color: "text-emerald-600"
+            },
+            commission_cod_debit: {
+                label: "Potongan COD (20%)",
+                icon: Icons.Bike,
+                color: "text-red-500"
+            },
+            topup: {
+                label: "Topup Saldo Driver",
+                icon: Icons.PlusCircle,
+                color: "text-blue-600"
+            },
+            withdraw: {
+                label: "Penarikan Driver",
+                icon: Icons.ArrowUpFromLine,
+                color: "text-orange-600"
+            },
+        }
+        return driverMap[type] ?? { label: type, icon: isIn ? Icons.ArrowDownLeft : Icons.ArrowUpRight, color: isIn ? "text-emerald-600" : "text-red-500" }
     }
 
     if (loading) return (
@@ -90,6 +162,10 @@ export default function ShopIncomeHistoryPage() {
             <Icons.Loader2 className="animate-spin text-indigo-600" size={32} />
         </div>
     )
+
+    const tabs: [Tab, string][] = isDriver
+        ? [["shop", "🏪 Toko"], ["driver", "🛵 Driver"], ["semua", "📋 Semua"]]
+        : [["shop", "🏪 Toko"], ["semua", "📋 Semua"]]
 
     return (
         <div className="min-h-screen bg-[#F5F5F5] max-w-md mx-auto font-sans pb-12">
@@ -105,7 +181,7 @@ export default function ShopIncomeHistoryPage() {
 
             {/* SALDO CARD */}
             <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-5 m-3 rounded-2xl text-white shadow-lg">
-                <p className="text-xs font-medium opacity-75 mb-1">Total Saldo</p>
+                <p className="text-xs font-medium opacity-75 mb-1">Total Saldo Wallet</p>
                 <p className="text-3xl font-bold tracking-tight">Rp {walletBalance.toLocaleString("id-ID")}</p>
                 <p className="text-xs mt-2 opacity-60">{shop?.name}</p>
             </div>
@@ -113,7 +189,7 @@ export default function ShopIncomeHistoryPage() {
             {/* TABS */}
             <div className="bg-white mx-3 rounded-xl shadow-sm border border-black/5 mb-2 overflow-hidden">
                 <div className="flex text-xs font-semibold">
-                    {([["merchant", "🏪 Toko"], ["driver", "🛵 Driver"], ["semua", "📋 Semua"]] as [Tab, string][]).map(([tab, label]) => (
+                    {tabs.map(([tab, label]) => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -125,31 +201,59 @@ export default function ShopIncomeHistoryPage() {
                 </div>
             </div>
 
+            {/* SUMMARY STATS */}
+            {displayedLogs.length > 0 && (
+                <div className="mx-3 mb-2 grid grid-cols-2 gap-2">
+                    <div className="bg-white rounded-xl shadow-sm border border-black/5 p-3">
+                        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide mb-1">Total Masuk</p>
+                        <p className="text-sm font-bold text-emerald-600">
+                            +Rp {displayedLogs.filter(l => l.amount > 0).reduce((s, l) => s + l.amount, 0).toLocaleString("id-ID")}
+                        </p>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-black/5 p-3">
+                        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide mb-1">Total Keluar</p>
+                        <p className="text-sm font-bold text-red-500">
+                            -Rp {Math.abs(displayedLogs.filter(l => l.amount < 0).reduce((s, l) => s + l.amount, 0)).toLocaleString("id-ID")}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* TRANSACTION LIST */}
             <div className="bg-white mx-3 rounded-xl shadow-sm border border-black/5 px-4 py-2">
-                {filteredLogs.length === 0 ? (
+                {displayedLogs.length === 0 ? (
                     <div className="py-12 flex flex-col items-center justify-center opacity-60">
                         <Icons.Inbox className="w-12 h-12 text-slate-300 mb-3" />
-                        <p className="text-sm font-medium text-slate-500">Belum ada transaksi</p>
+                        <p className="text-sm font-medium text-slate-500">
+                            {activeTab === "driver" ? "Belum ada riwayat pengiriman" : "Belum ada transaksi"}
+                        </p>
+                        {activeTab === "driver" && !isDriver && (
+                            <p className="text-xs text-slate-400 mt-1">Akun ini bukan driver</p>
+                        )}
                     </div>
                 ) : (
                     <div className="divide-y divide-slate-50">
-                        {filteredLogs.map((log) => {
-                            const { label, icon: TxIcon, color } = typeInfo(log.type, log.amount)
+                        {displayedLogs.map((log) => {
+                            const { label, icon: TxIcon, color } = typeInfo(log)
                             const isIncoming = log.amount > 0
                             return (
-                                <div key={log.id} className="flex justify-between items-center py-4">
+                                <div key={`${log.source}-${log.id}`} className="flex justify-between items-center py-4">
                                     <div className="flex gap-3 items-center">
                                         <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center ${isIncoming ? "bg-emerald-50" : "bg-red-50"}`}>
                                             <TxIcon size={18} className={color} />
                                         </div>
                                         <div>
-                                            <p className="text-[13px] font-semibold text-slate-800 leading-tight">{label}</p>
+                                            <div className="flex items-center gap-1.5">
+                                                <p className="text-[13px] font-semibold text-slate-800 leading-tight">{label}</p>
+                                                {log.source === "driver" && (
+                                                    <span className="text-[9px] bg-blue-100 text-blue-600 font-bold px-1.5 py-0.5 rounded-full">DRIVER</span>
+                                                )}
+                                            </div>
                                             {log.description && (
                                                 <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{log.description}</p>
                                             )}
                                             <p className="text-[10px] text-slate-400 mt-0.5">
-                                                {new Date(log.created_at).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                                {new Date(log.created_at!).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                                             </p>
                                         </div>
                                     </div>

@@ -37,18 +37,37 @@ export async function addDriverCommission(driverId: string, orderId: string) {
 
     if (balanceChange === 0) return 0
 
-    const { data: userRow } = await supabaseAdmin
-        .from("users")
-        .select("saldo")
-        .eq("id", driverId)
+    const { data: walletRow } = await supabaseAdmin
+        .from("wallets")
+        .select("balance")
+        .eq("user_id", driverId)
         .maybeSingle() as { data: any }
 
-    const currentSaldo = userRow?.saldo || 0
+    const currentSaldo = walletRow?.balance || 0
     const newSaldo = currentSaldo + balanceChange
 
+    // Sync Unified Wallet
+    const { error: walletErr } = await supabaseAdmin.rpc('increment_wallet_balance', {
+        p_user_id: driverId,
+        p_amount: balanceChange
+    })
+
+    if (!walletErr) {
+        await supabaseAdmin.rpc('create_transaction', {
+            p_user_id: driverId,
+            p_order_id: orderId,
+            p_type: order.payment_method === "online" ? "commission" : "refund",
+            p_amount: balanceChange,
+            p_description: logDesc
+        })
+    }
+
+    // Sync Legacy
+    const { data: userRow } = await supabaseAdmin.from("users").select("saldo").eq("id", driverId).maybeSingle() as { data: any }
+    const legacyCurrent = userRow?.saldo || 0
     await supabaseAdmin
         .from("users")
-        .update({ saldo: newSaldo } as any)
+        .update({ saldo: legacyCurrent + balanceChange } as any)
         .eq("id", driverId)
 
     await supabaseAdmin.from("driver_balance_logs").insert({

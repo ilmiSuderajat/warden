@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import Midtrans from "midtrans-client"
 
 const snap = new Midtrans.Snap({
-    isProduction: true,
+    isProduction: !process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.startsWith('SB-'),
     serverKey: process.env.MIDTRANS_SERVER_KEY!,
     clientKey: process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY!,
 })
@@ -18,8 +18,8 @@ export async function POST(req: Request) {
             { cookies: { getAll: () => cookieStore.getAll(), setAll: () => { } } }
         )
 
-        const { data: { session } } = await supabaseAuth.auth.getSession()
-        if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+        if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
         const body = await req.json()
         const amount = parseInt(body.amount)
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
         const { data: shop, error: shopError } = await supabaseAdmin
             .from("shops")
             .select("id, name, balance")
-            .eq("owner_id", session.user.id)
+            .eq("owner_id", user.id)
             .maybeSingle()
 
         if (shopError || !shop) {
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
         const { data: userData } = await supabaseAdmin
             .from("users")
             .select("full_name, email")
-            .eq("id", session.user.id)
+            .eq("id", user.id)
             .maybeSingle()
 
         const parameter = {
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
             },
             customer_details: {
                 first_name: userData?.full_name || shop.name,
-                email: userData?.email || session.user.email || "",
+                email: userData?.email || user.email || "",
             },
             item_details: [
                 {

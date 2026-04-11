@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getAuthenticatedUser, createAdminClient } from "@/lib/serverAuth"
+import { getAuthenticatedUser, createAdminClient, createAuthClient } from "@/lib/serverAuth"
 import { MIN_WITHDRAW_AMOUNT } from "@/lib/constants"
 import { createNotification } from "@/lib/notifications"
 
@@ -36,7 +36,8 @@ export async function POST(req: Request) {
         // 2. Gunakan RPC request_withdraw (Unified for all roles)
         // RPC ini menangani: locking, balance validation, deduction, transaction logging, dan request entry.
         // Penting: user_id dari auth digunakan sebagai kunci di tabel wallets.
-        const { data: requestId, error: rpcError } = await supabaseAdmin
+        const supabaseAuth = await createAuthClient()
+        const { data: requestId, error: rpcError } = await supabaseAuth
             .rpc("request_withdraw", { 
                 p_amount: withdrawAmount, 
                 p_bank_name: bank_name,
