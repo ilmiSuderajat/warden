@@ -36,6 +36,11 @@ export default function DriverMap({ center, isOnline }: { center: [number, numbe
         center={center}
         zoom={15}
         zoomControl={false}
+        dragging={false}
+        touchZoom={false}
+        scrollWheelZoom={false}
+        doubleClickZoom={false}
+        keyboard={false}
         className="w-full h-full"
       >
         <TileLayer
