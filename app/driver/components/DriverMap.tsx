@@ -20,21 +20,23 @@ function ChangeView({ center }: { center: [number, number] }) {
   const map = useMap()
   useEffect(() => {
     map.setView(center, map.getZoom())
-  }, [center, map])
+  }, [center[0], center[1], map])
   return null
 }
 
 export default function DriverMap({ center, isOnline }: { center: [number, number], isOnline: boolean }) {
   const [mounted, setMounted] = useState(false)
+  const [mapIcon, setMapIcon] = useState<any>(null)
 
   useEffect(() => {
     setMounted(true)
+    setMapIcon(getBlueDotIcon())
   }, [])
 
   if (!mounted) return <div className="w-full h-full bg-slate-100 animate-pulse" />
 
   return (
-    <div className="fixed max-w-md mx-auto inset-0 z-0">
+    <div className="absolute max-w-md mx-auto inset-0 z-0">
       <MapContainer
         center={center}
         zoom={15}
@@ -50,7 +52,7 @@ export default function DriverMap({ center, isOnline }: { center: [number, numbe
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <Marker position={center} icon={getBlueDotIcon() as L.Icon} />
+        {mapIcon && <Marker position={center} icon={mapIcon} />}
         {isOnline && (
           <Circle
             center={center}

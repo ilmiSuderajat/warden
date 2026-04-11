@@ -342,7 +342,7 @@ export default function DriverDashboard() {
   const activeOrder = activeDriverOrder?.orders
 
   return (
-    <div className="h-screen bg-white font-sans max-w-md mx-auto relative overflow-hidden flex flex-col ">
+    <div className="fixed inset-0 w-full h-full bg-white font-sans max-w-md mx-auto overflow-hidden flex flex-col ">
 
       {/* ─── MAP LAYER ─── */}
       <DriverMap
