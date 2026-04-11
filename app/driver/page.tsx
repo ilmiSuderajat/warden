@@ -417,7 +417,7 @@ export default function DriverDashboard() {
 
       {/* ─── ORDERS TAB PANEL (Active Orders) ─── */}
       {activeTab === 'orders' && (
-        <div className="relative bg-gray-50 z-20 px-4 pt-4 pb-68">
+        <div className="relative bg-gray-50 z-20 px-10 pt-4 pb-68">
           {activeOrdersLoading ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 size={24} className="animate-spin text-indigo-500" />
