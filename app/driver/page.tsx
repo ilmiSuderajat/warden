@@ -168,6 +168,16 @@ export default function DriverDashboard() {
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [activeOrders, setActiveOrders] = useState<any[]>([])
   const [activeOrdersLoading, setActiveOrdersLoading] = useState(false)
+  const [viewHeight, setViewHeight] = useState("100vh")
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setViewHeight(`${window.innerHeight}px`)
+      const handleResize = () => setViewHeight(`${window.innerHeight}px`)
+      window.addEventListener("resize", handleResize)
+      return () => window.removeEventListener("resize", handleResize)
+    }
+  }, [])
 
   const watchId = useRef<number | null>(null)
 
@@ -342,7 +352,7 @@ export default function DriverDashboard() {
   const activeOrder = activeDriverOrder?.orders
 
   return (
-    <div className="min-h-[100vh] w-full bg-slate-50 font-sans max-w-md mx-auto relative">
+    <div className="w-full bg-slate-50 font-sans max-w-md mx-auto relative" style={{ minHeight: viewHeight }}>
 
       {/* ─── MAP LAYER ─── */}
       <DriverMap
