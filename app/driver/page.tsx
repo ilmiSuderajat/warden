@@ -4,11 +4,22 @@ import { useEffect, useState, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import {
   MapPin, Power, ShieldCheck, Clock, Loader2, Navigation,
-  CheckCircle2, Package, Camera, X, Wallet, ChevronLeft
+  CheckCircle2, Package, Camera, X, Wallet, ChevronLeft,
+  Menu, Bell, Settings, Award, History, HelpCircle, Users,
+  BookOpen, Gift, ListTodo, Star, BarChart3, ChevronRight,
+  TrendingUp, Search
 } from "lucide-react"
 import { toast } from "sonner"
+import { motion, AnimatePresence } from "framer-motion"
+
+// Dynamic import for Map to avoid SSR issues with Leaflet
+const DriverMap = dynamic(() => import("./components/DriverMap"), { 
+  ssr: false,
+  loading: () => <div className="w-full h-full bg-slate-100 animate-pulse" />
+})
 
 // ─── Proof Upload Modal ────────────────────────────────────────
 function ProofModal({
@@ -65,7 +76,7 @@ function ProofModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
       <div className="relative w-full max-w-md bg-white rounded-t-3xl p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-1">
@@ -74,7 +85,6 @@ function ProofModal({
         </div>
         <p className="text-xs text-slate-500 mb-5">{description}</p>
 
-        {/* Photo */}
         <div
           onClick={() => inputRef.current?.click()}
           className="w-full h-44 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 overflow-hidden flex items-center justify-center mb-4 cursor-pointer hover:bg-slate-50 transition-colors"
@@ -120,6 +130,26 @@ function ProofModal({
   )
 }
 
+// ─── Sidebar Item ──────────────────────────────────────────────
+function SidebarItem({ icon: Icon, label, href, badge, onClick, dot }: any) {
+    const content = (
+        <div className="flex items-center justify-between py-4 active:bg-slate-50 transition-colors cursor-pointer group" onClick={onClick}>
+            <div className="flex items-center gap-4">
+                <div className="text-slate-700 group-hover:text-indigo-600 transition-colors">
+                    <Icon size={22} strokeWidth={2} />
+                </div>
+                <span className="text-sm font-medium text-slate-800">{label}</span>
+                {badge && <span className="bg-orange-600 text-[10px] text-white font-bold px-1.5 py-0.5 rounded-md uppercase ml-1">{badge}</span>}
+                {dot && <div className="w-2 h-2 rounded-full bg-red-500 ml-1" />}
+            </div>
+            <ChevronRight size={18} className="text-slate-300" />
+        </div>
+    )
+
+    if (href) return <Link href={href}>{content}</Link>
+    return content
+}
+
 // ─── Main Dashboard ────────────────────────────────────────────
 export default function DriverDashboard() {
   const router = useRouter()
@@ -132,6 +162,8 @@ export default function DriverDashboard() {
   const [statusLoading, setStatusLoading] = useState(false)
   const [pickupModal, setPickupModal] = useState(false)
   const [deliveryModal, setDeliveryModal] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<"heatmap" | "orders">("heatmap")
 
   const watchId = useRef<number | null>(null)
 
@@ -145,7 +177,6 @@ export default function DriverDashboard() {
     } catch { /* ignore */ }
   }
 
-  // Refresh saldo after delivery
   const refreshUser = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
@@ -154,16 +185,13 @@ export default function DriverDashboard() {
   }
 
   useEffect(() => {
-    // Persist driver mode so refresh keeps user on driver page
     localStorage.setItem("warden_mode", "driver")
-
     let mounted = true
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return router.replace("/login")
       const { data: userData } = await supabase.from("users").select("*").eq("id", session.user.id).single()
       if (mounted && userData) {
-        // Fetch wallet balance separately
         const { data: walletData } = await supabase.from("wallets").select("balance").eq("user_id", userData.id).maybeSingle()
         setUser({ ...userData, saldo: walletData?.balance || 0 })
         setIsOnline(userData.is_online || false)
@@ -213,10 +241,6 @@ export default function DriverDashboard() {
     const channel = supabase.channel(`driver_${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "driver_orders", filter: `driver_id=eq.${user.id}` }, async (payload: any) => {
         if (payload.new.status === "offered") router.push(`/driver/order/${payload.new.id}`)
-        else if (payload.new.status === "accepted") {
-          const { data: fullOrder } = await supabase.from("driver_orders").select("*, orders(*)").eq("id", payload.new.id).single()
-          if (fullOrder) { setActiveDriverOrder(fullOrder); toast.success("Order prioritas diterima!") }
-        }
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "driver_orders", filter: `driver_id=eq.${user.id}` }, async (payload: any) => {
         if (payload.new.status === "accepted") {
@@ -235,12 +259,6 @@ export default function DriverDashboard() {
     if (val) toast.success("Anda sekarang Online"); else toast.info("Anda Offline")
   }
 
-  const toggleAutoAccept = async () => {
-    const val = !isAutoAccept; setIsAutoAccept(val)
-    await fetch("/api/driver/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ is_auto_accept: val }) })
-    if (val) toast.success("Auto-Accept Aktif"); else toast.info("Auto-Accept Nonaktif")
-  }
-
   const handleArrivedAtStore = async () => {
     setStatusLoading(true)
     const orderId = activeDriverOrder?.order_id || activeDriverOrder?.orders?.id
@@ -253,23 +271,7 @@ export default function DriverDashboard() {
       if (data.success) {
         setActiveDriverOrder((prev: any) => ({ ...prev, status: "arrived_at_store" }))
         toast.success("Tiba di Toko!")
-      } else { toast.error(data.error || "Gagal update status") }
-    } catch { toast.error("Terjadi error") } finally { setStatusLoading(false) }
-  }
-
-  const handleArrivedAtCustomer = async () => {
-    setStatusLoading(true)
-    const orderId = activeDriverOrder?.order_id || activeDriverOrder?.orders?.id
-    try {
-      const res = await fetch("/api/driver/update-status", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId, status: "arrived_at_customer" })
-      })
-      const data = await res.json()
-      if (data.success) {
-        setActiveDriverOrder((prev: any) => ({ ...prev, status: "arrived_at_customer" }))
-        toast.success("Tiba di Lokasi Pelanggan!")
-      } else { toast.error(data.error || "Gagal update status") }
+      }
     } catch { toast.error("Terjadi error") } finally { setStatusLoading(false) }
   }
 
@@ -286,7 +288,7 @@ export default function DriverDashboard() {
         setPickupModal(false)
         setActiveDriverOrder((prev: any) => ({ ...prev, status: "picked_up" }))
         toast.success("Status: Sedang Dikirim!")
-      } else { toast.error(data.error || "Gagal update status") }
+      }
     } catch { toast.error("Terjadi error") } finally { setStatusLoading(false) }
   }
 
@@ -303,232 +305,236 @@ export default function DriverDashboard() {
         setDeliveryModal(false)
         setActiveDriverOrder(null)
         await refreshUser()
-        const commissionFmt = data.commission ? `+Rp ${data.commission.toLocaleString('id-ID')} komisi` : ""
-        toast.success(`Order Selesai! ${commissionFmt} 🎉`)
-      } else { toast.error(data.error || "Gagal update status") }
+        toast.success(`Order Selesai! 🎉`)
+      }
     } catch { toast.error("Terjadi error") } finally { setStatusLoading(false) }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-        <Loader2 className="animate-spin text-indigo-600 mb-2" size={32} />
-        <p className="text-sm font-medium text-slate-400">Memuat Dashboard...</p>
-      </div>
-    )
-  }
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-indigo-600" /></div>
 
   const activeOrder = activeDriverOrder?.orders
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto pb-24 relative overflow-hidden">
-      {/* BACKGROUND */}
-      <div className={`absolute top-0 left-0 right-0 h-64 transition-colors duration-700 ${isOnline ? 'bg-emerald-600' : 'bg-slate-800'} rounded-b-[40px] z-0`}></div>
+    <div className="min-h-[100dvh] bg-white font-sans max-w-md mx-auto relative overflow-hidden flex flex-col shadow-2xl">
+      
+      {/* ─── MAP LAYER ─── */}
+      <DriverMap 
+        center={location ? [location.lat, location.lng] : [-6.2, 106.8]} 
+        isOnline={isOnline} 
+      />
 
-      {/* HEADER */}
-      <div className="relative z-10 px-6 pt-12 pb-6 flex justify-between items-start">
-        <div>
-          <button
-            onClick={exitDriverMode}
-            className="flex items-center gap-1.5 text-white/70 text-xs font-bold mb-3 hover:text-white transition-colors"
-          >
-            <ChevronLeft size={16} /> Kembali ke Warung Kita
-          </button>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Halo, {user?.full_name?.split(' ')[0] || 'Driver'}</h1>
-          <p className="text-white/80 text-sm mt-1 flex items-center gap-1.5">
-            {location ? <MapPin size={12} /> : <Loader2 size={12} className="animate-spin" />}
-            {location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : 'Mencari lokasi...'}
-          </p>
-        </div>
-        {/* Saldo Badge */}
-        <div className="flex flex-col items-end gap-2">
-          <Link href="/driver/wallet" className="bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl px-4 py-2 text-right block active:scale-95 transition-transform hover:bg-white/30">
-            <p className="text-[10px] font-bold text-white/90 uppercase tracking-widest flex items-center justify-end gap-1">
-              <Wallet size={12} /> Dompet Komisi
-            </p>
-            <p className="text-base font-extrabold text-white">Rp {(user?.saldo || 0).toLocaleString('id-ID')}</p>
-          </Link>
-        </div>
-      </div>
+      {/* ─── TOP HUD ─── */}
+      <div className="relative z-20 pt-10 px-4 pointer-events-none">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-lg border border-slate-100/50 p-4 pointer-events-auto">
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                    <div className="relative" onClick={() => setSidebarOpen(true)}>
+                        <img 
+                            src={user?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} 
+                            className="w-12 h-12 rounded-full border-2 border-white shadow-sm cursor-pointer active:scale-90 transition-transform" 
+                            alt="driver"
+                        />
+                        <div className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${isOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900 leading-tight uppercase tracking-tight">{user?.full_name?.split(' ')[0] || 'ILMI'}</h2>
+                        <p className="text-[11px] font-medium text-slate-400">Status kerja {isOnline ? 'aktif' : 'tidak aktif'}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1.5">
+                        <Star size={16} fill="#FACC15" className="text-yellow-400" />
+                        <span className="text-sm font-bold text-slate-700">4.75</span>
+                    </div>
+                    <div className="w-px h-4 bg-slate-200" />
+                    <div className="flex items-center gap-1.5">
+                        <BarChart3 size={16} className="text-orange-500" />
+                        <span className="text-sm font-bold text-slate-700">0.0%</span>
+                    </div>
+                </div>
+            </div>
 
-      {/* TOGGLES CARD */}
-      <div className="relative z-10 px-5">
-        <div className="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col gap-5">
-          <div className="flex justify-between items-center">
-            <div className="flex gap-4 items-center">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isOnline ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-                <Power size={24} strokeWidth={2.5} />
-              </div>
-              <div>
-                <h2 className="font-bold text-slate-900 text-base">{isOnline ? 'Menerima Order' : 'Sedang Offline'}</h2>
-                <p className="text-xs text-slate-500 font-medium">Status Pekerjaan</p>
-              </div>
+            {/* Tabs */}
+            <div className="flex border-t border-slate-100 -mx-4 -mb-4">
+                <button 
+                    onClick={() => setActiveTab("heatmap")}
+                    className={`flex-1 py-3 text-sm font-bold transition-all relative ${activeTab === 'heatmap' ? 'text-orange-600' : 'text-slate-400'}`}
+                >
+                    Heatmap
+                    {activeTab === 'heatmap' && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-600" />}
+                </button>
+                <button 
+                    onClick={() => setActiveTab("orders")}
+                    className={`flex-1 py-3 text-sm font-bold transition-all relative ${activeTab === 'orders' ? 'text-orange-600' : 'text-slate-400'}`}
+                >
+                    Daftar Pesanan
+                    {activeTab === 'orders' && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-600" />}
+                </button>
             </div>
-            <button onClick={toggleOnline}
-              className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-              <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-sm transition ${isOnline ? 'translate-x-6' : 'translate-x-0'}`} />
-            </button>
-          </div>
-          <div className="h-px bg-slate-100" />
-          <div className="flex justify-between items-center">
-            <div className="flex gap-4 items-center">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isAutoAccept ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
-                <ShieldCheck size={24} strokeWidth={2.5} />
-              </div>
-              <div>
-                <h2 className="font-bold text-slate-900 text-base">Prioritas Auto-Terima</h2>
-                <p className="text-xs text-slate-500 font-medium">Terima order tanpa tunggu</p>
-              </div>
-            </div>
-            <button onClick={toggleAutoAccept}
-              className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ${isAutoAccept ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-              <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-sm transition ${isAutoAccept ? 'translate-x-6' : 'translate-x-0'}`} />
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* ACTIVE ORDER */}
-      <div className="px-5 mt-6">
-        <h3 className="text-sm font-bold text-slate-800 mb-4 px-1">Order Aktif</h3>
-
-        {activeDriverOrder && activeOrder ? (
-          <div className="bg-white rounded-3xl border border-indigo-100 shadow-sm overflow-hidden relative">
-            <div className={`absolute top-0 left-0 w-2 h-full ${['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) ? 'bg-blue-500' : 'bg-indigo-500'}`}></div>
-            <div className="p-5 pl-7">
-              <div className="flex justify-between items-start mb-1">
-                <p className={`text-xs font-bold mb-1 ${['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) ? 'text-blue-600' : 'text-indigo-600'}`}>
-                  {activeDriverOrder.status === 'arrived_at_customer' ? '📍 Tiba di Pelanggan' :
-                   activeDriverOrder.status === 'picked_up' ? '🚴 Sedang Dikirim' : 
-                   activeDriverOrder.status === 'arrived_at_store' ? '🏪 Tiba di Toko' : '📦 Menuju Toko'}
-                </p>
-                <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-1 rounded-md">
-                  #{activeOrder.id?.slice(0, 6).toUpperCase()}
-                </span>
-              </div>
-              <h4 className="text-base font-bold text-slate-900 mb-3">{activeOrder.customer_name}</h4>
-
-              {/* Data Order Items */}
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-4">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Daftar Pesanan</p>
-                <div className="space-y-3">
-                  {activeDriverOrder.order_items?.map((item: any, idx: number) => {
-                    const shopName = item.product_name?.split(" | ")[1] || "Toko Tidak Diketahui"
-                    const itemName = item.product_name?.split(" | ")[0]
-                    return (
-                      <div key={idx} className="flex gap-3 items-center text-xs pb-3 border-b border-slate-100 last:border-0 last:pb-0">
-                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-white border border-slate-100 shrink-0">
-                          <img src={item.image_url || "/placeholder.png"} alt={itemName} className="w-full h-full object-cover" />
+      {/* ─── SIDEBAR DRAWER ─── */}
+      <AnimatePresence>
+        {sidebarOpen && (
+            <>
+                <motion.div 
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    onClick={() => setSidebarOpen(false)}
+                    className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[50]" 
+                />
+                <motion.div 
+                    initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
+                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                    className="fixed inset-y-0 left-0 w-[85%] max-w-[320px] bg-white z-[60] shadow-2xl flex flex-col"
+                >
+                    <div className="p-6 pt-12 flex flex-col items-center">
+                        <div className="relative mb-3">
+                            <img src={user?.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} className="w-20 h-20 rounded-full border-4 border-slate-50 shadow-md" alt="p" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-slate-700 truncate line-clamp-1 mb-0.5">{itemName}</p>
-                          <p className="text-slate-400 text-[10px] truncate max-w-[100px]">{shopName}</p>
+                        <h3 className="text-xl font-bold text-slate-800 uppercase tracking-tight">{user?.full_name || 'ILMI'}</h3>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-6 pb-10 scrollbar-hide">
+                        <div className="flex items-center justify-between py-4">
+                            <span className="text-sm font-bold text-slate-800">Status Kerja</span>
+                            <button onClick={toggleOnline}
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ${isOnline ? 'bg-orange-500' : 'bg-slate-200'}`}>
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${isOnline ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </button>
                         </div>
-                        <div className="font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">
-                          {item.quantity}x
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Show store focus if not picked up yet */}
-              {!['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) && (
-                <div className="flex items-start gap-2 bg-orange-50 p-3 rounded-xl border border-orange-100 mb-4">
-                  <Package size={14} className="text-orange-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-[10px] font-bold text-orange-600 mb-0.5">AMBIL DI (TOKO)</p>
-                    <p className="text-xs text-orange-800 font-bold mb-0.5">
-                      {activeDriverOrder.order_items?.[0]?.product_name?.split(" | ")[1] || "Toko Utama"}
-                    </p>
-                    <p className="text-[10px] text-orange-700 font-medium leading-snug">{activeOrder.shop_address || "Hubungi admin untuk detail"}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Show delivery focus if picked up or arriving at customer */}
-              {['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) && (
-                <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4">
-                  <Navigation size={14} className="text-slate-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-500 mb-0.5">ANTAR KE (PELANGGAN)</p>
-                    <p className="text-sm font-semibold text-slate-800 mb-1">{activeOrder.customer_name}</p>
-                    <p className="text-xs text-slate-600 font-medium leading-relaxed">{activeOrder.address}</p>
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={() => {
-                  const destLat = ['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) ? activeOrder.latitude : activeOrder.shop_latitude;
-                  const destLng = ['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) ? activeOrder.longitude : activeOrder.shop_longitude;
-                  
-                  if (destLat && destLng) {
-                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`)
-                  } else {
-                    toast.error("Titik koordinat tujuan belum tersedia")
-                  }
-                }}
-                className="w-full bg-slate-900 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors mb-3"
-              >
-                <MapPin size={16} /> Buka Navigasi Maps
-              </button>
-
-              {activeDriverOrder.status === "accepted" && (
-                <button onClick={handleArrivedAtStore} disabled={statusLoading}
-                  className="w-full bg-slate-900 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors">
-                  📍 Saya Sudah Tiba di Toko
-                </button>
-              )}
-              {activeDriverOrder.status === "arrived_at_store" && (
-                <button onClick={() => setPickupModal(true)} disabled={statusLoading}
-                  className="w-full bg-blue-500 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-600 transition-colors">
-                  <Camera size={16} /> Ambil dari Toko (Upload Bukti)
-                </button>
-              )}
-              {activeDriverOrder.status === "picked_up" && (
-                <button onClick={handleArrivedAtCustomer} disabled={statusLoading}
-                  className="w-full bg-slate-900 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors">
-                  📍 Saya Tiba di Lokasi Pelanggan
-                </button>
-              )}
-              {activeDriverOrder.status === "arrived_at_customer" && (
-                <button onClick={() => setDeliveryModal(true)} disabled={statusLoading}
-                  className="w-full bg-emerald-500 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors">
-                  <CheckCircle2 size={16} /> Selesai Antar (Upload Bukti + GPS)
-                </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-slate-100/50 border-2 border-dashed border-slate-200 rounded-3xl p-8 flex flex-col items-center text-center">
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 mb-4">
-              <Clock size={28} className="text-slate-400 animate-pulse" />
-            </div>
-            <h4 className="text-base font-bold text-slate-800 mb-1">{isOnline ? 'Menunggu Order...' : 'Anda Sedang Offline'}</h4>
-            <p className="text-xs text-slate-500 font-medium max-w-[200px]">
-              {isOnline ? 'Pastikan aplikasi tetap terbuka.' : 'Aktifkan status untuk mulai bekerja.'}
-            </p>
-          </div>
+                        <SidebarItem icon={ListTodo} label="Pesanan Searah" badge="Baru" />
+                        <SidebarItem icon={Navigation} label="Hub" />
+                        <SidebarItem icon={Bell} label="Notifikasi" dot />
+                        <SidebarItem icon={Wallet} label="Saldo Saya" href="/driver/wallet" />
+                        <SidebarItem icon={Award} label="Insentif" />
+                        <SidebarItem icon={TrendingUp} label="Poin Penalti" badge="Baru" />
+                        <SidebarItem icon={History} label="Riwayat Pesanan" />
+                        <SidebarItem icon={Search} label="PuJOSera" />
+                        <SidebarItem icon={Gift} label="Ajak Teman Baru" badge="Hadiah" />
+                        <SidebarItem icon={BookOpen} label="Akademi Mitra Pengemudi" />
+                        <SidebarItem icon={HelpCircle} label="Bantuan" />
+                        <SidebarItem icon={Settings} label="Pengaturan" onClick={exitDriverMode} />
+                    </div>
+                </motion.div>
+            </>
         )}
+      </AnimatePresence>
+
+      {/* ─── DASHBOARD CONTENT (Conditional) ─── */}
+      <div className="mt-auto relative z-10 px-4 pb-6 pointer-events-none">
+        
+        {/* Floating Action Buttons */}
+        <div className="flex justify-end mb-4 pointer-events-auto">
+            <button className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-700 active:scale-90 transition-transform">
+                <Navigation size={22} className="rotate-45" />
+            </button>
+        </div>
+
+        {/* ACTIVE ORDER OR START BUTTON */}
+        <AnimatePresence mode="wait">
+            {activeDriverOrder && activeOrder ? (
+                <motion.div 
+                    key="active-order"
+                    initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }}
+                    className="bg-white rounded-3xl shadow-2xl p-5 border border-slate-100 pointer-events-auto"
+                >
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-2">
+                             <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                             <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-widest">
+                                {activeDriverOrder.status === 'arrived_at_customer' ? 'Tiba di Pelanggan' :
+                                 activeDriverOrder.status === 'picked_up' ? 'Sedang Dikirim' : 
+                                 activeDriverOrder.status === 'arrived_at_store' ? 'Tiba di Toko' : 'Menjemput Pesanan'}
+                             </span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400">#{activeOrder.id?.slice(0, 8).toUpperCase()}</span>
+                    </div>
+                    
+                    <h4 className="text-base font-bold text-slate-900 mb-1">{activeOrder.customer_name}</h4>
+                    <p className="text-xs text-slate-500 line-clamp-1 mb-4">{activeOrder.address}</p>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <button 
+                            onClick={() => {
+                                const destLat = ['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) ? activeOrder.latitude : activeOrder.shop_latitude;
+                                const destLng = ['picked_up', 'arrived_at_customer'].includes(activeDriverOrder.status) ? activeOrder.longitude : activeOrder.shop_longitude;
+                                if (destLat && destLng) window.open(`https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`)
+                                else toast.error("Koordinat tidak tersedia")
+                            }}
+                            className="py-3.5 bg-slate-900 text-white rounded-2xl text-[13px] font-bold flex items-center justify-center gap-2"
+                        >
+                            <MapPin size={16} /> Navigasi
+                        </button>
+                        
+                        {activeDriverOrder.status === "accepted" && (
+                            <button onClick={handleArrivedAtStore} disabled={statusLoading}
+                                className="py-3.5 bg-indigo-600 text-white rounded-2xl text-[13px] font-bold">
+                                Tiba di Toko
+                            </button>
+                        )}
+                        {activeDriverOrder.status === "arrived_at_store" && (
+                            <button onClick={() => setPickupModal(true)} disabled={statusLoading}
+                                className="py-3.5 bg-blue-500 text-white rounded-2xl text-[13px] font-bold flex items-center justify-center gap-2">
+                                <Camera size={16} /> Ambil
+                            </button>
+                        )}
+                        {activeDriverOrder.status === "picked_up" && (
+                            <button onClick={() => {}} 
+                                className="py-3.5 bg-slate-900 text-white rounded-2xl text-[13px] font-bold">
+                                Update Lokasi
+                            </button>
+                        )}
+                        {activeDriverOrder.status === "arrived_at_customer" && (
+                            <button onClick={() => setDeliveryModal(true)} disabled={statusLoading}
+                                className="py-3.5 bg-emerald-500 text-white rounded-2xl text-[13px] font-bold flex items-center justify-center gap-2">
+                                <CheckCircle2 size={16} /> Selesai
+                            </button>
+                        )}
+                    </div>
+                </motion.div>
+            ) : (
+                <motion.div 
+                    key="start-work"
+                    initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }}
+                    className="relative pointer-events-auto"
+                >
+                    <button 
+                        onClick={toggleOnline}
+                        className="w-full h-16 rounded-2xl flex items-center border-4 border-orange-600 bg-orange-600 transition-all overflow-hidden group shadow-xl"
+                    >
+                        <div className="bg-white w-14 h-14 rounded-xl flex items-center justify-center ml-1 group-active:translate-x-full transition-transform duration-300">
+                             <ChevronRight className="text-orange-600" size={28} />
+                        </div>
+                        <span className="flex-1 text-white font-bold text-xl text-center pr-10">
+                            {isOnline ? 'Berhenti Bekerja' : 'Mulai Bekerja'}
+                        </span>
+                    </button>
+                    {!isOnline && (
+                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur rounded-full px-4 py-1.5 shadow-md border border-slate-100 flex items-center gap-2">
+                            <Clock size={14} className="text-slate-400" />
+                            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Istirahat</span>
+                        </div>
+                    )}
+                </motion.div>
+            )}
+        </AnimatePresence>
       </div>
 
       {/* PROOF MODALS */}
       {pickupModal && (
         <ProofModal
           title="Bukti Pengambilan Barang"
-          description="Foto barang yang sudah Anda terima dari toko harus terlihat jelas."
+          description="Foto barang yang sudah Anda terima dari toko."
           onConfirm={(url) => handlePickupConfirm(url)}
           onCancel={() => setPickupModal(false)}
-          requireGps={false}
           loading={statusLoading}
         />
       )}
       {deliveryModal && (
         <ProofModal
-          title="Bukti Serah Terima Pelanggan"
-          description="Pastikan penerima dan barang terlihat jelas di foto. Lokasi GPS dikunci secara otomatis."
+          title="Bukti Antar Barang"
+          description="Pastikan foto serah terima terlihat jelas."
           onConfirm={(url, lat, lng) => handleDeliveryConfirm(url, lat, lng)}
           onCancel={() => setDeliveryModal(false)}
           requireGps={true}
