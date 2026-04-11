@@ -46,6 +46,8 @@ export default function DriverMap({ center, isOnline }: { center: [number, numbe
         scrollWheelZoom={false}
         doubleClickZoom={false}
         keyboard={false}
+        // @ts-expect-error: tap is a core leaflet MapOption but not mapped in react-leaflet v4 types
+        tap={false}
         className="w-full h-full"
       >
         <TileLayer
