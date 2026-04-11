@@ -10,7 +10,7 @@ import {
   CheckCircle2, Package, Camera, X, Wallet, ChevronLeft,
   Menu, Bell, Settings, Award, History, HelpCircle, Users,
   BookOpen, Gift, ListTodo, Star, BarChart3, ChevronRight,
-  TrendingUp, Search
+  TrendingUp, Search, Store
 } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
@@ -212,7 +212,7 @@ export default function DriverDashboard() {
   }
 
   useEffect(() => {
-    localStorage.setItem("warden_mode", "driver")
+    try { localStorage.setItem("warden_mode", "driver") } catch (e) { console.error("localStorage rejected", e) }
     let mounted = true
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -232,7 +232,7 @@ export default function DriverDashboard() {
   }, [router])
 
   const exitDriverMode = () => {
-    localStorage.removeItem("warden_mode")
+    try { localStorage.removeItem("warden_mode") } catch (e) { }
     router.push("/")
   }
 
@@ -374,7 +374,7 @@ export default function DriverDashboard() {
                 </p>
               </div>
             </div>
-            <div className="flex bg-white rounded-2xl p-2 gap-3 shadow-sm border border-slate-100">
+            <div className="flex bg-white rounded-2xl p-2 gap-3  border border-slate-100">
               <div className="flex items-center gap-1.5">
                 <Star size={16} fill="#FACC15" className="text-yellow-400" />
                 <span className="text-sm font-bold text-slate-800">4.75</span>
@@ -441,7 +441,7 @@ export default function DriverDashboard() {
                         <div className={`w-2 h-2 rounded-full animate-pulse ${st.dot}`} />
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
                       </div>
-                      <span className="text-[10px] text-slate-400 font-medium">#{order?.id?.slice(0, 8).toUpperCase()}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">#{order?.id?.slice(0, 8)?.toUpperCase()}</span>
                     </div>
                     <h4 className="text-[13px] font-bold text-slate-900 truncate mb-0.5">{order?.customer_name || 'Pelanggan'}</h4>
                     <p className="text-[11px] text-slate-400 line-clamp-1 mb-3">{order?.address}</p>
@@ -502,6 +502,10 @@ export default function DriverDashboard() {
                 <SidebarItem icon={Gift} label="Ajak Teman Baru" badge="Hadiah" />
                 <SidebarItem icon={BookOpen} label="Akademi Mitra Pengemudi" />
                 <SidebarItem icon={HelpCircle} label="Bantuan" />
+
+                {/* Pembatas untuk opsi khusus sistem */}
+                <div className="h-px bg-slate-100 my-2 mx-4" />
+                <SidebarItem icon={Store} label="Kembali ke Warung Kita" href="/" />
                 <SidebarItem icon={Settings} label="Pengaturan" onClick={exitDriverMode} />
               </div>
             </motion.div>
@@ -537,7 +541,7 @@ export default function DriverDashboard() {
                           activeDriverOrder.status === 'arrived_at_store' ? 'Tiba di Toko' : 'Menjemput Pesanan'}
                     </span>
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400">#{activeOrder.id?.slice(0, 8).toUpperCase()}</span>
+                  <span className="text-[10px] font-bold text-slate-400">#{activeOrder?.id?.slice(0, 8)?.toUpperCase()}</span>
                 </div>
 
                 <h4 className="text-base font-bold text-slate-900 mb-1">{activeOrder.customer_name}</h4>
