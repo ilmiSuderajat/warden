@@ -28,10 +28,10 @@ export default function DriverMap({ center, isOnline }: { center: [number, numbe
     setMounted(true)
   }, [])
 
-  if (!mounted) return <div className="w-full h-full  bg-slate-100 animate-pulse" />
+  if (!mounted) return <div className="w-full h-full bg-slate-100 animate-pulse" />
 
   return (
-    <div className="fixed inset-0 z-0">
+    <div className="fixed max-w-md mx-auto inset-0 z-0">
       <MapContainer
         center={center}
         zoom={15}
