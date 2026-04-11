@@ -174,7 +174,7 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <div className="h-screen bg-slate-900 flex items-center justify-center">
         <Loader2 className="animate-spin text-white" size={32} />
       </div>
     )
@@ -183,7 +183,7 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
   const percentage = (timeLeft / 20) * 100
 
   return (
-    <div className="min-h-screen bg-slate-900 font-sans max-w-md mx-auto relative overflow-hidden flex flex-col items-center justify-center p-6 pb-12">
+    <div className="h-[100dvh] bg-slate-900 font-sans max-w-md mx-auto relative overflow-hidden flex flex-col items-center justify-center p-6 pb-12">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl animate-pulse z-0 pointer-events-none"></div>
 
       <div className="w-full relative z-10 flex flex-col items-center">
@@ -196,7 +196,7 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
               <circle cx="64" cy="64" r="60" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-800" />
               <circle cx="64" cy="64" r="60" stroke="currentColor" strokeWidth="6" fill="transparent"
                 strokeDasharray={377} strokeDashoffset={377 - (377 * percentage) / 100}
-                className={`transition-all duration-1000 linear ${timeLeft <= 5 ? 'text-red-500' : 'text-emerald-400'}`}
+                className={`transition-all duration-1000 linear ${timeLeft <= 5 ? 'text-indigo-400' : 'text-emerald-400'}`}
                 strokeLinecap="round" />
             </svg>
             <div className="text-4xl font-extrabold text-white">{Math.ceil(timeLeft)}</div>
@@ -220,13 +220,13 @@ export default function DriverOrderOffer({ params }: { params: Promise<{ id: str
           <div className="space-y-4">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                <MapPin size={18} className="text-orange-400" />
+                <MapPin size={18} className="text-indigo-400" />
               </div>
               <div className="flex-1">
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Titik Jemput</p>
                 <p className="text-sm font-semibold text-white">{shop?.name || order?.shop_address || 'Toko Utama'}</p>
                 {distanceToShop !== null && (
-                  <p className="text-[11px] text-orange-400 font-medium mt-1">Jarak ke warung: {distanceToShop.toFixed(1)} KM</p>
+                  <p className="text-[11px] text-indigo-400 font-medium mt-1">Jarak ke warung: {distanceToShop.toFixed(1)} KM</p>
                 )}
               </div>
             </div>

@@ -47,16 +47,16 @@ export default function DriverWalletPage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
-      <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+    <div className="h-screen bg-white flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto shadow-2xl pb-10">
+    <div className="h-screen bg-slate-50 font-sans max-w-md mx-auto shadow-2xl pb-10 flex flex-col overflow-y-auto">
       
-      {/* ─── RED HEADER (ShopeePay Style) ─── */}
-      <div className="bg-[#ee4d2d] pt-12 pb-8 px-4 relative">
+      {/* ─── INDIGO HEADER ─── */}
+      <div className="bg-indigo-600 pt-12 pb-8 px-4 relative">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => router.back()} className="text-white p-1 hover:bg-white/10 rounded-full transition-colors">
             <ChevronLeft size={24} />
@@ -103,7 +103,7 @@ export default function DriverWalletPage() {
         <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100">
             <Link href="/driver/wallet/transactions" className="flex items-center justify-between p-4 active:bg-slate-50 transition-colors border-b border-slate-50 group">
                 <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600">
+                    <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
                         <History size={20} />
                     </div>
                     <div>
@@ -142,13 +142,13 @@ export default function DriverWalletPage() {
         </div>
 
         {/* PROMO / INFO BANNER */}
-        <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 flex items-start gap-3">
-             <div className="bg-orange-500 text-white rounded-full p-1.5 mt-0.5">
+        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex items-start gap-3">
+             <div className="bg-indigo-500 text-white rounded-full p-1.5 mt-0.5">
                 <Info size={14} />
              </div>
              <div>
-                <p className="text-[13px] font-bold text-orange-800 mb-0.5">Tips Keamanan</p>
-                <p className="text-xs text-orange-700/80 leading-relaxed font-medium">Jangan pernah memberikan kode OTP atau PIN Anda kepada siapa pun, termasuk pihak yang mengaku sebagai kami.</p>
+                <p className="text-[13px] font-bold text-indigo-800 mb-0.5">Tips Keamanan</p>
+                <p className="text-xs text-indigo-700/80 leading-relaxed font-medium">Jangan pernah memberikan kode OTP atau PIN Anda kepada siapa pun, termasuk pihak yang mengaku sebagai kami.</p>
              </div>
         </div>
 

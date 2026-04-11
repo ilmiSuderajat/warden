@@ -51,7 +51,7 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
 
   if (isAuthorized === null) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-3 max-w-md mx-auto">
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-50 gap-3 max-w-md mx-auto">
         <Loader2 className="animate-spin text-slate-400" size={28} />
         <p className="text-xs font-medium text-slate-400">Verifikasi akses driver...</p>
       </div>

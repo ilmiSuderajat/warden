@@ -31,10 +31,10 @@ export default function DriverMap({ center, isOnline }: { center: [number, numbe
   if (!mounted) return <div className="w-full h-full bg-slate-100 animate-pulse" />
 
   return (
-    <div className="w-full h-full absolute inset-0 z-0">
-      <MapContainer 
-        center={center} 
-        zoom={15} 
+    <div className="w-full h-full absolute bottom-0 left-0 right-0 z-0">
+      <MapContainer
+        center={center}
+        zoom={15}
         zoomControl={false}
         className="w-full h-full"
       >
@@ -44,11 +44,11 @@ export default function DriverMap({ center, isOnline }: { center: [number, numbe
         />
         <Marker position={center} icon={blueDotIcon} />
         {isOnline && (
-           <Circle 
-             center={center} 
-             radius={200} 
-             pathOptions={{ color: '#4285F4', fillColor: '#4285F4', fillOpacity: 0.1 }} 
-           />
+          <Circle
+            center={center}
+            radius={200}
+            pathOptions={{ color: '#4285F4', fillColor: '#4285F4', fillOpacity: 0.1 }}
+          />
         )}
         <ChangeView center={center} />
       </MapContainer>

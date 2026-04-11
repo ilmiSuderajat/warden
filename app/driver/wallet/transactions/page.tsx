@@ -20,12 +20,11 @@ export default function DriverTransactionsPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return router.replace("/login")
 
-      // Fetch from driver_balance_logs or a unified table depending on schema
-      // Here I'll try to fetch from driver_balance_logs first
+      // Fetch from driver_balance_logs (correct table per schema)
       const { data, error } = await supabase
-        .from("transactions")
+        .from("driver_balance_logs")
         .select("*")
-        .eq("user_id", session.user.id)
+        .eq("driver_id", session.user.id)
         .order("created_at", { ascending: false })
 
       if (error) {
@@ -61,13 +60,13 @@ export default function DriverTransactionsPage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
-      <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+    <div className="h-screen bg-white flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-white font-sans max-w-md mx-auto shadow-2xl pb-10 flex flex-col">
+    <div className="h-[100dvh] bg-white font-sans max-w-md mx-auto shadow-2xl pb-10 flex flex-col">
       
       {/* HEADER */}
       <div className="bg-white border-b border-slate-100 px-4 py-4 sticky top-0 z-10 flex items-center justify-between">

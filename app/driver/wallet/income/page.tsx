@@ -21,9 +21,9 @@ export default function DriverIncomePage() {
       if (!session) return router.replace("/login")
 
       const { data, error } = await supabase
-        .from("transactions")
+        .from("driver_balance_logs")
         .select("*")
-        .eq("user_id", session.user.id)
+        .eq("driver_id", session.user.id)
         .order("created_at", { ascending: false })
 
       if (!error) {
@@ -58,12 +58,12 @@ export default function DriverIncomePage() {
     filtered.forEach(tx => {
        if (tx.amount > 0) {
           result.total += tx.amount
-          if (tx.type === 'income') result.delivery += tx.amount
+          if (tx.type === 'income' || tx.type === 'commission' || tx.type === 'credit') result.delivery += tx.amount
           else if (tx.type === 'bonus') result.bonus += tx.amount
           else if (tx.type === 'tip') result.tips += tx.amount
           else result.delivery += tx.amount // default to delivery if unknown but positive
           
-          if (tx.type === 'income') result.count += 1
+          if (tx.type === 'income' || tx.type === 'commission' || tx.type === 'credit') result.count += 1
        }
     })
 
@@ -79,13 +79,13 @@ export default function DriverIncomePage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
-      <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+    <div className="h-screen bg-white flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans max-w-md mx-auto shadow-2xl pb-10 flex flex-col">
+    <div className="h-[100dvh] bg-slate-50 font-sans max-w-md mx-auto shadow-2xl pb-10 flex flex-col overflow-y-auto">
       
       {/* HEADER */}
       <div className="bg-white px-4 py-4 sticky top-0 z-10 flex items-center gap-3">
@@ -99,13 +99,13 @@ export default function DriverIncomePage() {
       <div className="flex bg-white px-4 pb-1">
         <button 
             onClick={() => setActiveRange("day")}
-            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeRange === 'day' ? 'border-[#ee4d2d] text-[#ee4d2d]' : 'border-transparent text-slate-400'}`}
+            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeRange === 'day' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400'}`}
         >
             Hari Ini
         </button>
         <button 
             onClick={() => setActiveRange("week")}
-            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeRange === 'week' ? 'border-[#ee4d2d] text-[#ee4d2d]' : 'border-transparent text-slate-400'}`}
+            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeRange === 'week' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400'}`}
         >
             Minggu Ini
         </button>
@@ -113,7 +113,7 @@ export default function DriverIncomePage() {
 
       {/* SUMMARY CARD */}
       <div className="p-4">
-        <div className="bg-[#ee4d2d] rounded-2xl p-6 text-white shadow-lg shadow-orange-200">
+        <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200">
             <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-white/80 uppercase tracking-widest">Total Pendapatan</span>
                 <TrendingUp size={18} className="text-white/60" />
@@ -150,7 +150,7 @@ export default function DriverIncomePage() {
 
              <div className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-orange-50 flex items-center justify-center text-orange-600">
+                    <div className="w-9 h-9 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
                         <Gift size={18} />
                     </div>
                     <span className="text-sm font-bold text-slate-700">Tip dari Pelanggan</span>
