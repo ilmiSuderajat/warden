@@ -5,13 +5,16 @@ import { MapContainer, TileLayer, Marker, useMap, Circle } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import L from "leaflet"
 
-// Fix for default marker icons
-const blueDotIcon = L.divIcon({
-  className: "custom-div-icon",
-  html: `<div style="background-color: #4285F4; width: 14px; height: 14px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.3);"></div>`,
-  iconSize: [14, 14],
-  iconAnchor: [7, 7],
-})
+// Fix for default marker icons - Lazy loaded to prevent undefined window crashes natively
+const getBlueDotIcon = () => {
+  if (typeof window === "undefined" || !L) return null
+  return L.divIcon({
+    className: "custom-div-icon",
+    html: `<div style="background-color: #4285F4; width: 14px; height: 14px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.3);"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  })
+}
 
 function ChangeView({ center }: { center: [number, number] }) {
   const map = useMap()
@@ -47,7 +50,7 @@ export default function DriverMap({ center, isOnline }: { center: [number, numbe
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <Marker position={center} icon={blueDotIcon} />
+        <Marker position={center} icon={getBlueDotIcon() as L.Icon} />
         {isOnline && (
           <Circle
             center={center}
