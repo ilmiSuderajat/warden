@@ -342,7 +342,7 @@ export default function DriverDashboard() {
   const activeOrder = activeDriverOrder?.orders
 
   return (
-    <div className="h-screen w-full bg-white font-sans max-w-md mx-auto relative overflow-hidden flex flex-col ">
+    <div className="min-h-[100vh] w-full bg-slate-50 font-sans max-w-md mx-auto relative">
 
       {/* ─── MAP LAYER ─── */}
       <DriverMap
@@ -351,7 +351,7 @@ export default function DriverDashboard() {
       />
 
       {/* ─── TOP HUD HEADER ─── */}
-      <div className="relative z-20 pointer-events-none">
+      <div className="sticky top-0 z-20 pointer-events-none">
         <div className="bg-gray-50 p-5 pt-10 pointer-events-auto border-b border-indigo-500/50">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -407,7 +407,7 @@ export default function DriverDashboard() {
 
       {/* ─── ORDERS TAB PANEL (Active Orders) ─── */}
       {activeTab === 'orders' && (
-        <div className="relative z-20 flex-1 overflow-y-auto bg-white/95 backdrop-blur-sm px-4 pt-4 pb-32">
+        <div className="relative z-20 px-4 pt-4 pb-32">
           {activeOrdersLoading ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 size={24} className="animate-spin text-indigo-500" />
@@ -515,7 +515,7 @@ export default function DriverDashboard() {
 
       {/* ─── DASHBOARD CONTENT (Conditional) ─── */}
       {activeTab === 'heatmap' && (
-        <div className="mt-auto relative z-10 px-4 pb-6 pointer-events-none">
+        <div className="absolute bottom-6 left-4 right-4 z-10 pointer-events-none">
 
           {/* Floating Action Buttons */}
           <div className="flex justify-end mb-4 pointer-events-auto">
